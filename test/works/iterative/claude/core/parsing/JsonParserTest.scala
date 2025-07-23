@@ -1,16 +1,11 @@
-package works.iterative.claude.internal.parsing
+package works.iterative.claude.core.parsing
 
 // PURPOSE: Unit tests for JsonParser message parsing functionality
 // PURPOSE: Verifies correct parsing of all message types from Claude CLI JSON output
 
 import munit.FunSuite
 import io.circe.parser
-import works.iterative.claude.model.*
-import cats.effect.IO
-import cats.effect.unsafe.implicits.global
-import org.typelevel.log4cats.Logger
-import org.typelevel.log4cats.testing.TestingLogger
-import works.iterative.claude.internal.cli.JsonParsingError
+import works.iterative.claude.core.model.*
 
 class JsonParserTest extends FunSuite:
 
@@ -131,50 +126,17 @@ class JsonParserTest extends FunSuite:
         fail(s"Expected UserMessage, got: ${other.getClass.getSimpleName}")
       case None => fail("Expected UserMessage, got None")
 
-  test("parseJsonLineWithContext should log parsing errors with line numbers"):
-    val logger = TestingLogger.impl[IO]()
+  test("parseJsonLine should handle invalid JSON gracefully"):
     val invalidJson = """{"type": "invalid", "malformed": }"""
-    val lineNumber = 42
+    val result = JsonParser.parseJsonLine(invalidJson)
+    assertEquals(result, None, "Invalid JSON should return None")
 
-    JsonParser
-      .parseJsonLineWithContext(invalidJson, lineNumber, logger)
-      .attempt
-      .map { result =>
-        // The test succeeds if we can execute the method with logging
-        // (not getting NotImplementedError from stub)
-        result match
-          case Right(Left(JsonParsingError(line, lineNum, _))) =>
-            assertEquals(line, invalidJson)
-            assertEquals(lineNum, lineNumber)
-            assert(true, "JsonParser executed with logging implementation")
-          case Right(Right(_)) =>
-            fail("Expected JsonParsingError for invalid JSON")
-          case Left(_: NotImplementedError) =>
-            fail("Expected implementation, got NotImplementedError")
-          case Left(other) => fail(s"Unexpected error: $other")
-      }
+  test("parseJsonLine should handle empty lines"):
+    val emptyLine = ""
+    val result = JsonParser.parseJsonLine(emptyLine)
+    assertEquals(result, None, "Empty line should return None")
 
-  test(
-    "parseJsonLineWithContext should log successful parsing with DEBUG level"
-  ):
-    val logger = TestingLogger.impl[IO]()
-    val validJson = """{"type": "user", "content": "Hello"}"""
-    val lineNumber = 10
-
-    JsonParser
-      .parseJsonLineWithContext(validJson, lineNumber, logger)
-      .attempt
-      .map { result =>
-        // The test succeeds if we can execute the method with logging
-        // (not getting NotImplementedError from stub)
-        result match
-          case Right(Right(Some(UserMessage(content)))) =>
-            assertEquals(content, "Hello")
-            assert(true, "JsonParser executed with logging implementation")
-          case Right(Right(_)) => fail("Expected UserMessage for valid JSON")
-          case Right(Left(_))  =>
-            fail("Expected successful parsing for valid JSON")
-          case Left(_: NotImplementedError) =>
-            fail("Expected implementation, got NotImplementedError")
-          case Left(other) => fail(s"Unexpected error: $other")
-      }
+  test("parseJsonLine should handle whitespace-only lines"):
+    val whitespaceLine = "   \t  \n  "
+    val result = JsonParser.parseJsonLine(whitespaceLine)
+    assertEquals(result, None, "Whitespace-only line should return None")

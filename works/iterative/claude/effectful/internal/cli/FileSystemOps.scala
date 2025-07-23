@@ -1,4 +1,4 @@
-package works.iterative.claude.internal.cli
+package works.iterative.claude.effectful.internal.cli
 
 // PURPOSE: File system operations abstraction for CLI discovery testing
 // PURPOSE: Enables dependency injection for unit tests with mocked file system

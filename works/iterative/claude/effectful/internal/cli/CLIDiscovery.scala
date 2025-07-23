@@ -1,10 +1,15 @@
-package works.iterative.claude.internal.cli
+package works.iterative.claude.effectful.internal.cli
 
 // PURPOSE: CLI discovery functionality for finding Claude Code executable
 // PURPOSE: Uses functional programming with dependency injection for testability
 
 import cats.effect.IO
 import org.typelevel.log4cats.Logger
+import works.iterative.claude.core.{
+  CLIError,
+  CLINotFoundError,
+  NodeJSNotFoundError
+}
 
 object CLIDiscovery:
 

@@ -1,12 +1,12 @@
 // PURPOSE: Test environment variable validation edge cases and error handling
 // PURPOSE: Ensure invalid environment variable configurations fail gracefully
 
-package works.iterative.claude.internal.cli
+package works.iterative.claude.effectful.internal.cli
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import works.iterative.claude.QueryOptions
-import works.iterative.claude.internal.cli.ProcessManager
+import works.iterative.claude.core.model.QueryOptions
+import works.iterative.claude.effectful.internal.cli.ProcessManager
 import munit.CatsEffectSuite
 
 class EnvironmentValidationTest extends CatsEffectSuite:

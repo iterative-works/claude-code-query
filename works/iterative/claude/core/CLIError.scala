@@ -1,4 +1,4 @@
-package works.iterative.claude.internal.cli
+package works.iterative.claude.core
 
 // PURPOSE: Error types for CLI discovery and execution failures
 // PURPOSE: Provides structured error handling with actionable messages

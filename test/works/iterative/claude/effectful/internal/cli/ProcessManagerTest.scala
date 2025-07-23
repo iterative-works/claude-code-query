@@ -1,10 +1,11 @@
-package works.iterative.claude.internal.cli
+package works.iterative.claude.effectful.internal.cli
 
 import munit.CatsEffectSuite
 import cats.effect.IO
 import fs2.io.process.ProcessBuilder
-import works.iterative.claude.QueryOptions
-import works.iterative.claude.internal.cli.JsonParsingError
+import works.iterative.claude.core.model.QueryOptions
+import works.iterative.claude.core.JsonParsingError
+import works.iterative.claude.effectful.internal.cli.ProcessManager
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.testing.TestingLogger
 

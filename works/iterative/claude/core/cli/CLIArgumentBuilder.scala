@@ -1,10 +1,9 @@
 // PURPOSE: Converts QueryOptions case class parameters into Claude Code CLI arguments
 // PURPOSE: Ensures all SDK parameters are properly mapped to their corresponding CLI flags
 
-package works.iterative.claude.internal.cli
+package works.iterative.claude.core.cli
 
-import works.iterative.claude.QueryOptions
-import works.iterative.claude.model.PermissionMode
+import works.iterative.claude.core.model.{QueryOptions, PermissionMode}
 
 object CLIArgumentBuilder:
   /** Converts QueryOptions into list of CLI arguments for Claude Code
