@@ -1,0 +1,11 @@
+#!/bin/bash
+# Mock Claude CLI that outputs some valid JSON followed by malformed JSON
+
+# Output valid JSON first
+echo '{"type":"system","subtype":"user_context","context_user_id":"mock_user"}'
+
+# Output malformed JSON (missing closing brace)
+echo '{"type":"assistant","message":{"content":[{"type":"text","text":"Mock response"}'
+
+# Output more valid JSON to test recovery
+echo '{"type":"result","subtype":"conversation_result","duration_ms":100,"duration_api_ms":50,"is_error":false,"num_turns":1,"session_id":"mock_session"}'

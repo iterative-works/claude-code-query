@@ -379,3 +379,51 @@ class ClaudeCodeTest extends munit.FunSuite:
       )
     }
   }
+
+  test("T6.8: query handles JSON parsing errors in stream") {
+    supervised {
+      // Setup: Use mock CLI that outputs malformed JSON mid-stream
+      val options = QueryOptions(
+        prompt = "Test prompt",
+        cwd = None,
+        executable = None,
+        executableArgs = None,
+        pathToClaudeCodeExecutable = Some(
+          "test/bin/mock-claude-malformed"
+        ), // Mock CLI with malformed JSON
+        maxTurns = None,
+        allowedTools = None,
+        disallowedTools = None,
+        systemPrompt = None,
+        appendSystemPrompt = None,
+        mcpTools = None,
+        permissionMode = None,
+        continueConversation = None,
+        resume = None,
+        model = None,
+        maxThinkingTokens = None,
+        timeout = None,
+        inheritEnvironment = None,
+        environmentVariables = None
+      )
+
+      // Execute: Call query with CLI that outputs malformed JSON
+      // The current implementation should gracefully handle JSON parsing errors
+      val messageFlow = ClaudeCode.query(options)
+      val messages = messageFlow.runToList()
+
+      // Verify: Should handle JSON parsing errors gracefully
+      // Based on ProcessManager implementation, it logs errors but continues processing
+      // So we should get the valid messages (first and third lines) but skip the malformed one
+      assert(
+        messages.length >= 1,
+        "Should get at least some valid messages despite malformed JSON"
+      )
+
+      // First message should be the valid SystemMessage
+      messages.headOption match
+        case Some(SystemMessage(subtype, _)) =>
+          assertEquals(subtype, "user_context")
+        case other => fail(s"Expected SystemMessage but got: $other")
+    }
+  }
