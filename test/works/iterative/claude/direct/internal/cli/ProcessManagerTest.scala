@@ -125,7 +125,10 @@ class ProcessManagerTest extends munit.FunSuite:
 
       // Mock command that outputs to both stdout and stderr
       val testScript = "/bin/sh"
-      val args = List("-c", """echo '{"type":"user","content":"test"}' && echo 'stderr output' >&2""")
+      val args = List(
+        "-c",
+        """echo '{"type":"user","content":"test"}' && echo 'stderr output' >&2"""
+      )
       val options = QueryOptions(
         prompt = "test prompt",
         cwd = None,
