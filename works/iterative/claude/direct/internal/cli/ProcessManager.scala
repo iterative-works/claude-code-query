@@ -27,6 +27,20 @@ object ProcessManager:
     // Start the process
     val process = processBuilder.start()
 
+    // Concurrently capture stderr using Ox fork
+    val stderrCapture = fork {
+      val stderrReader = new BufferedReader(
+        new InputStreamReader(process.getErrorStream)
+      )
+      val stderrContent = scala.collection.mutable.ListBuffer[String]()
+      var stderrLine: String = null
+      while { stderrLine = stderrReader.readLine(); stderrLine != null } do
+        stderrContent += stderrLine
+        logger.debug(s"stderr: $stderrLine")
+      stderrReader.close()
+      stderrContent.toList
+    }
+
     // Read stdout and parse JSON messages
     val reader = new BufferedReader(
       new InputStreamReader(process.getInputStream)
@@ -44,8 +58,13 @@ object ProcessManager:
           logger.error(s"JSON parsing failed: ${error.message}")
           // For this minimal implementation, continue processing other lines
 
+    reader.close()
+
     // Wait for process to complete
     val exitCode = process.waitFor()
+
+    // Wait for stderr capture to complete
+    val stderrLines = stderrCapture.join()
 
     logger.info(s"Process completed with exit code: $exitCode")
 
