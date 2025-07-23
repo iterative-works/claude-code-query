@@ -30,3 +30,13 @@ class FileSystemOpsTest extends munit.FunSuite:
 
     // Should return true for existing files
     assert(result, "existing file should return true")
+
+  test("isExecutable correctly identifies executable files"):
+    // Test with sh executable that should be found and executable
+    val shPath = FileSystemOps.which("sh")
+    assert(shPath.isDefined, "sh should be found in PATH for this test")
+
+    val result = FileSystemOps.isExecutable(shPath.get)
+
+    // Should return true for executable files
+    assert(result, "sh executable should return true")
