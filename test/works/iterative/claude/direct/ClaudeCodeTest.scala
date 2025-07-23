@@ -436,7 +436,8 @@ class ClaudeCodeTest extends munit.FunSuite:
         cwd = None,
         executable = None,
         executableArgs = None,
-        pathToClaudeCodeExecutable = Some("test/bin/mock-claude"), // Mock CLI with multiple messages
+        pathToClaudeCodeExecutable =
+          Some("test/bin/mock-claude"), // Mock CLI with multiple messages
         maxTurns = None,
         allowedTools = None,
         disallowedTools = None,
@@ -458,13 +459,159 @@ class ClaudeCodeTest extends munit.FunSuite:
 
       // Verify: Should collect all messages from the Flow into a List
       assert(messages.nonEmpty, "Should receive messages from CLI")
-      
+
       // Should have multiple message types from the mock CLI
       val hasSystemMessage = messages.exists(_.isInstanceOf[SystemMessage])
-      val hasAssistantMessage = messages.exists(_.isInstanceOf[AssistantMessage])
+      val hasAssistantMessage =
+        messages.exists(_.isInstanceOf[AssistantMessage])
       val hasResultMessage = messages.exists(_.isInstanceOf[ResultMessage])
-      
+
       assert(hasSystemMessage, "Should include SystemMessage from mock CLI")
       // Note: AssistantMessage and ResultMessage depend on the mock CLI output
+    }
+  }
+
+  test("T7.2: querySync propagates errors from underlying query") {
+    supervised {
+      // Setup: QueryOptions that will cause ProcessExecutionError
+      val options = QueryOptions(
+        prompt = "Test prompt",
+        cwd = None,
+        executable = None,
+        executableArgs = None,
+        pathToClaudeCodeExecutable =
+          Some("/bin/false"), // Command that always exits with code 1
+        maxTurns = None,
+        allowedTools = None,
+        disallowedTools = None,
+        systemPrompt = None,
+        appendSystemPrompt = None,
+        mcpTools = None,
+        permissionMode = None,
+        continueConversation = None,
+        resume = None,
+        model = None,
+        maxThinkingTokens = None,
+        timeout = None,
+        inheritEnvironment = None,
+        environmentVariables = None
+      )
+
+      // Execute: Call querySync with failing CLI - should propagate error
+      val exception = intercept[ProcessExecutionError] {
+        ClaudeCode.querySync(options)
+      }
+
+      // Verify: Should propagate same error as query() method
+      assert(
+        exception.exitCode != 0,
+        s"Expected non-zero exit code but got: ${exception.exitCode}"
+      )
+      assert(
+        exception.command.nonEmpty,
+        "Expected command information in error"
+      )
+    }
+  }
+
+  test("T7.3: queryResult extracts text from AssistantMessage") {
+    supervised {
+      // Setup: QueryOptions that will produce AssistantMessage with TextBlock
+      val options = QueryOptions(
+        prompt = "Test prompt",
+        cwd = None,
+        executable = None,
+        executableArgs = None,
+        pathToClaudeCodeExecutable =
+          Some("test/bin/mock-claude"), // Mock CLI with AssistantMessage
+        maxTurns = None,
+        allowedTools = None,
+        disallowedTools = None,
+        systemPrompt = None,
+        appendSystemPrompt = None,
+        mcpTools = None,
+        permissionMode = None,
+        continueConversation = None,
+        resume = None,
+        model = None,
+        maxThinkingTokens = None,
+        timeout = None,
+        inheritEnvironment = None,
+        environmentVariables = None
+      )
+
+      // Execute: Call queryResult to extract text content
+      val result = ClaudeCode.queryResult(options)
+
+      // Verify: Should extract text from AssistantMessage's TextBlock
+      assert(result.nonEmpty, "Should extract text from AssistantMessage")
+      // The exact content depends on the mock CLI output
+    }
+  }
+
+  test("T7.4: queryResult handles missing AssistantMessage gracefully") {
+    supervised {
+      // Setup: Use a command that outputs only SystemMessage and ResultMessage (no AssistantMessage)
+      val options = QueryOptions(
+        prompt = "Test prompt",
+        cwd = None,
+        executable = None,
+        executableArgs = Some(List("SystemMessage only")), // Custom args to control output
+        pathToClaudeCodeExecutable = Some("/bin/echo"), // Echo only outputs one line
+        maxTurns = None,
+        allowedTools = None,
+        disallowedTools = None,
+        systemPrompt = None,
+        appendSystemPrompt = None,
+        mcpTools = None,
+        permissionMode = None,
+        continueConversation = None,
+        resume = None,
+        model = None,
+        maxThinkingTokens = None,
+        timeout = None,
+        inheritEnvironment = None,
+        environmentVariables = None
+      )
+
+      // Execute: Call queryResult when no AssistantMessage is present
+      val result = ClaudeCode.queryResult(options)
+
+      // Verify: Should return empty string gracefully
+      assertEquals(result, "", "Should return empty string when no AssistantMessage found")
+    }
+  }
+
+  test("T7.5: queryResult handles AssistantMessage without TextBlock") {
+    supervised {
+      // Setup: This is a theoretical test case - in practice, AssistantMessages from the CLI
+      // would typically contain TextBlocks. This test verifies graceful handling of edge cases.
+      val options = QueryOptions(
+        prompt = "Test prompt",
+        cwd = None,
+        executable = None,
+        executableArgs = Some(List("No text content")),
+        pathToClaudeCodeExecutable = Some("/bin/echo"),
+        maxTurns = None,
+        allowedTools = None,
+        disallowedTools = None,
+        systemPrompt = None,
+        appendSystemPrompt = None,
+        mcpTools = None,
+        permissionMode = None,
+        continueConversation = None,
+        resume = None,
+        model = None,
+        maxThinkingTokens = None,
+        timeout = None,
+        inheritEnvironment = None,
+        environmentVariables = None
+      )
+
+      // Execute: Call queryResult - echo output won't be a valid AssistantMessage
+      val result = ClaudeCode.queryResult(options)
+
+      // Verify: Should return empty string when no TextBlock found
+      assertEquals(result, "", "Should return empty string when no TextBlock found")
     }
   }

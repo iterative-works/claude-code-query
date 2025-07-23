@@ -35,6 +35,24 @@ object ClaudeCode:
   def querySync(options: QueryOptions)(using ox: Ox): List[Message] =
     executeQuerySync(options)
 
+  /** Executes a query and extracts the text content from AssistantMessage. This
+    * is a convenience method for getting just the assistant's response text.
+    */
+  def queryResult(options: QueryOptions)(using ox: Ox): String =
+    val messages = executeQuerySync(options)
+    extractTextFromMessages(messages)
+
+  private def extractTextFromMessages(messages: List[Message]): String =
+    messages
+      .collectFirst { case assistant: AssistantMessage =>
+        assistant.content
+          .collectFirst { case textBlock: TextBlock =>
+            textBlock.text
+          }
+          .getOrElse("")
+      }
+      .getOrElse("")
+
   private def executeQuerySync(options: QueryOptions)(using
       ox: Ox
   ): List[Message] =
