@@ -5,8 +5,21 @@ package works.iterative.claude.direct.internal.parsing
 import works.iterative.claude.core.{JsonParsingError}
 import works.iterative.claude.core.model.*
 import works.iterative.claude.direct.internal.parsing.JsonParser
+import works.iterative.claude.direct.internal.cli.Logger
 
 class JsonParserTest extends munit.FunSuite:
+
+  // Mock Logger for testing
+  class MockLogger extends Logger:
+    var debugMessages: List[String] = List.empty
+    var infoMessages: List[String] = List.empty
+    var warnMessages: List[String] = List.empty
+    var errorMessages: List[String] = List.empty
+
+    def debug(msg: String): Unit = debugMessages = msg :: debugMessages
+    def info(msg: String): Unit = infoMessages = msg :: infoMessages
+    def warn(msg: String): Unit = warnMessages = msg :: warnMessages
+    def error(msg: String): Unit = errorMessages = msg :: errorMessages
 
   test("T3.1: parseJsonLineWithContext handles valid JSON messages") {
     // Setup: Valid JSON message strings from CLI output
@@ -140,4 +153,52 @@ class JsonParserTest extends munit.FunSuite:
         assert(cause != null)
       case other =>
         fail(s"Expected Left(JsonParsingError(...)) but got: $other")
+  }
+
+  test("T3.4: parseJsonLineWithContext logs parsing attempts") {
+    // Setup: Mock logger capturing debug messages
+    given MockLogger = MockLogger()
+
+    val validJson = """{"type":"user","content":"Hello Claude!"}"""
+    val malformedJson = """{"type":"user","invalid"}"""
+    val emptyLine = ""
+
+    // Execute: Parse different types of input with logging
+    val validResult =
+      JsonParser.parseJsonLineWithContextWithLogging(validJson, 1)
+    val malformedResult =
+      JsonParser.parseJsonLineWithContextWithLogging(malformedJson, 2)
+    val emptyResult =
+      JsonParser.parseJsonLineWithContextWithLogging(emptyLine, 3)
+
+    // Verify: Results are correct
+    assert(validResult.isRight)
+    assert(malformedResult.isLeft)
+    assert(emptyResult.isRight)
+
+    // Verify: Appropriate debug and error log messages
+    val logger = summon[MockLogger]
+
+    // Should log parsing attempts
+    assert(
+      logger.debugMessages.exists(_.contains("Parsing JSON line 1"))
+    )
+    assert(
+      logger.debugMessages.exists(_.contains("Parsing JSON line 2"))
+    )
+    assert(
+      logger.debugMessages.exists(_.contains("Skipping empty line 3"))
+    )
+
+    // Should log successful parsing
+    assert(
+      logger.debugMessages.exists(
+        _.contains("Successfully parsed message of type user")
+      )
+    )
+
+    // Should log parsing errors
+    assert(
+      logger.errorMessages.exists(_.contains("Failed to parse JSON at line 2"))
+    )
   }

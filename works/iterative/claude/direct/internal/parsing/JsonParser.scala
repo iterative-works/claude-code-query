@@ -5,6 +5,7 @@ package works.iterative.claude.direct.internal.parsing
 import works.iterative.claude.core.{JsonParsingError}
 import works.iterative.claude.core.model.Message
 import works.iterative.claude.core.parsing.{JsonParser as CoreJsonParser}
+import works.iterative.claude.direct.internal.cli.Logger
 import io.circe.parser
 
 object JsonParser:
@@ -27,3 +28,12 @@ object JsonParser:
         case Left(parseError) =>
           // JSON parsing failed, return JsonParsingError
           Left(JsonParsingError(line, lineNumber, parseError))
+
+  /** Parse JSON line with context and logging, returning Either for error
+    * handling without IO effects
+    */
+  def parseJsonLineWithContextWithLogging(
+      line: String,
+      lineNumber: Int
+  )(using logger: Logger): Either[JsonParsingError, Option[Message]] =
+    ???
