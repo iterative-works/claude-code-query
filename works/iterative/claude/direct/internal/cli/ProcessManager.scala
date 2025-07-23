@@ -16,7 +16,7 @@ object ProcessManager:
       args: List[String],
       options: QueryOptions
   ): ProcessBuilder =
-    // GREEN Phase: Implementation to make T5.1, T5.2, T5.3 tests pass
+    // GREEN Phase: Implementation to make T5.1, T5.2, T5.3, T5.4, T5.5 tests pass
     val processBuilder = new ProcessBuilder((executablePath :: args).asJava)
 
     // Set working directory when provided
@@ -24,9 +24,18 @@ object ProcessManager:
       processBuilder.directory(new java.io.File(cwdPath))
     }
 
+    // Handle environment inheritance
+    val environment = processBuilder.environment()
+    options.inheritEnvironment match
+      case Some(false) =>
+        // Clear all inherited environment variables
+        environment.clear()
+      case Some(true) | None =>
+        // Keep inherited environment (default ProcessBuilder behavior)
+        ()
+
     // Set environment variables when provided
     options.environmentVariables.foreach { envVars =>
-      val environment = processBuilder.environment()
       envVars.foreach { case (key, value) =>
         environment.put(key, value)
       }

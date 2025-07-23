@@ -272,3 +272,82 @@ class ProcessManagerTest extends munit.FunSuite:
     assertEquals(environment.get("TEST_VAR"), "test_value")
     assertEquals(environment.get("ANOTHER_VAR"), "another_value")
   }
+
+  test(
+    "T5.4: configureProcess inherits environment when inheritEnvironment is true"
+  ) {
+    // Setup: QueryOptions with inheritEnvironment=true
+    given MockLogger = MockLogger()
+
+    val options = QueryOptions(
+      prompt = "test prompt",
+      cwd = None,
+      executable = None,
+      executableArgs = None,
+      pathToClaudeCodeExecutable = None,
+      maxTurns = None,
+      allowedTools = None,
+      disallowedTools = None,
+      systemPrompt = None,
+      appendSystemPrompt = None,
+      mcpTools = None,
+      permissionMode = None,
+      continueConversation = None,
+      resume = None,
+      model = None,
+      maxThinkingTokens = None,
+      timeout = None,
+      inheritEnvironment = Some(true),
+      environmentVariables = None
+    )
+
+    // Execute: Call configureProcess with inheritEnvironment=true
+    val processBuilder =
+      ProcessManager.configureProcess("/bin/echo", List("test"), options)
+
+    // Verify: Should preserve parent environment variables
+    val environment = processBuilder.environment()
+    // Test with PATH which should exist in parent environment
+    assert(environment.containsKey("PATH"))
+    assert(environment.get("PATH") != null)
+    assert(environment.get("PATH").nonEmpty)
+  }
+
+  test(
+    "T5.5: configureProcess isolates environment when inheritEnvironment is false"
+  ) {
+    // Setup: QueryOptions with inheritEnvironment=false
+    given MockLogger = MockLogger()
+
+    val options = QueryOptions(
+      prompt = "test prompt",
+      cwd = None,
+      executable = None,
+      executableArgs = None,
+      pathToClaudeCodeExecutable = None,
+      maxTurns = None,
+      allowedTools = None,
+      disallowedTools = None,
+      systemPrompt = None,
+      appendSystemPrompt = None,
+      mcpTools = None,
+      permissionMode = None,
+      continueConversation = None,
+      resume = None,
+      model = None,
+      maxThinkingTokens = None,
+      timeout = None,
+      inheritEnvironment = Some(false),
+      environmentVariables = None
+    )
+
+    // Execute: Call configureProcess with inheritEnvironment=false
+    val processBuilder =
+      ProcessManager.configureProcess("/bin/echo", List("test"), options)
+
+    // Verify: Should start with clean environment (no inherited variables)
+    val environment = processBuilder.environment()
+    // When inheritEnvironment is false, the environment should be cleared
+    // PATH should not be present unless explicitly set
+    assert(!environment.containsKey("PATH"))
+  }
