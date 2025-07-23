@@ -1,0 +1,14 @@
+#!/bin/bash
+
+# Mock Claude Code CLI that returns malformed JSON to test JSON parsing error handling
+# This simulates what happens when the claude CLI outputs corrupted JSON
+
+# First output a valid system init message
+cat << 'EOF'
+{"type":"system","subtype":"init","apiKeySource":"environment","cwd":"/test","session_id":"test-session-123","tools":["Read","Write","Bash"],"mcp_servers":[],"model":"claude-3-5-sonnet-20241022","permissionMode":"default"}
+EOF
+
+# Then output malformed JSON that should trigger JsonParsingError
+echo '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"This is malformed JSON'
+echo '{"invalid": json without closing braces'
+echo 'completely broken json'

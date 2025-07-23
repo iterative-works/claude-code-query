@@ -1,0 +1,8 @@
+#!/bin/bash
+
+# Mock Claude Code CLI that returns non-zero exit code to simulate CLI failure
+# This simulates what happens when the claude CLI encounters an error
+
+echo "Error: Authentication failed. Please check your API key." >&2
+echo "Claude CLI encountered an unexpected error" >&2
+exit 1
