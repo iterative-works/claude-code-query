@@ -14,4 +14,11 @@ object FileSystemOps:
     try os.exists(os.Path(path, os.pwd))
     catch case _: Exception => false
 
-  def isExecutable(path: String): Boolean = ???
+  def isExecutable(path: String): Boolean =
+    try
+      val osPath = os.Path(path)
+      if os.exists(osPath) && os.isFile(osPath) then
+        val perms = os.perms(osPath)
+        perms.toString.contains("x")
+      else false
+    catch case _: Exception => false
