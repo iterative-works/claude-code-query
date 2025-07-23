@@ -394,7 +394,11 @@ class ProcessManagerTest extends munit.FunSuite:
       // Verify: Should capture and log stderr information
       val logger = summon[MockLogger]
       assert(logger.debugMessages.exists(_.contains("error message")))
-      assert(logger.infoMessages.exists(_.contains("Process completed with exit code: 1")))
+      assert(
+        logger.infoMessages.exists(
+          _.contains("Process completed with exit code: 1")
+        )
+      )
     }
   }
 
@@ -423,7 +427,9 @@ class ProcessManagerTest extends munit.FunSuite:
         resume = None,
         model = None,
         maxThinkingTokens = None,
-        timeout = Some(scala.concurrent.duration.FiniteDuration(500, "milliseconds")), // 500ms timeout
+        timeout = Some(
+          scala.concurrent.duration.FiniteDuration(500, "milliseconds")
+        ), // 500ms timeout
         inheritEnvironment = None,
         environmentVariables = None
       )
@@ -434,7 +440,10 @@ class ProcessManagerTest extends munit.FunSuite:
       }
 
       // Verify: Should throw ProcessTimeoutError after specified duration
-      assertEquals(exception.timeoutDuration, scala.concurrent.duration.FiniteDuration(500, "milliseconds"))
+      assertEquals(
+        exception.timeoutDuration,
+        scala.concurrent.duration.FiniteDuration(500, "milliseconds")
+      )
       assertEquals(exception.command, testScript :: args)
 
       // Verify: Should log timeout information
@@ -483,7 +492,10 @@ class ProcessManagerTest extends munit.FunSuite:
       val messages = ProcessManager.executeProcess(testScript, args, options)
 
       // Verify: Should continue processing and return valid messages despite parsing errors
-      assertEquals(messages.length, 2) // Only the valid JSON messages should be parsed
+      assertEquals(
+        messages.length,
+        2
+      ) // Only the valid JSON messages should be parsed
 
       // Verify first message (SystemMessage)
       messages(0) match
@@ -502,7 +514,11 @@ class ProcessManagerTest extends munit.FunSuite:
       // Verify: Should log JSON parsing error but continue processing
       val logger = summon[MockLogger]
       assert(logger.errorMessages.exists(_.contains("JSON parsing failed")))
-      assert(logger.infoMessages.exists(_.contains("Process completed with exit code: 0")))
+      assert(
+        logger.infoMessages.exists(
+          _.contains("Process completed with exit code: 0")
+        )
+      )
     }
   }
 
@@ -549,17 +565,27 @@ class ProcessManagerTest extends munit.FunSuite:
       val logger = summon[MockLogger]
 
       // Should log process start
-      assert(logger.infoMessages.exists(msg => 
-        msg.contains("Starting process:") && 
-        msg.contains("/bin/echo") && 
-        msg.contains(mockOutput)
-      ))
+      assert(
+        logger.infoMessages.exists(msg =>
+          msg.contains("Starting process:") &&
+            msg.contains("/bin/echo") &&
+            msg.contains(mockOutput)
+        )
+      )
 
       // Should log JSON parsing attempts (via parseJsonLineWithContextWithLogging)
       assert(logger.debugMessages.exists(_.contains("Parsing JSON line")))
-      assert(logger.debugMessages.exists(_.contains("Successfully parsed message of type user")))
+      assert(
+        logger.debugMessages.exists(
+          _.contains("Successfully parsed message of type user")
+        )
+      )
 
       // Should log process completion
-      assert(logger.infoMessages.exists(_.contains("Process completed with exit code: 0")))
+      assert(
+        logger.infoMessages.exists(
+          _.contains("Process completed with exit code: 0")
+        )
+      )
     }
   }

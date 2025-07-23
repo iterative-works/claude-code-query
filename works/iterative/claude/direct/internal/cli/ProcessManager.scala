@@ -49,7 +49,9 @@ object ProcessManager:
       options: QueryOptions
   )(using logger: Logger, ox: Ox): List[Message] =
     val command = executablePath :: args
-    logger.info(s"Starting process: $executablePath with args: ${args.mkString(" ")}")
+    logger.info(
+      s"Starting process: $executablePath with args: ${args.mkString(" ")}"
+    )
 
     // Apply timeout if specified
     options.timeout match
@@ -61,7 +63,7 @@ object ProcessManager:
           throw ProcessTimeoutError(timeoutDuration, command)
         else
           executeProcessWithoutTimeout(executablePath, args, options, command)
-        
+
       case None =>
         executeProcessWithoutTimeout(executablePath, args, options, command)
 
@@ -118,7 +120,6 @@ object ProcessManager:
 
     logger.info(s"Process completed with exit code: $exitCode")
 
-    if exitCode != 0 then
-      throw ProcessExecutionError(exitCode, "", command)
+    if exitCode != 0 then throw ProcessExecutionError(exitCode, "", command)
 
     messages.toList

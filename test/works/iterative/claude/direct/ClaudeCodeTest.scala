@@ -15,11 +15,18 @@ class ClaudeCodeTest extends munit.FunSuite:
   test("T6.1: query with simple prompt returns Flow of messages") {
     supervised {
       // Setup: Mock CLI executable outputting SystemMessage + AssistantMessage + ResultMessage
+      // Mock command that outputs expected JSON messages
+      val mockJsonOutput = List(
+        """{"type":"system","subtype":"user_context","context_user_id":"user_123"}""",
+        """{"type":"assistant","message":{"content":[{"type":"text","text":"Hello! How can I help?"}]}}""",
+        """{"type":"result","subtype":"conversation_result","duration_ms":1000,"duration_api_ms":500,"is_error":false,"num_turns":1,"session_id":"session_123"}"""
+      ).mkString("\n")
+
       val options = QueryOptions(
         prompt = "Hello Claude!",
         cwd = None,
         executable = None,
-        executableArgs = None,
+        executableArgs = Some(List(mockJsonOutput)), // Pass JSON as executable args for echo
         pathToClaudeCodeExecutable = Some("/bin/echo"), // Mock CLI with echo
         maxTurns = None,
         allowedTools = None,
@@ -36,13 +43,6 @@ class ClaudeCodeTest extends munit.FunSuite:
         inheritEnvironment = None,
         environmentVariables = None
       )
-
-      // Mock command that outputs expected JSON messages
-      val mockJsonOutput = List(
-        """{"type":"system","subtype":"user_context","context_user_id":"user_123"}""",
-        """{"type":"assistant","message":{"content":[{"type":"text","text":"Hello! How can I help?"}]}}""",
-        """{"type":"result","subtype":"conversation_result","duration_ms":1000,"duration_api_ms":500,"is_error":false,"num_turns":1,"session_id":"session_123"}"""
-      ).mkString("\n")
 
       // Execute: Call query to get Flow of messages
       val messageFlow = ClaudeCode.query(options)
