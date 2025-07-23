@@ -5,6 +5,9 @@ package works.iterative.claude.direct.internal.cli
 import ox.*
 import works.iterative.claude.core.model.*
 import works.iterative.claude.core.{ProcessExecutionError, ProcessTimeoutError}
+import works.iterative.claude.direct.internal.parsing.JsonParser
+import java.io.{BufferedReader, InputStreamReader}
+import scala.jdk.CollectionConverters.*
 
 object ProcessManager:
 
@@ -13,5 +16,40 @@ object ProcessManager:
       args: List[String],
       options: QueryOptions
   )(using logger: Logger, ox: Ox): List[Message] =
-    // RED Phase: Stub implementation that will cause test to fail
-    ???
+    // GREEN Phase: Minimal implementation to make test pass
+    logger.info(
+      s"Starting process: $executablePath with args: ${args.mkString(" ")}"
+    )
+
+    // Create process builder
+    val processBuilder = new ProcessBuilder((executablePath :: args).asJava)
+
+    // Start the process
+    val process = processBuilder.start()
+
+    // Read stdout and parse JSON messages
+    val reader = new BufferedReader(
+      new InputStreamReader(process.getInputStream)
+    )
+    val messages = scala.collection.mutable.ListBuffer[Message]()
+
+    var lineNumber = 0
+    var line: String = null
+    while { line = reader.readLine(); line != null } do
+      lineNumber += 1
+      JsonParser.parseJsonLineWithContextWithLogging(line, lineNumber) match
+        case Right(Some(message)) => messages += message
+        case Right(None)          => // Skip empty lines
+        case Left(error)          =>
+          logger.error(s"JSON parsing failed: ${error.message}")
+          // For this minimal implementation, continue processing other lines
+
+    // Wait for process to complete
+    val exitCode = process.waitFor()
+
+    logger.info(s"Process completed with exit code: $exitCode")
+
+    if exitCode != 0 then
+      throw ProcessExecutionError(exitCode, "", executablePath :: args)
+
+    messages.toList
