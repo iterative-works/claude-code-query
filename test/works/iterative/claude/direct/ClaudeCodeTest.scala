@@ -165,3 +165,43 @@ class ClaudeCodeTest extends munit.FunSuite:
         case other => fail(s"Expected ResultMessage but got: $other")
     }
   }
+
+  test("T6.3: query handles CLI discovery failure gracefully") {
+    supervised {
+      // Setup: Use an invalid executable path that will definitely fail
+      val options = QueryOptions(
+        prompt = "Hello Claude!",
+        cwd = None,
+        executable = None,
+        executableArgs = None, // No mock args - will try real CLI arguments
+        pathToClaudeCodeExecutable =
+          Some("/this/path/definitely/does/not/exist/claude"), // Invalid path
+        maxTurns = None,
+        allowedTools = None,
+        disallowedTools = None,
+        systemPrompt = None,
+        appendSystemPrompt = None,
+        mcpTools = None,
+        permissionMode = None,
+        continueConversation = None,
+        resume = None,
+        model = None,
+        maxThinkingTokens = None,
+        timeout = None,
+        inheritEnvironment = None,
+        environmentVariables = None
+      )
+
+      // Execute: Call query with invalid CLI path - should fail process execution
+      val exception = intercept[Exception] {
+        val messageFlow = ClaudeCode.query(options)
+        messageFlow.runToList() // Force evaluation
+      }
+
+      // Verify: Should propagate process execution error
+      assert(
+        exception.getMessage != null && exception.getMessage.nonEmpty,
+        s"Expected non-empty error message but got: ${exception.getMessage}"
+      )
+    }
+  }
