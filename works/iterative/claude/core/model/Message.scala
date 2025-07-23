@@ -1,4 +1,4 @@
-package works.iterative.claude.model
+package works.iterative.claude.core.model
 
 // PURPOSE: Message type hierarchy for Claude Code SDK communication
 // PURPOSE: Represents different types of messages exchanged during conversation

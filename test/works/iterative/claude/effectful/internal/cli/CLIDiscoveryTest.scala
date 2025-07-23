@@ -1,11 +1,10 @@
-package works.iterative.claude
+package works.iterative.claude.effectful.internal.cli
 
 import cats.effect.IO
 import munit.CatsEffectSuite
 import org.typelevel.log4cats.Logger
-import works.iterative.claude.internal.cli.{
-  CLIDiscovery,
-  FileSystemOps,
+// CLIDiscovery and FileSystemOps are now in the same package
+import works.iterative.claude.core.{
   CLINotFoundError,
   NodeJSNotFoundError,
   ProcessError

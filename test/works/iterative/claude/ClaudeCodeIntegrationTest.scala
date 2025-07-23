@@ -8,8 +8,8 @@ import fs2.Stream
 import munit.CatsEffectSuite
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.testing.TestingLogger
-import works.iterative.claude.internal.cli.{
-  CLIDiscovery,
+import works.iterative.claude.effectful.internal.cli.CLIDiscovery
+import works.iterative.claude.core.{
   CLIError,
   ProcessExecutionError,
   JsonParsingError,
@@ -17,7 +17,7 @@ import works.iterative.claude.internal.cli.{
   ConfigurationError
 }
 import scala.concurrent.duration.*
-import works.iterative.claude.model.*
+import works.iterative.claude.core.model.*
 
 class ClaudeCodeIntegrationTest extends CatsEffectSuite:
 

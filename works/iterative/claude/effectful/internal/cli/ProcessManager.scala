@@ -1,15 +1,20 @@
 // PURPOSE: Manages subprocess execution and configuration for Claude Code CLI
 // PURPOSE: Separates process management logic from ClaudeCode for better testability
 
-package works.iterative.claude.internal.cli
+package works.iterative.claude.effectful.internal.cli
 
 import cats.effect.IO
 import fs2.Stream
 import fs2.io.process.ProcessBuilder
 import fs2.io.file.Path
-import works.iterative.claude.QueryOptions
-import works.iterative.claude.model.{Message, AssistantMessage, ResultMessage}
-import works.iterative.claude.internal.parsing.JsonParser
+import works.iterative.claude.core.model.QueryOptions
+import works.iterative.claude.core.model.{
+  Message,
+  AssistantMessage,
+  ResultMessage
+}
+import works.iterative.claude.effectful.internal.parsing.JsonParser
+import works.iterative.claude.core.{ProcessExecutionError, ProcessTimeoutError}
 import org.typelevel.log4cats.Logger
 
 /** Manages process configuration and execution for Claude Code CLI.

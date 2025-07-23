@@ -4,7 +4,7 @@ import cats.effect.IO
 import munit.CatsEffectSuite
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.testing.TestingLogger
-import works.iterative.claude.model.*
+import works.iterative.claude.core.model.*
 
 class ClaudeCodeLoggingTest extends CatsEffectSuite:
 

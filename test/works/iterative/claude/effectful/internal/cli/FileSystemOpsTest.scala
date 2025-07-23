@@ -1,10 +1,11 @@
-package works.iterative.claude.internal.cli
+package works.iterative.claude.effectful.internal.cli
 
 // PURPOSE: Unit tests for FileSystemOps real implementations
 // PURPOSE: Verifies actual file system operations work correctly
 
 import cats.effect.IO
 import munit.CatsEffectSuite
+import works.iterative.claude.effectful.internal.cli.RealFileSystemOps
 
 class FileSystemOpsTest extends CatsEffectSuite:
 

@@ -1,42 +1,19 @@
-package works.iterative.claude.internal.parsing
+package works.iterative.claude.core.parsing
 
-// PURPOSE: JSON parsing utilities for Claude Code CLI stream output
-// PURPOSE: Converts CLI JSON responses into typed Message objects
+// PURPOSE: Pure JSON parsing utilities for Claude Code CLI stream output
+// PURPOSE: Converts CLI JSON responses into typed Message objects without effects
 
-import cats.effect.IO
 import io.circe.{Json, parser}
-import works.iterative.claude.model.*
-import works.iterative.claude.internal.cli.JsonParsingError
-import org.typelevel.log4cats.Logger
+import works.iterative.claude.core.model.*
 
 object JsonParser:
-  // High-level JSON line parsing - entry point for simple parsing
-  def parseJsonLine(line: String): IO[Option[Message]] =
-    if line.trim.isEmpty then IO.pure(None)
+  // Pure JSON line parsing - simple parsing without effects
+  def parseJsonLine(line: String): Option[Message] =
+    if line.trim.isEmpty then None
     else
       parser.parse(line) match
-        case Right(json) => IO.pure(parseMessage(json))
-        case Left(_)     => IO.pure(None)
-
-  // High-level JSON line parsing with error context and logging
-  def parseJsonLineWithContext(
-      line: String,
-      lineNumber: Int,
-      logger: Logger[IO]
-  ): IO[Either[JsonParsingError, Option[Message]]] =
-    if line.trim.isEmpty then IO.pure(Right(None))
-    else
-      parser.parse(line) match
-        case Right(json) =>
-          logger.debug(
-            s"Successfully parsed JSON message at line $lineNumber"
-          ) *>
-            IO.pure(Right(parseMessage(json)))
-        case Left(error) =>
-          logger.error(
-            s"JSON parsing error at line $lineNumber: ${error.getMessage}"
-          ) *>
-            IO.pure(Left(JsonParsingError(line, lineNumber, error)))
+        case Right(json) => parseMessage(json)
+        case Left(_)     => None
 
   // Core message parsing - dispatches to specific message type parsers
   def parseMessage(json: Json): Option[Message] =

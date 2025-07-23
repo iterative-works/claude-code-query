@@ -3,11 +3,12 @@ package works.iterative.claude
 import cats.effect.IO
 import munit.CatsEffectSuite
 import org.typelevel.log4cats.Logger
-import works.iterative.claude.internal.cli.{
+import works.iterative.claude.core.{
   ConfigurationError,
   ProcessExecutionError,
   JsonParsingError
 }
+import works.iterative.claude.core.model.QueryOptions
 
 class ErrorContextLoggingTest extends CatsEffectSuite:
 

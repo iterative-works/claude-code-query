@@ -1,4 +1,4 @@
-package works.iterative.claude.model
+package works.iterative.claude.core.model
 
 // PURPOSE: Content block type hierarchy for structured message content
 // PURPOSE: Represents different types of content within assistant messages

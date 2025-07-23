@@ -1,12 +1,12 @@
 // PURPOSE: Tests CLI parameter mapping functionality for QueryOptions to CLI arguments conversion
 // PURPOSE: Ensures all QueryOptions parameters are correctly translated to Claude Code CLI flags
 
-package works.iterative.claude.internal.cli
+package works.iterative.claude.core.cli
 
 import munit.CatsEffectSuite
-import works.iterative.claude.QueryOptions
-import works.iterative.claude.internal.cli.CLIArgumentBuilder
-import works.iterative.claude.model.PermissionMode
+import works.iterative.claude.core.model.QueryOptions
+import works.iterative.claude.core.cli.CLIArgumentBuilder
+import works.iterative.claude.core.model.PermissionMode
 
 class CLIArgumentBuilderTest extends CatsEffectSuite:
 
