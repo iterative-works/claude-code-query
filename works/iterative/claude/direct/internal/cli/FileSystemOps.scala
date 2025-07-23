@@ -10,6 +10,8 @@ object FileSystemOps:
       else None
     catch case _: Exception => None
 
-  def exists(path: String): Boolean = ???
+  def exists(path: String): Boolean =
+    try os.exists(os.Path(path, os.pwd))
+    catch case _: Exception => false
 
   def isExecutable(path: String): Boolean = ???

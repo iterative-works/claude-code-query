@@ -21,7 +21,7 @@ This document outlines the test-driven development plan for migrating from cats-
   - Tests: Graceful handling of missing commands
   - Expected: `None`
 
-- [ ] **T1.3**: `exists correctly identifies existing files`
+- [x] **T1.3**: `exists correctly identifies existing files`
   - Test with known existing file
   - Tests: File existence checking without IO effects
   - Expected: `Boolean` result
