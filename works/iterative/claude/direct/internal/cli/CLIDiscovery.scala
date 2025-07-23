@@ -45,6 +45,30 @@ object CLIDiscovery:
         logger.info(s"Found claude in PATH: $path")
         Right(path)
       case None =>
-        // For now, just implement the PATH case to make T2.1 pass
-        // Will implement fallback paths in next tests
-        Left(CLINotFoundError("Claude not found in PATH"))
+        // Try common installation paths as fallback
+        logger.debug("PATH lookup failed, trying common paths")
+        tryCommonPaths(fs, logger)
+
+  /** Try common installation paths for Claude CLI */
+  private def tryCommonPaths(
+      fs: FileSystemOperations,
+      logger: Logger
+  ): Either[CLIError, String] =
+    val commonPaths = List(
+      "/usr/local/bin/claude",
+      "/usr/bin/claude",
+      "/opt/homebrew/bin/claude",
+      System.getProperty("user.home") + "/.local/bin/claude",
+      System.getProperty("user.home") + "/bin/claude"
+    )
+
+    commonPaths.find(path => fs.exists(path) && fs.isExecutable(path)) match
+      case Some(path) =>
+        logger.info(s"Found claude at common path: $path")
+        Right(path)
+      case None =>
+        Left(
+          CLINotFoundError(
+            "Claude not found in PATH or common installation paths"
+          )
+        )

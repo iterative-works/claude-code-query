@@ -41,7 +41,7 @@ This document outlines the test-driven development plan for migrating from cats-
   - Tests: PATH lookup success case with direct-style
   - Expected: `Either[CLIError, String]` with `Right(path)`
 
-- [ ] **T2.2**: `findClaude falls back to common paths when PATH lookup fails`
+- [x] **T2.2**: `findClaude falls back to common paths when PATH lookup fails`
   - Mock FileSystemOps with PATH failure, common path success
   - Tests: Fallback logic without IO effects
   - Expected: `Right(path)` from common installation paths
