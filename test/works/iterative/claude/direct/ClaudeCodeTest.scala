@@ -260,7 +260,7 @@ class ClaudeCodeTest extends munit.FunSuite:
         executable = Some("test-executable"),
         executableArgs = None, // Don't override - let it build real arguments
         pathToClaudeCodeExecutable =
-          Some("/bin/echo"), // Use echo to capture arguments
+          Some("test/bin/mock-claude"), // Use mock CLI that outputs JSON
         maxTurns = Some(5),
         allowedTools = Some(List("tool1", "tool2")),
         disallowedTools = Some(List("tool3")),
