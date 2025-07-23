@@ -163,3 +163,50 @@ class CLIDiscoveryTest extends munit.FunSuite:
       logger.warnMessages.exists(_.contains("Claude Code CLI not found"))
     )
   }
+
+  test("T2.5: findClaude logs PATH search attempt and results") {
+    // Setup: Mock FileSystemOps for successful PATH lookup
+    val mockFs = MockFileSystemOps()
+    mockFs.whichResponses = Map("claude" -> Some("/opt/claude/bin/claude"))
+    val mockLogger = MockLogger()
+
+    // Execute: Call findClaude with mocked dependencies
+    val result = CLIDiscovery.findClaude(mockFs, mockLogger)
+
+    // Verify: Should return Right with the path from PATH lookup
+    assertEquals(result, Right("/opt/claude/bin/claude"))
+
+    // Verify: Should log the PATH search attempt
+    assert(
+      mockLogger.debugMessages.exists(
+        _.contains("Searching for claude in PATH")
+      ),
+      s"Expected debug message about PATH search but got: ${mockLogger.debugMessages}"
+    )
+
+    // Verify: Should log the successful PATH search result
+    assert(
+      mockLogger.infoMessages.exists(
+        _.contains("Found claude in PATH: /opt/claude/bin/claude")
+      ),
+      s"Expected info message about PATH result but got: ${mockLogger.infoMessages}"
+    )
+
+    // Setup: Test case for PATH search failure scenario
+    val mockFs2 = MockFileSystemOps()
+    mockFs2.whichResponses = Map("claude" -> None)
+    mockFs2.existsResponses = Map.empty // No common paths succeed either
+    mockFs2.isExecutableResponses = Map.empty
+    val mockLogger2 = MockLogger()
+
+    // Execute: Call findClaude with PATH failure
+    val result2 = CLIDiscovery.findClaude(mockFs2, mockLogger2)
+
+    // Verify: Should log PATH search failure
+    assert(
+      mockLogger2.debugMessages.exists(
+        _.contains("PATH lookup failed, trying common paths")
+      ),
+      s"Expected debug message about PATH failure but got: ${mockLogger2.debugMessages}"
+    )
+  }
