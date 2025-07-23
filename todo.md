@@ -51,7 +51,7 @@ This document outlines the test-driven development plan for migrating from cats-
   - Tests: Prerequisite checking with direct-style error handling
   - Expected: `Left(NodeJSNotFoundError)` with installation guide
 
-- [ ] **T2.4**: `findClaude returns CLINotFoundError when claude not found anywhere`
+- [x] **T2.4**: `findClaude returns CLINotFoundError when claude not found anywhere`
   - Mock FileSystemOps returning no claude, but node available
   - Tests: Error case with actionable message
   - Expected: `Left(CLINotFoundError)` with installation instructions
