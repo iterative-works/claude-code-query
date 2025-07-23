@@ -79,9 +79,12 @@ object CLIDiscovery:
     fs.which("node") match
       case Some(_) =>
         // Node.js is available, return CLINotFoundError
+        logger.warn(
+          "Claude Code CLI not found in PATH or common installation paths"
+        )
         Left(
           CLINotFoundError(
-            "Claude not found in PATH or common installation paths"
+            "Claude Code CLI not found in PATH or common installation paths. Please install the Claude Code CLI first."
           )
         )
       case None =>
