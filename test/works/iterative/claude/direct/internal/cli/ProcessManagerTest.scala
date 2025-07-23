@@ -234,3 +234,41 @@ class ProcessManagerTest extends munit.FunSuite:
     // Verify: Should use current working directory (processBuilder.directory() should be null)
     assertEquals(processBuilder.directory(), null)
   }
+
+  test("T5.3: configureProcess sets environment variables when specified") {
+    // Setup: QueryOptions with custom environment variables
+    given MockLogger = MockLogger()
+
+    val customEnvVars =
+      Map("TEST_VAR" -> "test_value", "ANOTHER_VAR" -> "another_value")
+    val options = QueryOptions(
+      prompt = "test prompt",
+      cwd = None,
+      executable = None,
+      executableArgs = None,
+      pathToClaudeCodeExecutable = None,
+      maxTurns = None,
+      allowedTools = None,
+      disallowedTools = None,
+      systemPrompt = None,
+      appendSystemPrompt = None,
+      mcpTools = None,
+      permissionMode = None,
+      continueConversation = None,
+      resume = None,
+      model = None,
+      maxThinkingTokens = None,
+      timeout = None,
+      inheritEnvironment = None,
+      environmentVariables = Some(customEnvVars)
+    )
+
+    // Execute: Call configureProcess with custom environment variables
+    val processBuilder =
+      ProcessManager.configureProcess("/bin/echo", List("test"), options)
+
+    // Verify: Should set environment variables correctly
+    val environment = processBuilder.environment()
+    assertEquals(environment.get("TEST_VAR"), "test_value")
+    assertEquals(environment.get("ANOTHER_VAR"), "another_value")
+  }

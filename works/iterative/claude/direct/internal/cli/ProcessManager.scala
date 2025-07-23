@@ -16,12 +16,20 @@ object ProcessManager:
       args: List[String],
       options: QueryOptions
   ): ProcessBuilder =
-    // GREEN Phase: Minimal implementation to make T5.1 test pass
+    // GREEN Phase: Implementation to make T5.1, T5.2, T5.3 tests pass
     val processBuilder = new ProcessBuilder((executablePath :: args).asJava)
 
     // Set working directory when provided
     options.cwd.foreach { cwdPath =>
       processBuilder.directory(new java.io.File(cwdPath))
+    }
+
+    // Set environment variables when provided
+    options.environmentVariables.foreach { envVars =>
+      val environment = processBuilder.environment()
+      envVars.foreach { case (key, value) =>
+        environment.put(key, value)
+      }
     }
 
     processBuilder
