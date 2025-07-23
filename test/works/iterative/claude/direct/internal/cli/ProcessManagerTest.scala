@@ -117,3 +117,48 @@ class ProcessManagerTest extends munit.FunSuite:
       )
     }
   }
+
+  test("T4.2: executeProcess captures stderr concurrently") {
+    supervised {
+      // Setup: Mock CLI executable that writes to both stdout and stderr
+      given MockLogger = MockLogger()
+
+      // Mock command that outputs to both stdout and stderr
+      val testScript = "/bin/sh"
+      val args = List("-c", """echo '{"type":"user","content":"test"}' && echo 'stderr output' >&2""")
+      val options = QueryOptions(
+        prompt = "test prompt",
+        cwd = None,
+        executable = None,
+        executableArgs = None,
+        pathToClaudeCodeExecutable = None,
+        maxTurns = None,
+        allowedTools = None,
+        disallowedTools = None,
+        systemPrompt = None,
+        appendSystemPrompt = None,
+        mcpTools = None,
+        permissionMode = None,
+        continueConversation = None,
+        resume = None,
+        model = None,
+        maxThinkingTokens = None,
+        timeout = None,
+        inheritEnvironment = None,
+        environmentVariables = None
+      )
+
+      // Execute: Call executeProcess with mocked CLI that writes to stderr
+      val messages = ProcessManager.executeProcess(testScript, args, options)
+
+      // Verify: Should return parsed messages from stdout
+      assertEquals(messages.length, 1)
+      messages(0) match
+        case UserMessage(content) => assertEquals(content, "test")
+        case other => fail(s"Expected UserMessage but got: $other")
+
+      // Verify: Should capture stderr concurrently and make it available for error handling
+      val logger = summon[MockLogger]
+      assert(logger.debugMessages.exists(_.contains("stderr output")))
+    }
+  }
