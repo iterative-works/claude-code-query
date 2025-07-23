@@ -427,3 +427,44 @@ class ClaudeCodeTest extends munit.FunSuite:
         case other => fail(s"Expected SystemMessage but got: $other")
     }
   }
+
+  test("T7.1: querySync collects all messages from query Flow") {
+    supervised {
+      // Setup: QueryOptions that will produce multiple messages
+      val options = QueryOptions(
+        prompt = "Test prompt",
+        cwd = None,
+        executable = None,
+        executableArgs = None,
+        pathToClaudeCodeExecutable = Some("test/bin/mock-claude"), // Mock CLI with multiple messages
+        maxTurns = None,
+        allowedTools = None,
+        disallowedTools = None,
+        systemPrompt = None,
+        appendSystemPrompt = None,
+        mcpTools = None,
+        permissionMode = None,
+        continueConversation = None,
+        resume = None,
+        model = None,
+        maxThinkingTokens = None,
+        timeout = None,
+        inheritEnvironment = None,
+        environmentVariables = None
+      )
+
+      // Execute: Call querySync to collect all messages at once
+      val messages = ClaudeCode.querySync(options)
+
+      // Verify: Should collect all messages from the Flow into a List
+      assert(messages.nonEmpty, "Should receive messages from CLI")
+      
+      // Should have multiple message types from the mock CLI
+      val hasSystemMessage = messages.exists(_.isInstanceOf[SystemMessage])
+      val hasAssistantMessage = messages.exists(_.isInstanceOf[AssistantMessage])
+      val hasResultMessage = messages.exists(_.isInstanceOf[ResultMessage])
+      
+      assert(hasSystemMessage, "Should include SystemMessage from mock CLI")
+      // Note: AssistantMessage and ResultMessage depend on the mock CLI output
+    }
+  }

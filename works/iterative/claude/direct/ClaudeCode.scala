@@ -29,6 +29,12 @@ object ClaudeCode:
   def query(options: QueryOptions)(using ox: Ox): Flow[Message] =
     Flow.fromIterable(executeQuerySync(options))
 
+  /** Executes a query and returns all messages as a List. This is a convenience
+    * method that collects all messages from the query Flow synchronously.
+    */
+  def querySync(options: QueryOptions)(using ox: Ox): List[Message] =
+    executeQuerySync(options)
+
   private def executeQuerySync(options: QueryOptions)(using
       ox: Ox
   ): List[Message] =
