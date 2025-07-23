@@ -200,3 +200,37 @@ class ProcessManagerTest extends munit.FunSuite:
     // Verify: Should set working directory correctly
     assertEquals(processBuilder.directory().getAbsolutePath, testCwd)
   }
+
+  test("T5.2: configureProcess handles missing working directory gracefully") {
+    // Setup: QueryOptions with None for cwd
+    given MockLogger = MockLogger()
+
+    val options = QueryOptions(
+      prompt = "test prompt",
+      cwd = None, // No working directory specified
+      executable = None,
+      executableArgs = None,
+      pathToClaudeCodeExecutable = None,
+      maxTurns = None,
+      allowedTools = None,
+      disallowedTools = None,
+      systemPrompt = None,
+      appendSystemPrompt = None,
+      mcpTools = None,
+      permissionMode = None,
+      continueConversation = None,
+      resume = None,
+      model = None,
+      maxThinkingTokens = None,
+      timeout = None,
+      inheritEnvironment = None,
+      environmentVariables = None
+    )
+
+    // Execute: Call configureProcess with no working directory
+    val processBuilder =
+      ProcessManager.configureProcess("/bin/echo", List("test"), options)
+
+    // Verify: Should use current working directory (processBuilder.directory() should be null)
+    assertEquals(processBuilder.directory(), null)
+  }
