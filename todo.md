@@ -11,7 +11,7 @@ This document outlines the test-driven development plan for migrating from cats-
 **Dependencies**: None - direct system calls
 **Priority**: Foundation - required by CLI discovery
 
-- [ ] **T1.1**: `which finds existing commands in PATH`
+- [x] **T1.1**: `which finds existing commands in PATH`
   - Test with 'sh' command (exists on Unix systems)
   - Tests: Real system PATH lookup without IO wrapper
   - Expected: `Option[String]` with path to sh executable
