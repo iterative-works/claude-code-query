@@ -76,3 +76,68 @@ class JsonParserTest extends munit.FunSuite:
       case other =>
         fail(s"Expected Right(Some(ResultMessage(...))) but got: $other")
   }
+
+  test("T3.2: parseJsonLineWithContext handles empty lines gracefully") {
+    // Setup: Empty and whitespace-only strings
+    val emptyLine = ""
+    val whitespaceLine = "   \t  \n  "
+    val justSpaces = "     "
+
+    // Execute: Parse empty lines with line context
+    val emptyResult = JsonParser.parseJsonLineWithContext(emptyLine, 1)
+    val whitespaceResult =
+      JsonParser.parseJsonLineWithContext(whitespaceLine, 2)
+    val spacesResult = JsonParser.parseJsonLineWithContext(justSpaces, 3)
+
+    // Verify: Should return Right(None) for empty lines
+    assertEquals(emptyResult, Right(None))
+    assertEquals(whitespaceResult, Right(None))
+    assertEquals(spacesResult, Right(None))
+  }
+
+  test("T3.3: parseJsonLineWithContext handles malformed JSON gracefully") {
+    // Setup: Invalid JSON strings with context
+    val malformedJson1 = """{"type":"system","missing_quote:true}"""
+    val malformedJson2 = """{"type":"user","content":"Hello" extra_text}"""
+    val malformedJson3 = """{"type":"assistant",}"""
+    val notJsonAtAll = """This is not JSON at all!"""
+
+    // Execute: Parse malformed JSON with line context
+    val result1 = JsonParser.parseJsonLineWithContext(malformedJson1, 5)
+    val result2 = JsonParser.parseJsonLineWithContext(malformedJson2, 10)
+    val result3 = JsonParser.parseJsonLineWithContext(malformedJson3, 15)
+    val result4 = JsonParser.parseJsonLineWithContext(notJsonAtAll, 20)
+
+    // Verify: Should return Left(JsonParsingError) with line context
+    result1 match
+      case Left(JsonParsingError(line, lineNumber, cause)) =>
+        assertEquals(line, malformedJson1)
+        assertEquals(lineNumber, 5)
+        assert(cause != null)
+      case other =>
+        fail(s"Expected Left(JsonParsingError(...)) but got: $other")
+
+    result2 match
+      case Left(JsonParsingError(line, lineNumber, cause)) =>
+        assertEquals(line, malformedJson2)
+        assertEquals(lineNumber, 10)
+        assert(cause != null)
+      case other =>
+        fail(s"Expected Left(JsonParsingError(...)) but got: $other")
+
+    result3 match
+      case Left(JsonParsingError(line, lineNumber, cause)) =>
+        assertEquals(line, malformedJson3)
+        assertEquals(lineNumber, 15)
+        assert(cause != null)
+      case other =>
+        fail(s"Expected Left(JsonParsingError(...)) but got: $other")
+
+    result4 match
+      case Left(JsonParsingError(line, lineNumber, cause)) =>
+        assertEquals(line, notJsonAtAll)
+        assertEquals(lineNumber, 20)
+        assert(cause != null)
+      case other =>
+        fail(s"Expected Left(JsonParsingError(...)) but got: $other")
+  }

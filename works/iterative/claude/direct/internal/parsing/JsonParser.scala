@@ -5,6 +5,7 @@ package works.iterative.claude.direct.internal.parsing
 import works.iterative.claude.core.{JsonParsingError}
 import works.iterative.claude.core.model.Message
 import works.iterative.claude.core.parsing.{JsonParser as CoreJsonParser}
+import io.circe.parser
 
 object JsonParser:
 
@@ -17,9 +18,12 @@ object JsonParser:
   ): Either[JsonParsingError, Option[Message]] =
     if line.trim.isEmpty then Right(None)
     else
-      try
-        val message = CoreJsonParser.parseJsonLine(line)
-        Right(message)
-      catch
-        case ex: Throwable =>
-          Left(JsonParsingError(line, lineNumber, ex))
+      // Use circe parser directly to catch JSON parsing errors
+      parser.parse(line) match
+        case Right(json) =>
+          // Use core parser for message parsing
+          val message = CoreJsonParser.parseMessage(json)
+          Right(message)
+        case Left(parseError) =>
+          // JSON parsing failed, return JsonParsingError
+          Left(JsonParsingError(line, lineNumber, parseError))
