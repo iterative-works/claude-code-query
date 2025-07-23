@@ -334,3 +334,48 @@ class ClaudeCodeTest extends munit.FunSuite:
       )
     }
   }
+
+  test("T6.7: query handles process timeout errors") {
+    supervised {
+      // Setup: Use a command that hangs with a short timeout
+      val options = QueryOptions(
+        prompt = "Test prompt",
+        cwd = None,
+        executable = None,
+        executableArgs = Some(List("10")), // Sleep for 10 seconds
+        pathToClaudeCodeExecutable = Some("sleep"), // Command that will hang
+        timeout = Some(
+          scala.concurrent.duration.Duration(500, "milliseconds")
+        ), // Very short timeout
+        maxTurns = None,
+        allowedTools = None,
+        disallowedTools = None,
+        systemPrompt = None,
+        appendSystemPrompt = None,
+        mcpTools = None,
+        permissionMode = None,
+        continueConversation = None,
+        resume = None,
+        model = None,
+        maxThinkingTokens = None,
+        inheritEnvironment = None,
+        environmentVariables = None
+      )
+
+      // Execute: Call query with hanging CLI and timeout - should timeout
+      val exception = intercept[ProcessTimeoutError] {
+        val messageFlow = ClaudeCode.query(options)
+        messageFlow.runToList() // Force evaluation
+      }
+
+      // Verify: Should fail with ProcessTimeoutError after timeout duration
+      assert(
+        exception.timeoutDuration.toMillis == 500,
+        s"Expected 500ms timeout but got: ${exception.timeoutDuration}"
+      )
+      assert(
+        exception.command.nonEmpty,
+        "Expected command information in error"
+      )
+    }
+  }
