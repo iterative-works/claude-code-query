@@ -165,3 +165,38 @@ class ProcessManagerTest extends munit.FunSuite:
       assert(logger.debugMessages.exists(_.contains("stderr output")))
     }
   }
+
+  test("T5.1: configureProcess sets working directory when provided") {
+    // Setup: QueryOptions with cwd specified
+    given MockLogger = MockLogger()
+
+    val testCwd = "/tmp"
+    val options = QueryOptions(
+      prompt = "test prompt",
+      cwd = Some(testCwd),
+      executable = None,
+      executableArgs = None,
+      pathToClaudeCodeExecutable = None,
+      maxTurns = None,
+      allowedTools = None,
+      disallowedTools = None,
+      systemPrompt = None,
+      appendSystemPrompt = None,
+      mcpTools = None,
+      permissionMode = None,
+      continueConversation = None,
+      resume = None,
+      model = None,
+      maxThinkingTokens = None,
+      timeout = None,
+      inheritEnvironment = None,
+      environmentVariables = None
+    )
+
+    // Execute: Call configureProcess to configure ProcessBuilder
+    val processBuilder =
+      ProcessManager.configureProcess("/bin/echo", List("test"), options)
+
+    // Verify: Should set working directory correctly
+    assertEquals(processBuilder.directory().getAbsolutePath, testCwd)
+  }

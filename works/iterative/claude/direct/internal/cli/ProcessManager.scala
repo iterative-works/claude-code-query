@@ -11,6 +11,21 @@ import scala.jdk.CollectionConverters.*
 
 object ProcessManager:
 
+  def configureProcess(
+      executablePath: String,
+      args: List[String],
+      options: QueryOptions
+  ): ProcessBuilder =
+    // GREEN Phase: Minimal implementation to make T5.1 test pass
+    val processBuilder = new ProcessBuilder((executablePath :: args).asJava)
+
+    // Set working directory when provided
+    options.cwd.foreach { cwdPath =>
+      processBuilder.directory(new java.io.File(cwdPath))
+    }
+
+    processBuilder
+
   def executeProcess(
       executablePath: String,
       args: List[String],
