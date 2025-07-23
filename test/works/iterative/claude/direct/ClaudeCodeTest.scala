@@ -205,3 +205,47 @@ class ClaudeCodeTest extends munit.FunSuite:
       )
     }
   }
+
+  test("T6.4: query validates configuration before execution") {
+    supervised {
+      // Setup: QueryOptions with invalid working directory
+      val options = QueryOptions(
+        prompt = "Hello Claude!",
+        cwd = Some(
+          "/this/directory/definitely/does/not/exist"
+        ), // Invalid working directory
+        executable = None,
+        executableArgs = None,
+        pathToClaudeCodeExecutable = Some("/bin/echo"), // Valid executable
+        maxTurns = None,
+        allowedTools = None,
+        disallowedTools = None,
+        systemPrompt = None,
+        appendSystemPrompt = None,
+        mcpTools = None,
+        permissionMode = None,
+        continueConversation = None,
+        resume = None,
+        model = None,
+        maxThinkingTokens = None,
+        timeout = None,
+        inheritEnvironment = None,
+        environmentVariables = None
+      )
+
+      // Execute: Call query with invalid working directory - should fail validation
+      val exception = intercept[Exception] {
+        val messageFlow = ClaudeCode.query(options)
+        messageFlow.runToList() // Force evaluation
+      }
+
+      // Verify: Should fail with ConfigurationError before attempting process execution
+      assert(
+        exception.getMessage.contains("working directory") ||
+          exception.getMessage.contains("does not exist") ||
+          exception.getMessage.contains("invalid") ||
+          exception.getMessage.contains("configuration"),
+        s"Expected configuration error about working directory but got: ${exception.getMessage}"
+      )
+    }
+  }
