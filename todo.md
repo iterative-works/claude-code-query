@@ -36,7 +36,7 @@ This document outlines the test-driven development plan for migrating from cats-
 **Dependencies**: FileSystemOps (mocked)
 **Priority**: Foundation - required by main API
 
-- [ ] **T2.1**: `findClaude succeeds when claude is found in PATH`
+- [x] **T2.1**: `findClaude succeeds when claude is found in PATH`
   - Mock FileSystemOps returning claude path from `which`
   - Tests: PATH lookup success case with direct-style
   - Expected: `Either[CLIError, String]` with `Right(path)`

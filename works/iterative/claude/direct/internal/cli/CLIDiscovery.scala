@@ -38,4 +38,13 @@ object CLIDiscovery:
       fs: FileSystemOperations,
       logger: Logger
   ): Either[CLIError, String] =
-    ???
+    // First try PATH lookup
+    logger.debug("Searching for claude in PATH")
+    fs.which("claude") match
+      case Some(path) =>
+        logger.info(s"Found claude in PATH: $path")
+        Right(path)
+      case None =>
+        // For now, just implement the PATH case to make T2.1 pass
+        // Will implement fallback paths in next tests
+        Left(CLINotFoundError("Claude not found in PATH"))
