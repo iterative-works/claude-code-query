@@ -290,3 +290,47 @@ class ClaudeCodeTest extends munit.FunSuite:
       assert(messages.nonEmpty, "Should receive some output from echo command")
     }
   }
+
+  test("T6.6: query handles process execution errors") {
+    supervised {
+      // Setup: Use an executable that will fail with non-zero exit code
+      val options = QueryOptions(
+        prompt = "Test prompt",
+        cwd = None,
+        executable = None,
+        executableArgs = None,
+        pathToClaudeCodeExecutable =
+          Some("/bin/false"), // Command that always exits with code 1
+        maxTurns = None,
+        allowedTools = None,
+        disallowedTools = None,
+        systemPrompt = None,
+        appendSystemPrompt = None,
+        mcpTools = None,
+        permissionMode = None,
+        continueConversation = None,
+        resume = None,
+        model = None,
+        maxThinkingTokens = None,
+        timeout = None,
+        inheritEnvironment = None,
+        environmentVariables = None
+      )
+
+      // Execute: Call query with failing CLI - should propagate process execution error
+      val exception = intercept[ProcessExecutionError] {
+        val messageFlow = ClaudeCode.query(options)
+        messageFlow.runToList() // Force evaluation
+      }
+
+      // Verify: Should fail with ProcessExecutionError with context
+      assert(
+        exception.exitCode != 0,
+        s"Expected non-zero exit code but got: ${exception.exitCode}"
+      )
+      assert(
+        exception.command.nonEmpty,
+        "Expected command information in error"
+      )
+    }
+  }
