@@ -67,8 +67,11 @@ object CLIDiscovery:
         logger.info(s"Found claude at common path: $path")
         Right(path)
       case None =>
-        Left(
-          CLINotFoundError(
-            "Claude not found in PATH or common installation paths"
-          )
-        )
+        // Check if Node.js is available before returning CLINotFoundError
+        checkNodeJSPrerequisite(fs, logger)
+
+  /** Check if Node.js is available as a prerequisite for Claude CLI */
+  private def checkNodeJSPrerequisite(
+      fs: FileSystemOperations,
+      logger: Logger
+  ): Either[CLIError, String] = ???

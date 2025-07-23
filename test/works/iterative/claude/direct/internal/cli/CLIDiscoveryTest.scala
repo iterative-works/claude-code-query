@@ -95,3 +95,32 @@ class CLIDiscoveryTest extends munit.FunSuite:
       )
     )
   }
+
+  test("T2.3: findClaude returns NodeJSNotFoundError when Node.js is missing") {
+    // Setup: Mock FileSystemOps returning no claude and no node
+    val mockFs = MockFileSystemOps()
+    mockFs.whichResponses = Map("claude" -> None, "node" -> None) // Both fail
+    // All common paths fail too
+    mockFs.existsResponses = Map.empty
+    mockFs.isExecutableResponses = Map.empty
+    given MockLogger = MockLogger()
+
+    // Execute: Call findClaude with mocked dependencies
+    val result = CLIDiscovery.findClaude(mockFs, summon[MockLogger])
+
+    // Verify: Should return Left(NodeJSNotFoundError) with installation guide
+    result match
+      case Left(NodeJSNotFoundError(message)) =>
+        assert(message.contains("Node.js"))
+        assert(message.contains("installation"))
+      case other => fail(s"Expected NodeJSNotFoundError but got: $other")
+
+    // Verify: Should log prerequisite checking
+    val logger = summon[MockLogger]
+    assert(
+      logger.debugMessages.exists(_.contains("Checking for Node.js"))
+    )
+    assert(
+      logger.errorMessages.exists(_.contains("Node.js not found"))
+    )
+  }
