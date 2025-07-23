@@ -62,3 +62,36 @@ class CLIDiscoveryTest extends munit.FunSuite:
       )
     )
   }
+
+  test("T2.2: findClaude falls back to common paths when PATH lookup fails") {
+    // Setup: Mock FileSystemOps with PATH failure but common path success
+    val mockFs = MockFileSystemOps()
+    mockFs.whichResponses = Map("claude" -> None) // PATH lookup fails
+    // Simulate finding claude in a common installation path
+    val commonPath = "/usr/local/bin/claude"
+    mockFs.existsResponses = Map(commonPath -> true)
+    mockFs.isExecutableResponses = Map(commonPath -> true)
+    given MockLogger = MockLogger()
+
+    // Execute: Call findClaude with mocked dependencies
+    val result = CLIDiscovery.findClaude(mockFs, summon[MockLogger])
+
+    // Verify: Should return Right with path from common installation paths
+    assertEquals(result, Right(commonPath))
+
+    // Verify: Should log fallback behavior
+    val logger = summon[MockLogger]
+    assert(
+      logger.debugMessages.exists(_.contains("Searching for claude in PATH"))
+    )
+    assert(
+      logger.debugMessages.exists(
+        _.contains("PATH lookup failed, trying common paths")
+      )
+    )
+    assert(
+      logger.infoMessages.exists(
+        _.contains(s"Found claude at common path: $commonPath")
+      )
+    )
+  }
