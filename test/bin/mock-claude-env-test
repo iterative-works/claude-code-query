@@ -1,0 +1,25 @@
+#!/bin/bash
+
+# Mock Claude Code CLI that checks environment variables and returns JSON
+# This allows testing environment variable propagation
+
+# First, output a system init message
+cat << 'EOF'
+{"type":"system","subtype":"init","apiKeySource":"environment","cwd":"/test","session_id":"test-session-123","tools":["Read","Write","Bash"],"mcp_servers":[],"model":"claude-3-5-sonnet-20241022","permissionMode":"default"}
+EOF
+
+# Check if TEST_ENV_VAR is set and return it in the response
+if [ -n "$TEST_ENV_VAR" ]; then
+    cat << EOF
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Environment variable TEST_ENV_VAR is set to: $TEST_ENV_VAR"}]},"session_id":"test-session-123"}
+EOF
+else
+    cat << 'EOF'
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Environment variable TEST_ENV_VAR is not set"}]},"session_id":"test-session-123"}
+EOF
+fi
+
+# Result message
+cat << 'EOF'
+{"type":"result","subtype":"query","duration_ms":1500,"duration_api_ms":800,"is_error":false,"num_turns":1,"result":"environment test complete","session_id":"test-session-123","total_cost_usd":0.001,"usage":{"input_tokens":10,"output_tokens":1}}
+EOF
