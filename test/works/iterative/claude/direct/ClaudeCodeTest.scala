@@ -7,7 +7,8 @@ import works.iterative.claude.core.model.*
 import works.iterative.claude.core.{
   ProcessExecutionError,
   ProcessTimeoutError,
-  JsonParsingError
+  JsonParsingError,
+  ConfigurationError
 }
 
 class ClaudeCodeTest extends munit.FunSuite:
@@ -234,7 +235,7 @@ class ClaudeCodeTest extends munit.FunSuite:
       )
 
       // Execute: Call query with invalid working directory - should fail validation
-      val exception = intercept[Exception] {
+      val exception = intercept[ConfigurationError] {
         val messageFlow = ClaudeCode.query(options)
         messageFlow.runToList() // Force evaluation
       }

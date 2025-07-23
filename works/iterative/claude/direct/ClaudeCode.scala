@@ -6,12 +6,13 @@ import ox.*
 import ox.flow.Flow
 import works.iterative.claude.core.model.*
 import works.iterative.claude.core.cli.CLIArgumentBuilder
+import works.iterative.claude.core.ConfigurationError
 import works.iterative.claude.direct.internal.cli.{
   ProcessManager,
   CLIDiscovery,
-  Logger
+  Logger,
+  FileSystemOps
 }
-import works.iterative.claude.direct.internal.cli.FileSystemOperations
 
 object ClaudeCode:
 
@@ -31,6 +32,9 @@ object ClaudeCode:
   private def executeQuerySync(options: QueryOptions)(using
       ox: Ox
   ): List[Message] =
+    // Validate configuration before execution
+    validateConfiguration(options)
+
     // Get executable path - discover if not provided
     val executablePath = options.pathToClaudeCodeExecutable.getOrElse {
       // For testing purposes with T6.2, if executableArgs is provided, use /bin/echo
@@ -49,3 +53,14 @@ object ClaudeCode:
 
     // Execute process and return messages
     ProcessManager.executeProcess(executablePath, args, options)
+
+  private def validateConfiguration(options: QueryOptions): Unit =
+    // Validate working directory if specified
+    options.cwd.foreach { dir =>
+      if !FileSystemOps.exists(dir) then
+        throw ConfigurationError(
+          parameter = "cwd",
+          value = dir,
+          reason = "working directory does not exist"
+        )
+    }
