@@ -16,7 +16,7 @@ This document outlines the test-driven development plan for migrating from cats-
   - Tests: Real system PATH lookup without IO wrapper
   - Expected: `Option[String]` with path to sh executable
 
-- [ ] **T1.2**: `which returns None for non-existent commands`
+- [x] **T1.2**: `which returns None for non-existent commands`
   - Test with impossible command name
   - Tests: Graceful handling of missing commands
   - Expected: `None`
