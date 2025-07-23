@@ -124,3 +124,42 @@ class CLIDiscoveryTest extends munit.FunSuite:
       logger.errorMessages.exists(_.contains("Node.js not found"))
     )
   }
+
+  test(
+    "T2.4: findClaude returns CLINotFoundError when claude not found anywhere"
+  ) {
+    // Setup: Mock FileSystemOps returning no claude, but node available
+    val mockFs = MockFileSystemOps()
+    mockFs.whichResponses = Map(
+      "claude" -> None,
+      "node" -> Some("/usr/bin/node")
+    ) // Node available, claude not
+    // All common paths fail too
+    mockFs.existsResponses = Map.empty
+    mockFs.isExecutableResponses = Map.empty
+    given MockLogger = MockLogger()
+
+    // Execute: Call findClaude with mocked dependencies
+    val result = CLIDiscovery.findClaude(mockFs, summon[MockLogger])
+
+    // Verify: Should return Left(CLINotFoundError) with installation instructions
+    result match
+      case Left(CLINotFoundError(message)) =>
+        assert(message.contains("Claude Code CLI"))
+        assert(message.contains("installation"))
+      case other => fail(s"Expected CLINotFoundError but got: $other")
+
+    // Verify: Should log appropriate warnings and errors
+    val logger = summon[MockLogger]
+    assert(
+      logger.debugMessages.exists(_.contains("Searching for claude in PATH"))
+    )
+    assert(
+      logger.debugMessages.exists(
+        _.contains("PATH lookup failed, trying common paths")
+      )
+    )
+    assert(
+      logger.warnMessages.exists(_.contains("Claude Code CLI not found"))
+    )
+  }
