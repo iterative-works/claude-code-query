@@ -3,7 +3,7 @@
 
 package works.iterative.claude
 
-import works.iterative.claude.model.*
+// PermissionMode is defined in model.scala at package level
 
 /** Configuration options for Claude Code queries.
   *
