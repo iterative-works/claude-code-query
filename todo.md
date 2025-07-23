@@ -46,7 +46,7 @@ This document outlines the test-driven development plan for migrating from cats-
   - Tests: Fallback logic without IO effects
   - Expected: `Right(path)` from common installation paths
 
-- [ ] **T2.3**: `findClaude returns NodeJSNotFoundError when Node.js is missing`
+- [x] **T2.3**: `findClaude returns NodeJSNotFoundError when Node.js is missing`
   - Mock FileSystemOps returning no claude and no node
   - Tests: Prerequisite checking with direct-style error handling
   - Expected: `Left(NodeJSNotFoundError)` with installation guide

@@ -74,4 +74,21 @@ object CLIDiscovery:
   private def checkNodeJSPrerequisite(
       fs: FileSystemOperations,
       logger: Logger
-  ): Either[CLIError, String] = ???
+  ): Either[CLIError, String] =
+    logger.debug("Checking for Node.js")
+    fs.which("node") match
+      case Some(_) =>
+        // Node.js is available, return CLINotFoundError
+        Left(
+          CLINotFoundError(
+            "Claude not found in PATH or common installation paths"
+          )
+        )
+      case None =>
+        // Node.js is missing, return NodeJSNotFoundError
+        logger.error("Node.js not found")
+        Left(
+          NodeJSNotFoundError(
+            "Node.js is required for Claude Code CLI installation. Please install Node.js first."
+          )
+        )
