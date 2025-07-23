@@ -26,7 +26,7 @@ This document outlines the test-driven development plan for migrating from cats-
   - Tests: File existence checking without IO effects
   - Expected: `Boolean` result
 
-- [ ] **T1.4**: `isExecutable correctly identifies executable files`
+- [x] **T1.4**: `isExecutable correctly identifies executable files`
   - Test with sh executable
   - Tests: File permission checking
   - Expected: `Boolean` result for executable status
