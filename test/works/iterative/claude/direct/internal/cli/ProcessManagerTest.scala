@@ -351,3 +351,215 @@ class ProcessManagerTest extends munit.FunSuite:
     // PATH should not be present unless explicitly set
     assert(!environment.containsKey("PATH"))
   }
+
+  test("T4.3: executeProcess handles process failure with exit codes") {
+    supervised {
+      // Setup: Mock CLI that exits with non-zero code and stderr
+      given MockLogger = MockLogger()
+
+      // Mock command that exits with failure (exit code 1) and writes to stderr
+      val testScript = "/bin/sh"
+      val args = List("-c", "echo 'error message' >&2 && exit 1")
+      val options = QueryOptions(
+        prompt = "test prompt",
+        cwd = None,
+        executable = None,
+        executableArgs = None,
+        pathToClaudeCodeExecutable = None,
+        maxTurns = None,
+        allowedTools = None,
+        disallowedTools = None,
+        systemPrompt = None,
+        appendSystemPrompt = None,
+        mcpTools = None,
+        permissionMode = None,
+        continueConversation = None,
+        resume = None,
+        model = None,
+        maxThinkingTokens = None,
+        timeout = None,
+        inheritEnvironment = None,
+        environmentVariables = None
+      )
+
+      // Execute: Call executeProcess with failing CLI
+      val exception = intercept[ProcessExecutionError] {
+        ProcessManager.executeProcess(testScript, args, options)
+      }
+
+      // Verify: Should throw ProcessExecutionError with exit code and stderr content
+      assertEquals(exception.exitCode, 1)
+      assertEquals(exception.command, testScript :: args)
+
+      // Verify: Should capture and log stderr information
+      val logger = summon[MockLogger]
+      assert(logger.debugMessages.exists(_.contains("error message")))
+      assert(logger.infoMessages.exists(_.contains("Process completed with exit code: 1")))
+    }
+  }
+
+  test("T4.4: executeProcess applies timeout when specified") {
+    supervised {
+      // Setup: Mock hanging process with short timeout
+      given MockLogger = MockLogger()
+
+      // Mock command that hangs (sleeps for a long time)
+      val testScript = "/bin/sh"
+      val args = List("-c", "sleep 30") // Sleep for 30 seconds
+      val options = QueryOptions(
+        prompt = "test prompt",
+        cwd = None,
+        executable = None,
+        executableArgs = None,
+        pathToClaudeCodeExecutable = None,
+        maxTurns = None,
+        allowedTools = None,
+        disallowedTools = None,
+        systemPrompt = None,
+        appendSystemPrompt = None,
+        mcpTools = None,
+        permissionMode = None,
+        continueConversation = None,
+        resume = None,
+        model = None,
+        maxThinkingTokens = None,
+        timeout = Some(scala.concurrent.duration.FiniteDuration(500, "milliseconds")), // 500ms timeout
+        inheritEnvironment = None,
+        environmentVariables = None
+      )
+
+      // Execute: Call executeProcess with hanging CLI and short timeout
+      val exception = intercept[ProcessTimeoutError] {
+        ProcessManager.executeProcess(testScript, args, options)
+      }
+
+      // Verify: Should throw ProcessTimeoutError after specified duration
+      assertEquals(exception.timeoutDuration, scala.concurrent.duration.FiniteDuration(500, "milliseconds"))
+      assertEquals(exception.command, testScript :: args)
+
+      // Verify: Should log timeout information
+      val logger = summon[MockLogger]
+      assert(logger.errorMessages.exists(_.contains("Process timed out")))
+    }
+  }
+
+  test("T4.5: executeProcess handles JSON parsing errors gracefully") {
+    supervised {
+      // Setup: Mock CLI outputting malformed JSON
+      given MockLogger = MockLogger()
+
+      // Mock command that outputs malformed JSON mixed with valid JSON
+      val mockOutput = List(
+        """{"type":"system","subtype":"user_context","context_user_id":"user_123"}""", // Valid JSON
+        """{"type":"user","content":"Hello" invalid_json}""", // Malformed JSON
+        """{"type":"assistant","message":{"content":[{"type":"text","text":"Hello!"}]}}""" // Valid JSON
+      ).mkString("\n")
+
+      val testScript = "/bin/echo"
+      val args = List(mockOutput)
+      val options = QueryOptions(
+        prompt = "test prompt",
+        cwd = None,
+        executable = None,
+        executableArgs = None,
+        pathToClaudeCodeExecutable = None,
+        maxTurns = None,
+        allowedTools = None,
+        disallowedTools = None,
+        systemPrompt = None,
+        appendSystemPrompt = None,
+        mcpTools = None,
+        permissionMode = None,
+        continueConversation = None,
+        resume = None,
+        model = None,
+        maxThinkingTokens = None,
+        timeout = None,
+        inheritEnvironment = None,
+        environmentVariables = None
+      )
+
+      // Execute: Call executeProcess with CLI that outputs malformed JSON
+      val messages = ProcessManager.executeProcess(testScript, args, options)
+
+      // Verify: Should continue processing and return valid messages despite parsing errors
+      assertEquals(messages.length, 2) // Only the valid JSON messages should be parsed
+
+      // Verify first message (SystemMessage)
+      messages(0) match
+        case SystemMessage(subtype, _) => assertEquals(subtype, "user_context")
+        case other => fail(s"Expected SystemMessage but got: $other")
+
+      // Verify second message (AssistantMessage)
+      messages(1) match
+        case AssistantMessage(content) =>
+          assertEquals(content.length, 1)
+          content.head match
+            case TextBlock(text) => assertEquals(text, "Hello!")
+            case other           => fail(s"Expected TextBlock but got: $other")
+        case other => fail(s"Expected AssistantMessage but got: $other")
+
+      // Verify: Should log JSON parsing error but continue processing
+      val logger = summon[MockLogger]
+      assert(logger.errorMessages.exists(_.contains("JSON parsing failed")))
+      assert(logger.infoMessages.exists(_.contains("Process completed with exit code: 0")))
+    }
+  }
+
+  test("T4.6: executeProcess logs process lifecycle events") {
+    supervised {
+      // Setup: Any simple command with logging verification
+      given MockLogger = MockLogger()
+
+      val mockOutput = """{"type":"user","content":"test message"}"""
+      val testScript = "/bin/echo"
+      val args = List(mockOutput)
+      val options = QueryOptions(
+        prompt = "test prompt",
+        cwd = None,
+        executable = None,
+        executableArgs = None,
+        pathToClaudeCodeExecutable = None,
+        maxTurns = None,
+        allowedTools = None,
+        disallowedTools = None,
+        systemPrompt = None,
+        appendSystemPrompt = None,
+        mcpTools = None,
+        permissionMode = None,
+        continueConversation = None,
+        resume = None,
+        model = None,
+        maxThinkingTokens = None,
+        timeout = None,
+        inheritEnvironment = None,
+        environmentVariables = None
+      )
+
+      // Execute: Call executeProcess and verify logging
+      val messages = ProcessManager.executeProcess(testScript, args, options)
+
+      // Verify: Process executes successfully
+      assertEquals(messages.length, 1)
+      messages(0) match
+        case UserMessage(content) => assertEquals(content, "test message")
+        case other => fail(s"Expected UserMessage but got: $other")
+
+      // Verify: Should log process lifecycle events throughout execution
+      val logger = summon[MockLogger]
+
+      // Should log process start
+      assert(logger.infoMessages.exists(msg => 
+        msg.contains("Starting process:") && 
+        msg.contains("/bin/echo") && 
+        msg.contains(mockOutput)
+      ))
+
+      // Should log JSON parsing attempts (via parseJsonLineWithContextWithLogging)
+      assert(logger.debugMessages.exists(_.contains("Parsing JSON line")))
+      assert(logger.debugMessages.exists(_.contains("Successfully parsed message of type user")))
+
+      // Should log process completion
+      assert(logger.infoMessages.exists(_.contains("Process completed with exit code: 0")))
+    }
+  }
