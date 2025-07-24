@@ -23,64 +23,52 @@ object ClaudeCode:
     def warn(msg: String): Unit = ()
     def error(msg: String): Unit = ()
 
+  // ==== HIGH-LEVEL PUBLIC API ====
+
   /** Executes a query and returns a Flow of messages from the Claude CLI. Uses
     * Ox direct-style programming for structured concurrency.
     */
   def query(options: QueryOptions)(using ox: Ox): Flow[Message] =
-    Flow.fromIterable(executeQuerySync(options))
+    Flow.fromIterable(executeQuery(options))
 
   /** Executes a query and returns all messages as a List. This is a convenience
     * method that collects all messages from the query Flow synchronously.
     */
   def querySync(options: QueryOptions)(using ox: Ox): List[Message] =
-    executeQuerySync(options)
+    executeQuery(options)
 
   /** Executes a query and extracts the text content from AssistantMessage. This
     * is a convenience method for getting just the assistant's response text.
     */
   def queryResult(options: QueryOptions)(using ox: Ox): String =
-    val messages = executeQuerySync(options)
-    extractTextFromMessages(messages)
+    val messages = executeQuery(options)
+    extractAssistantTextContent(messages)
 
-  private def extractTextFromMessages(messages: List[Message]): String =
-    messages
-      .collectFirst { case assistant: AssistantMessage =>
-        assistant.content
-          .collectFirst { case textBlock: TextBlock =>
-            textBlock.text
-          }
-          .getOrElse("")
-      }
-      .getOrElse("")
+  // ==== MAIN EXECUTION LOGIC ====
 
-  private def executeQuerySync(options: QueryOptions)(using
-      ox: Ox
-  ): List[Message] =
-    // Validate configuration before execution
-    validateConfiguration(options)
+  private def executeQuery(options: QueryOptions)(using ox: Ox): List[Message] =
+    validateQueryConfiguration(options)
+    val executablePath = resolveClaudeExecutablePath(options)
+    val args = buildCliArguments(options)
+    ProcessManager.executeProcess(executablePath, args, options)
 
-    // Get executable path - discover if not provided
-    val executablePath = options.pathToClaudeCodeExecutable.getOrElse {
-      // For testing purposes with T6.2, if executableArgs is provided, use /bin/echo
-      // This allows the test to pass by using echo to simulate the CLI
-      if options.executableArgs.isDefined then "/bin/echo"
-      else
-        CLIDiscovery.findClaude match
-          case Right(path) => path
-          case Left(error) => throw new RuntimeException(error.message)
+  private def validateQueryConfiguration(options: QueryOptions): Unit =
+    validateWorkingDirectory(options.cwd)
+
+  private def resolveClaudeExecutablePath(options: QueryOptions): String =
+    options.pathToClaudeCodeExecutable.getOrElse {
+      discoverClaudeExecutablePath(options)
     }
 
-    // Build CLI arguments - use executableArgs if provided (for testing), otherwise build from options
-    val args = options.executableArgs.getOrElse {
+  private def buildCliArguments(options: QueryOptions): List[String] =
+    options.executableArgs.getOrElse {
       CLIArgumentBuilder.buildArgs(options) :+ options.prompt
     }
 
-    // Execute process and return messages
-    ProcessManager.executeProcess(executablePath, args, options)
+  // ==== DETAILED IMPLEMENTATION ====
 
-  private def validateConfiguration(options: QueryOptions): Unit =
-    // Validate working directory if specified
-    options.cwd.foreach { dir =>
+  private def validateWorkingDirectory(cwd: Option[String]): Unit =
+    cwd.foreach { dir =>
       if !FileSystemOps.exists(dir) then
         throw ConfigurationError(
           parameter = "cwd",
@@ -88,3 +76,26 @@ object ClaudeCode:
           reason = "working directory does not exist"
         )
     }
+
+  private def discoverClaudeExecutablePath(options: QueryOptions): String =
+    // For testing purposes with T6.2, if executableArgs is provided, use /bin/echo
+    // This allows the test to pass by using echo to simulate the CLI
+    if options.executableArgs.isDefined then "/bin/echo"
+    else
+      CLIDiscovery.findClaude match
+        case Right(path) => path
+        case Left(error) => throw new RuntimeException(error.message)
+
+  private def extractAssistantTextContent(messages: List[Message]): String =
+    messages
+      .collectFirst { case assistant: AssistantMessage =>
+        extractTextFromContent(assistant.content)
+      }
+      .getOrElse("")
+
+  private def extractTextFromContent(content: List[ContentBlock]): String =
+    content
+      .collectFirst { case textBlock: TextBlock =>
+        textBlock.text
+      }
+      .getOrElse("")
