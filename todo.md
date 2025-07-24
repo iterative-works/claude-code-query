@@ -209,27 +209,27 @@ This document outlines the test-driven development plan for migrating from cats-
 **Dependencies**: ClaudeCode.query()
 **Priority**: High - user convenience
 
-- [ ] **T7.1**: `querySync collects all messages from query Flow`
+- [x] **T7.1**: `querySync collects all messages from query Flow`
   - Mock CLI with multiple messages
   - Tests: Flow collection using Ox direct-style
   - Expected: `List[Message]` with all messages from Flow
 
-- [ ] **T7.2**: `querySync propagates errors from underlying query`
+- [x] **T7.2**: `querySync propagates errors from underlying query`
   - Mock CLI that causes various error types
   - Tests: Error propagation through sync wrapper
   - Expected: Same errors as `query()` method
 
-- [ ] **T7.3**: `queryResult extracts text from AssistantMessage`
+- [x] **T7.3**: `queryResult extracts text from AssistantMessage`
   - Mock CLI outputting AssistantMessage with TextBlock
   - Tests: Message processing and text extraction
   - Expected: `String` with text content from AssistantMessage
 
-- [ ] **T7.4**: `queryResult handles missing AssistantMessage gracefully`
+- [x] **T7.4**: `queryResult handles missing AssistantMessage gracefully`
   - Mock CLI outputting only SystemMessage and ResultMessage
   - Tests: Graceful handling of missing expected content
   - Expected: Empty string when no AssistantMessage found
 
-- [ ] **T7.5**: `queryResult handles AssistantMessage without TextBlock`
+- [x] **T7.5**: `queryResult handles AssistantMessage without TextBlock`
   - Mock CLI outputting AssistantMessage with non-text content
   - Tests: Graceful handling of unexpected content types
   - Expected: Empty string when no TextBlock found

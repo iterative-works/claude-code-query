@@ -556,8 +556,10 @@ class ClaudeCodeTest extends munit.FunSuite:
         prompt = "Test prompt",
         cwd = None,
         executable = None,
-        executableArgs = Some(List("SystemMessage only")), // Custom args to control output
-        pathToClaudeCodeExecutable = Some("/bin/echo"), // Echo only outputs one line
+        executableArgs =
+          Some(List("SystemMessage only")), // Custom args to control output
+        pathToClaudeCodeExecutable =
+          Some("/bin/echo"), // Echo only outputs one line
         maxTurns = None,
         allowedTools = None,
         disallowedTools = None,
@@ -578,7 +580,11 @@ class ClaudeCodeTest extends munit.FunSuite:
       val result = ClaudeCode.queryResult(options)
 
       // Verify: Should return empty string gracefully
-      assertEquals(result, "", "Should return empty string when no AssistantMessage found")
+      assertEquals(
+        result,
+        "",
+        "Should return empty string when no AssistantMessage found"
+      )
     }
   }
 
@@ -612,6 +618,10 @@ class ClaudeCodeTest extends munit.FunSuite:
       val result = ClaudeCode.queryResult(options)
 
       // Verify: Should return empty string when no TextBlock found
-      assertEquals(result, "", "Should return empty string when no TextBlock found")
+      assertEquals(
+        result,
+        "",
+        "Should return empty string when no TextBlock found"
+      )
     }
   }

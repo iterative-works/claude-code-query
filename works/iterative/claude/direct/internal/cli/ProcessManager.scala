@@ -73,8 +73,8 @@ object ProcessManager:
       options: QueryOptions,
       command: List[String]
   )(using logger: Logger, ox: Ox): List[Message] =
-    // Create process builder
-    val processBuilder = new ProcessBuilder((executablePath :: args).asJava)
+    // Create process builder using configureProcess to handle environment variables
+    val processBuilder = configureProcess(executablePath, args, options)
 
     // Start the process
     val process = processBuilder.start()
