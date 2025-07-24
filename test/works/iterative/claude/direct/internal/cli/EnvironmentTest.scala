@@ -8,6 +8,7 @@ import works.iterative.claude.core.model.*
 import works.iterative.claude.core.model.QueryOptions
 import works.iterative.claude.core.ProcessExecutionError
 import works.iterative.claude.direct.internal.cli.{ProcessManager, Logger}
+import works.iterative.claude.direct.internal.testing.TestConstants
 import org.scalacheck.*
 import org.scalacheck.Prop.*
 import munit.ScalaCheckSuite
@@ -285,7 +286,7 @@ class EnvironmentTest extends munit.FunSuite with ScalaCheckSuite:
           "/bin/sh",
           List("-c", "invalid shell syntax {")
         ),
-        ("Command with timeout", "/bin/sh", List("-c", "sleep 10"))
+        ("Command with timeout", "/bin/sh", List("-c", s"sleep ${TestConstants.WaitIntervals.SLEEP_DURATION_MEDIUM}"))
       )
 
       failureScenarios.foreach { case (scenarioName, command, args) =>
@@ -293,7 +294,7 @@ class EnvironmentTest extends munit.FunSuite with ScalaCheckSuite:
 
         val options = if (scenarioName.contains("timeout")) {
           baseOptions.copy(timeout =
-            Some(scala.concurrent.duration.Duration(100, "milliseconds"))
+            Some(TestConstants.Timeouts.TEST_TIMEOUT_VERY_SHORT)
           )
         } else {
           baseOptions
@@ -330,7 +331,7 @@ class EnvironmentTest extends munit.FunSuite with ScalaCheckSuite:
               s"Log messages: ${allLogMessages.mkString(", ")}\n" +
               s"Exception message: $exceptionMessage\n" +
               s"Exception toString: $exceptionToString\n" +
-              s"Stack trace snippet: ${exceptionStackTrace.take(500)}..."
+              s"Stack trace snippet: ${exceptionStackTrace.take(TestConstants.TestDataSizes.MEDIUM_DATA_SIZE / 2)}..."
           )
 
           // Also check for partial leakage of longer secrets (check substrings of 10+ chars)
@@ -523,12 +524,12 @@ class EnvironmentTest extends munit.FunSuite with ScalaCheckSuite:
       ),
       Map("BUILD_NUMBER" -> "123", "VERSION_TAG" -> "v1.0.0"),
       Map("LOG_LEVEL" -> "info", "TIMEOUT_VALUE" -> "30"),
-      Map("WORKER_COUNT" -> "4", "CACHE_SIZE" -> "1000"),
+      Map("WORKER_COUNT" -> "4", "CACHE_SIZE" -> TestConstants.TestDataSizes.MEDIUM_DATA_SIZE.toString),
       Map("MY_CUSTOM_VAR" -> "value with spaces", "BATCH_SIZE" -> "50"),
       Map(
         "ENVIRONMENT" -> "test",
         "RETRY_COUNT" -> "3",
-        "MAX_CONNECTIONS" -> "100"
+        "MAX_CONNECTIONS" -> TestConstants.TestDataSizes.SMALL_DATA_SIZE.toString
       )
     )
 

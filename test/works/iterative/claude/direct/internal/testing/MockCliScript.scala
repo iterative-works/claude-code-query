@@ -24,11 +24,11 @@ object MockCliScript:
   /** Configuration for mock CLI behavior */
   case class MockBehavior(
       messages: List[String],
-      delayBetweenMessages: Duration = Duration(50, "milliseconds"),
+      delayBetweenMessages: Duration = TestConstants.MockDelays.MOCK_MESSAGE_DELAY_COMFORTABLE,
       exitCode: Int = 0,
       stderrOutput: Option[String] = None,
       simulateHang: Boolean = false,
-      hangDuration: Duration = Duration(10, "seconds")
+      hangDuration: Duration = TestConstants.MockDelays.MOCK_HANG_DURATION_STANDARD
   )
 
   /** Pre-defined common mock behaviors */
@@ -41,9 +41,9 @@ object MockCliScript:
       messages = List(
         """{"type":"system","subtype":"user_context","context_user_id":"user_123"}""",
         s"""{"type":"assistant","message":{"content":[{"type":"text","text":"Response to: $prompt"}]}}""",
-        """{"type":"result","subtype":"conversation_result","duration_ms":1000,"duration_api_ms":500,"is_error":false,"num_turns":1,"session_id":"session_123"}"""
+        s"""{"type":"result","subtype":"conversation_result","duration_ms":${TestConstants.MockJsonValues.MOCK_DURATION_MS_STANDARD},"duration_api_ms":${TestConstants.MockJsonValues.MOCK_DURATION_API_MS_STANDARD},"is_error":false,"num_turns":${TestConstants.MockJsonValues.MOCK_NUM_TURNS_SINGLE},"session_id":"${TestConstants.MockJsonValues.MOCK_SESSION_ID}"}"""
       ),
-      delayBetweenMessages = Duration(75, "milliseconds")
+      delayBetweenMessages = TestConstants.MockDelays.MOCK_MESSAGE_DELAY_SLOW
     )
 
     /** CLI execution that fails with non-zero exit code */
@@ -56,7 +56,7 @@ object MockCliScript:
       ),
       exitCode = exitCode,
       stderrOutput = Some(errorMessage),
-      delayBetweenMessages = Duration(25, "milliseconds")
+      delayBetweenMessages = TestConstants.MockDelays.MOCK_MESSAGE_DELAY_STANDARD
     )
 
     /** CLI that outputs malformed JSON to test error handling */
@@ -66,12 +66,12 @@ object MockCliScript:
         """{"type":"user","content":"Hello" invalid_json}""", // Malformed
         """{"type":"assistant","message":{"content":[{"type":"text","text":"Hello back!"}]}}"""
       ),
-      delayBetweenMessages = Duration(30, "milliseconds")
+      delayBetweenMessages = TestConstants.MockDelays.MOCK_MESSAGE_DELAY_MEDIUM
     )
 
     /** CLI that hangs to test timeout behavior */
     def hangingProcess(
-        hangDuration: Duration = Duration(10, "seconds")
+        hangDuration: Duration = TestConstants.MockDelays.MOCK_HANG_DURATION_STANDARD
     ): MockBehavior = MockBehavior(
       messages = List(
         """{"type":"system","subtype":"user_context","context_user_id":"user_123"}"""
@@ -88,9 +88,9 @@ object MockCliScript:
         """{"type":"user","content":"Complex question"}""",
         """{"type":"assistant","message":{"content":[{"type":"text","text":"Let me think about this..."}]}}""",
         """{"type":"assistant","message":{"content":[{"type":"text","text":"Here's my detailed response."}]}}""",
-        """{"type":"result","subtype":"conversation_result","duration_ms":2500,"duration_api_ms":1800,"is_error":false,"num_turns":2,"session_id":"session_123"}"""
+        s"""{"type":"result","subtype":"conversation_result","duration_ms":${TestConstants.MockJsonValues.MOCK_DURATION_MS_COMPLEX},"duration_api_ms":${TestConstants.MockJsonValues.MOCK_DURATION_API_MS_COMPLEX},"is_error":false,"num_turns":${TestConstants.MockJsonValues.MOCK_NUM_TURNS_DOUBLE},"session_id":"${TestConstants.MockJsonValues.MOCK_SESSION_ID}"}"""
       ),
-      delayBetweenMessages = Duration(100, "milliseconds")
+      delayBetweenMessages = TestConstants.MockDelays.MOCK_MESSAGE_DELAY_VERY_SLOW
     )
 
   /** Creates a temporary executable shell script that simulates Claude CLI
@@ -131,7 +131,7 @@ object MockCliScript:
   /** Creates a temporary executable script from a list of JSON messages.
     * Convenience method for simple cases.
     */
-  def createSimpleScript(messages: List[String], delayMs: Long = 50): Path =
+  def createSimpleScript(messages: List[String], delayMs: Long = TestConstants.MockDelays.MOCK_MESSAGE_DELAY_COMFORTABLE.toMillis): Path =
     createTempScript(
       MockBehavior(
         messages = messages,

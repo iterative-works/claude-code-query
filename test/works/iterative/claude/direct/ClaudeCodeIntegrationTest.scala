@@ -7,6 +7,7 @@ import ox.*
 import works.iterative.claude.core.model.*
 import works.iterative.claude.core.model.QueryOptions
 import works.iterative.claude.direct.internal.cli.{Logger}
+import works.iterative.claude.direct.internal.testing.TestConstants
 
 class ClaudeCodeIntegrationTest extends munit.FunSuite:
 
@@ -32,7 +33,7 @@ class ClaudeCodeIntegrationTest extends munit.FunSuite:
         """{"type":"system","subtype":"user_context","context_user_id":"user_123","workspace_id":"workspace_456"}""",
         """{"type":"user","content":"What is 2+2?"}""",
         """{"type":"assistant","message":{"content":[{"type":"text","text":"2+2 equals 4. This is a fundamental arithmetic operation."}]}}""",
-        """{"type":"result","subtype":"conversation_result","duration_ms":1500,"duration_api_ms":800,"is_error":false,"num_turns":1,"session_id":"session_789"}"""
+        s"""{"type":"result","subtype":"conversation_result","duration_ms":${TestConstants.MockJsonValues.MOCK_DURATION_MS_SLOW},"duration_api_ms":${TestConstants.MockJsonValues.MOCK_DURATION_API_MS_SLOW},"is_error":false,"num_turns":${TestConstants.MockJsonValues.MOCK_NUM_TURNS_SINGLE},"session_id":"${TestConstants.MockJsonValues.MOCK_SESSION_ID_SECONDARY}"}"""
       ).mkString("\n")
 
       // Full QueryOptions with all parameters to test comprehensive integration
@@ -43,7 +44,7 @@ class ClaudeCodeIntegrationTest extends munit.FunSuite:
         executableArgs =
           Some(List(mockClaudeOutput)), // Pass mock output as args to echo
         pathToClaudeCodeExecutable = Some("/bin/echo"),
-        maxTurns = Some(5),
+        maxTurns = Some(TestConstants.TestParameters.MAX_TURNS_TEST),
         allowedTools = Some(List("Read", "Write")),
         disallowedTools = Some(List("Bash")),
         systemPrompt = Some("You are a helpful math tutor."),
@@ -53,7 +54,7 @@ class ClaudeCodeIntegrationTest extends munit.FunSuite:
         continueConversation = Some(false),
         resume = None,
         model = Some("claude-3-5-sonnet-20241022"),
-        maxThinkingTokens = Some(10000),
+        maxThinkingTokens = Some(TestConstants.TestParameters.MAX_THINKING_TOKENS_MAX),
         timeout = None,
         inheritEnvironment = Some(true),
         environmentVariables = Some(
@@ -245,8 +246,8 @@ class ClaudeCodeIntegrationTest extends munit.FunSuite:
         model = None,
         maxThinkingTokens = None,
         timeout = Some(
-          scala.concurrent.duration.FiniteDuration(2, "seconds")
-        ), // Very short timeout
+          TestConstants.Timeouts.FINITE_TIMEOUT_MEDIUM
+        ), // Short timeout
         inheritEnvironment = None,
         environmentVariables = None
       )

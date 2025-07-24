@@ -6,6 +6,7 @@ import works.iterative.claude.core.{JsonParsingError}
 import works.iterative.claude.core.model.*
 import works.iterative.claude.direct.internal.parsing.JsonParser
 import works.iterative.claude.direct.internal.cli.Logger
+import works.iterative.claude.direct.internal.testing.TestConstants
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalacheck.Prop.forAll
 
@@ -120,7 +121,7 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
       Gen.const("Unicode: émojis 🚀 中文"), // Unicode content
       Gen.const("Multi\nline\ntext"), // Multiline content
       Gen.const("Quotes and \"escapes\" test"), // Quote escaping
-      Gen.choose(1, 1000).map("x" * _) // Variable length content
+      Gen.choose(1, TestConstants.TestDataSizes.MEDIUM_DATA_SIZE).map("x" * _) // Variable length content
     )
 
     // Generator for system message data
@@ -128,7 +129,7 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
       Gen.const(Map.empty[String, Any]),
       Gen.const(Map("context_user_id" -> "user_123")),
       Gen.const(Map("key1" -> "value1", "key2" -> 42, "key3" -> true)),
-      Gen.const(Map("nested" -> "data", "count" -> 100))
+      Gen.const(Map("nested" -> "data", "count" -> TestConstants.TestDataSizes.SMALL_DATA_SIZE))
     )
 
     // Generator for content blocks
@@ -167,8 +168,8 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
         "error_result",
         "timeout_result"
       )
-      durationMs <- Gen.choose(100, 10000)
-      durationApiMs <- Gen.choose(50, 5000)
+      durationMs <- Gen.choose(TestConstants.TestDataSizes.SMALL_DATA_SIZE, TestConstants.TestDataSizes.LARGE_DATA_SIZE)
+      durationApiMs <- Gen.choose(50, TestConstants.TestParameters.MAX_THINKING_TOKENS_LARGE)
       isError <- Gen.oneOf(true, false)
       numTurns <- Gen.choose(1, 10)
       sessionId <- Gen.alphaNumStr.suchThat(_.nonEmpty)
@@ -548,7 +549,7 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
     import JsonSerializationUtils.*
 
     // Test with large content blocks
-    val largeText = "x" * 10000
+    val largeText = "x" * TestConstants.TestDataSizes.LARGE_DATA_SIZE
     val largeUserMessage = UserMessage(largeText)
     val largeAssistantMessage = AssistantMessage(
       List(
