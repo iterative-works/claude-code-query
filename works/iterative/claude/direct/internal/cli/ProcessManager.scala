@@ -56,16 +56,85 @@ object ProcessManager:
     // Apply timeout if specified
     options.timeout match
       case Some(timeoutDuration) =>
-        // Simple timeout implementation: if timeout is very short (< 1 second), just throw timeout error
-        // This is a minimal implementation to make the test pass
-        if timeoutDuration.toMillis < 1000 then
-          logger.error(s"Process timed out after ${timeoutDuration.toMillis}ms")
-          throw ProcessTimeoutError(timeoutDuration, command)
-        else
-          executeProcessWithoutTimeout(executablePath, args, options, command)
-
+        executeProcessWithTimeout(
+          executablePath,
+          args,
+          options,
+          command,
+          timeoutDuration
+        )
       case None =>
         executeProcessWithoutTimeout(executablePath, args, options, command)
+
+  private def executeProcessWithTimeout(
+      executablePath: String,
+      args: List[String],
+      options: QueryOptions,
+      command: List[String],
+      timeoutDuration: scala.concurrent.duration.Duration
+  )(using logger: Logger, ox: Ox): List[Message] =
+    // Create process builder using configureProcess to handle environment variables
+    val processBuilder = configureProcess(executablePath, args, options)
+
+    // Start the process
+    val process = processBuilder.start()
+
+    // Convert Duration to FiniteDuration for timeout
+    val finiteDuration = timeoutDuration match
+      case fd: scala.concurrent.duration.FiniteDuration => fd
+      case _                                            =>
+        scala.concurrent.duration
+          .FiniteDuration(timeoutDuration.toMillis, "milliseconds")
+
+    // Wait for process to complete with timeout first (like we did in the working version)
+    val finished = process.waitFor(
+      finiteDuration.toMillis,
+      java.util.concurrent.TimeUnit.MILLISECONDS
+    )
+
+    if !finished then
+      logger.error(s"Process timed out after ${timeoutDuration}")
+      process.destroyForcibly()
+      throw ProcessTimeoutError(finiteDuration, command)
+
+    val exitCode = process.exitValue()
+
+    // Process completed within timeout, now read stdout
+    val reader = new BufferedReader(
+      new InputStreamReader(process.getInputStream)
+    )
+    val messages = scala.collection.mutable.ListBuffer[Message]()
+
+    var lineNumber = 0
+    var line: String = null
+    while { line = reader.readLine(); line != null } do
+      lineNumber += 1
+      JsonParser.parseJsonLineWithContextWithLogging(line, lineNumber) match
+        case Right(Some(message)) => messages += message
+        case Right(None)          => // Skip empty lines
+        case Left(error)          =>
+          logger.error(s"JSON parsing failed: ${error.message}")
+          // For this minimal implementation, continue processing other lines
+
+    reader.close()
+
+    // Read stderr synchronously after process completes - it won't hang since process is done
+    val stderrReader = new BufferedReader(
+      new InputStreamReader(process.getErrorStream)
+    )
+    val stderrContent = scala.collection.mutable.ListBuffer[String]()
+    var stderrLine: String = null
+    while { stderrLine = stderrReader.readLine(); stderrLine != null } do
+      stderrContent += stderrLine
+      logger.debug(s"stderr: $stderrLine")
+    stderrReader.close()
+    val stderrLines = stderrContent.toList
+
+    logger.info(s"Process completed with exit code: $exitCode")
+
+    if exitCode != 0 then throw ProcessExecutionError(exitCode, "", command)
+
+    messages.toList
 
   private def executeProcessWithoutTimeout(
       executablePath: String,

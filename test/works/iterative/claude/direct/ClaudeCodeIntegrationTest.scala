@@ -243,8 +243,8 @@ class ClaudeCodeIntegrationTest extends munit.FunSuite:
         model = None,
         maxThinkingTokens = None,
         timeout = Some(
-          scala.concurrent.duration.FiniteDuration(5, "seconds")
-        ), // Short timeout
+          scala.concurrent.duration.FiniteDuration(2, "seconds")
+        ), // Very short timeout
         inheritEnvironment = None,
         environmentVariables = None
       )
