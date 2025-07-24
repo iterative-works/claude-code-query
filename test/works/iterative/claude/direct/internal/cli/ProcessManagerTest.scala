@@ -11,6 +11,7 @@ import works.iterative.claude.core.{
 }
 import works.iterative.claude.direct.internal.cli.{ProcessManager, Logger}
 import works.iterative.claude.core.model.QueryOptions
+import works.iterative.claude.direct.internal.testing.MockCliScript
 import java.util.concurrent.{CountDownLatch, TimeUnit, ConcurrentLinkedQueue}
 import scala.collection.concurrent.TrieMap
 import java.util.concurrent.atomic.AtomicInteger
@@ -18,8 +19,18 @@ import scala.jdk.CollectionConverters.*
 import java.lang.management.ManagementFactory
 import scala.util.{Try, Success, Failure}
 import scala.concurrent.duration.*
+import java.nio.file.Path
 
 class ProcessManagerTest extends munit.FunSuite:
+
+  // Track created mock scripts for cleanup
+  private val createdScripts = scala.collection.mutable.ListBuffer[Path]()
+
+  override def afterEach(context: AfterEach): Unit =
+    // Clean up temporary mock scripts
+    createdScripts.foreach(MockCliScript.cleanup)
+    createdScripts.clear()
+    super.afterEach(context)
 
   // Process resource tracking utilities for cleanup verification
   private def countRunningProcesses(): Int =
@@ -134,17 +145,21 @@ class ProcessManagerTest extends munit.FunSuite:
       // Setup: Mock CLI executable outputting valid JSON messages
       given MockLogger = MockLogger()
 
-      // Mock command that outputs system, user, assistant, and result messages
-      val mockJsonOutput = List(
-        """{"type":"system","subtype":"user_context","context_user_id":"user_123"}""",
-        """{"type":"user","content":"Hello Claude!"}""",
-        """{"type":"assistant","message":{"content":[{"type":"text","text":"Hello! How can I help?"}]}}""",
-        """{"type":"result","subtype":"conversation_result","duration_ms":1000,"duration_api_ms":500,"is_error":false,"num_turns":1,"session_id":"session_123"}"""
-      ).mkString("\n")
+      // Create realistic mock CLI script with progressive output
+      val mockBehavior = MockCliScript.MockBehavior(
+        messages = List(
+          """{"type":"system","subtype":"user_context","context_user_id":"user_123"}""",
+          """{"type":"user","content":"Hello Claude!"}""",
+          """{"type":"assistant","message":{"content":[{"type":"text","text":"Hello! How can I help?"}]}}""",
+          """{"type":"result","subtype":"conversation_result","duration_ms":1000,"duration_api_ms":500,"is_error":false,"num_turns":1,"session_id":"session_123"}"""
+        ),
+        delayBetweenMessages = Duration(25, "milliseconds")
+      )
+      val mockScript = MockCliScript.createTempScript(mockBehavior)
+      createdScripts += mockScript
 
-      // Create a test script that outputs the mock JSON
-      val testScript = "/bin/echo"
-      val args = List(mockJsonOutput)
+      val testScript = mockScript.toString
+      val args = List.empty[String] // No args needed with realistic mock
       val options = QueryOptions(
         prompt = "test prompt",
         cwd = None,
@@ -576,15 +591,13 @@ class ProcessManagerTest extends munit.FunSuite:
       // Setup: Mock CLI outputting malformed JSON
       given MockLogger = MockLogger()
 
-      // Mock command that outputs malformed JSON mixed with valid JSON
-      val mockOutput = List(
-        """{"type":"system","subtype":"user_context","context_user_id":"user_123"}""", // Valid JSON
-        """{"type":"user","content":"Hello" invalid_json}""", // Malformed JSON
-        """{"type":"assistant","message":{"content":[{"type":"text","text":"Hello!"}]}}""" // Valid JSON
-      ).mkString("\n")
+      // Create realistic mock CLI script with malformed JSON
+      val mockBehavior = MockCliScript.CommonBehaviors.malformedJson()
+      val mockScript = MockCliScript.createTempScript(mockBehavior)
+      createdScripts += mockScript
 
-      val testScript = "/bin/echo"
-      val args = List(mockOutput)
+      val testScript = mockScript.toString
+      val args = List.empty[String]
       val options = QueryOptions(
         prompt = "test prompt",
         cwd = None,
@@ -626,7 +639,7 @@ class ProcessManagerTest extends munit.FunSuite:
         case AssistantMessage(content) =>
           assertEquals(content.length, 1)
           content.head match
-            case TextBlock(text) => assertEquals(text, "Hello!")
+            case TextBlock(text) => assertEquals(text, "Hello back!")
             case other           => fail(s"Expected TextBlock but got: $other")
         case other => fail(s"Expected AssistantMessage but got: $other")
 
@@ -647,9 +660,16 @@ class ProcessManagerTest extends munit.FunSuite:
       // Setup: Any simple command with logging verification
       given MockLogger = MockLogger()
 
-      val mockOutput = """{"type":"user","content":"test message"}"""
-      val testScript = "/bin/echo"
-      val args = List(mockOutput)
+      // Create simple mock CLI script for logging verification
+      val mockBehavior = MockCliScript.MockBehavior(
+        messages = List("""{"type":"user","content":"test message"}"""),
+        delayBetweenMessages = Duration(10, "milliseconds")
+      )
+      val mockScript = MockCliScript.createTempScript(mockBehavior)
+      createdScripts += mockScript
+
+      val testScript = mockScript.toString
+      val args = List.empty[String]
       val options = QueryOptions(
         prompt = "test prompt",
         cwd = None,
@@ -691,8 +711,7 @@ class ProcessManagerTest extends munit.FunSuite:
       assert(
         logger.hasInfoMessage(msg =>
           msg.contains("Starting process:") &&
-            msg.contains("/bin/echo") &&
-            msg.contains(mockOutput)
+            msg.contains(testScript)
         )
       )
 
@@ -726,13 +745,20 @@ class ProcessManagerTest extends munit.FunSuite:
       // Capture initial zombie process count
       val initialZombieCount = countZombieProcesses()
 
-      // Create large amount of malformed JSON that will cause parsing failures
-      val malformedOutput = "invalid json " * 1000 + "\n" +
-        """{"type":"user","content":"valid after invalid"}""" + "\n" +
-        "more invalid json" * 500
+      // Create realistic mock CLI script with large malformed output for cleanup testing
+      val mockBehavior = MockCliScript.MockBehavior(
+        messages = List(
+          "invalid json " * 100, // Large malformed JSON
+          """{"type":"user","content":"valid after invalid"}""",
+          "more invalid json" * 50
+        ),
+        delayBetweenMessages = Duration(5, "milliseconds")
+      )
+      val mockScript = MockCliScript.createTempScript(mockBehavior)
+      createdScripts += mockScript
 
-      val testScript = "/bin/echo"
-      val args = List(malformedOutput)
+      val testScript = mockScript.toString
+      val args = List.empty[String]
       val options = QueryOptions(
         prompt = "test cleanup",
         cwd = None,
@@ -930,14 +956,31 @@ class ProcessManagerTest extends munit.FunSuite:
         environmentVariables = None
       )
 
+      // Create mock scripts for concurrent operations
+      val validScript = MockCliScript.createTempScript(
+        MockCliScript.MockBehavior(
+          messages = List("""{"type":"user","content":"valid"}"""),
+          delayBetweenMessages = Duration(10, "milliseconds")
+        )
+      )
+      createdScripts += validScript
+
+      val malformedScript = MockCliScript.createTempScript(
+        MockCliScript.MockBehavior(
+          messages = List("invalid json content"),
+          delayBetweenMessages = Duration(10, "milliseconds")
+        )
+      )
+      createdScripts += malformedScript
+
       // Run multiple concurrent operations with different failure modes
       val operations = List(
         // Valid operation
         fork {
           Try {
             ProcessManager.executeProcess(
-              "/bin/echo",
-              List("""{"type":"user","content":"valid"}"""),
+              validScript.toString,
+              List.empty[String],
               baseOptions
             )
           }
@@ -946,8 +989,8 @@ class ProcessManagerTest extends munit.FunSuite:
         fork {
           Try {
             ProcessManager.executeProcess(
-              "/bin/echo",
-              List("invalid json content"),
+              malformedScript.toString,
+              List.empty[String],
               baseOptions
             )
           }
