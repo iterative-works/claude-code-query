@@ -1318,3 +1318,247 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
       assert(hasSystemMessages, "Should have 3 SystemMessages")
     }
   }
+
+  // === Property-Based Testing for Timeout Precision ===
+
+  test(
+    "PROPERTY-3: timeout precision - timeouts trigger within reasonable bounds of specified duration"
+  ) {
+    // Manually test specific timeout values to ensure reliable results
+    val testTimeouts =
+      List(200, 500, 1000, 1500) // Test a few representative timeout values
+
+    testTimeouts.foreach { timeoutMs =>
+      supervised {
+        given MockLogger = MockLogger()
+
+        val timeout = FiniteDuration(timeoutMs, MILLISECONDS)
+        val options = QueryOptions(
+          prompt = s"timeout precision test $timeoutMs ms",
+          cwd = None,
+          executable = None,
+          executableArgs = None,
+          pathToClaudeCodeExecutable = None,
+          maxTurns = None,
+          allowedTools = None,
+          disallowedTools = None,
+          systemPrompt = None,
+          appendSystemPrompt = None,
+          mcpTools = None,
+          permissionMode = None,
+          continueConversation = None,
+          resume = None,
+          model = None,
+          maxThinkingTokens = None,
+          timeout = Some(timeout),
+          inheritEnvironment = None,
+          environmentVariables = None
+        )
+
+        // Use /bin/sh with sleep command that definitely exceeds timeout
+        val testScript = "/bin/sh"
+        val args = List(
+          "-c",
+          "sleep 10"
+        ) // Always sleep 10 seconds (much longer than any timeout)
+
+        // Measure actual timeout duration
+        val startTime = System.currentTimeMillis()
+        val exception = intercept[ProcessTimeoutError] {
+          ProcessManager.executeProcess(testScript, args, options)
+        }
+        val actualDuration = System.currentTimeMillis() - startTime
+
+        // Verify ProcessTimeoutError contains correct information
+        assertEquals(
+          exception.timeoutDuration,
+          timeout,
+          s"ProcessTimeoutError should contain correct timeout duration: expected $timeout"
+        )
+        assertEquals(
+          exception.command,
+          testScript :: args,
+          "ProcessTimeoutError should contain correct command information"
+        )
+
+        // Calculate tolerance based on timeout duration and system constraints
+        // For shorter timeouts (< 1s), allow larger relative tolerance due to system overhead
+        // For longer timeouts, use smaller relative tolerance but higher absolute minimum
+        val relativeTolerance =
+          if (timeoutMs < 1000) 0.4 else 0.3 // 40% for short, 30% for long
+        val absoluteToleranceMs =
+          if (timeoutMs < 1000) 200 else 300 // 200ms for short, 300ms for long
+        val toleranceMs =
+          math.max(timeoutMs * relativeTolerance, absoluteToleranceMs.toDouble)
+
+        // Verify timeout occurs within reasonable bounds
+        val lowerBound = Math.max(
+          0,
+          timeoutMs - toleranceMs
+        ) // Ensure non-negative lower bound
+        val upperBound = timeoutMs + toleranceMs
+
+        assert(
+          actualDuration >= lowerBound,
+          s"Timeout too fast for ${timeoutMs}ms: ${actualDuration}ms < ${lowerBound}ms (expected: ${timeoutMs}ms ± ${toleranceMs}ms)"
+        )
+        assert(
+          actualDuration <= upperBound,
+          s"Timeout too slow for ${timeoutMs}ms: ${actualDuration}ms > ${upperBound}ms (expected: ${timeoutMs}ms ± ${toleranceMs}ms)"
+        )
+
+        // Verify timeout was properly logged
+        val logger = summon[MockLogger]
+        assert(
+          logger.hasErrorMessage(_.contains("Process timed out")),
+          "Should log timeout error message"
+        )
+      }
+    }
+  }
+
+  test(
+    "PROPERTY-3-EDGE: timeout precision edge cases with short timeouts"
+  ) {
+    // Test specific short timeout values
+    val shortTimeouts = List(100, 250, 500) // Short but reliable timeout values
+
+    shortTimeouts.foreach { timeoutMs =>
+      supervised {
+        given MockLogger = MockLogger()
+
+        val timeout = FiniteDuration(timeoutMs, MILLISECONDS)
+        val options = QueryOptions(
+          prompt = s"short timeout test $timeoutMs ms",
+          cwd = None,
+          executable = None,
+          executableArgs = None,
+          pathToClaudeCodeExecutable = None,
+          maxTurns = None,
+          allowedTools = None,
+          disallowedTools = None,
+          systemPrompt = None,
+          appendSystemPrompt = None,
+          mcpTools = None,
+          permissionMode = None,
+          continueConversation = None,
+          resume = None,
+          model = None,
+          maxThinkingTokens = None,
+          timeout = Some(timeout),
+          inheritEnvironment = None,
+          environmentVariables = None
+        )
+
+        // Use sleep command with duration definitely longer than timeout
+        val testScript = "/bin/sh"
+        val args = List("-c", "sleep 5") // Always sleep 5 seconds
+
+        val startTime = System.currentTimeMillis()
+        val exception = intercept[ProcessTimeoutError] {
+          ProcessManager.executeProcess(testScript, args, options)
+        }
+        val actualDuration = System.currentTimeMillis() - startTime
+
+        // For very short timeouts, be more lenient with tolerance due to system overhead
+        val toleranceMs =
+          math.max(timeoutMs * 0.8, 250.0) // 80% tolerance or 250ms minimum
+        val lowerBound = Math.max(
+          0,
+          timeoutMs - toleranceMs
+        ) // Ensure non-negative lower bound
+        val upperBound = timeoutMs + toleranceMs
+
+        assert(
+          actualDuration >= lowerBound,
+          s"Short timeout too fast for ${timeoutMs}ms: ${actualDuration}ms < ${lowerBound}ms (expected: ${timeoutMs}ms ± ${toleranceMs}ms)"
+        )
+        assert(
+          actualDuration <= upperBound,
+          s"Short timeout too slow for ${timeoutMs}ms: ${actualDuration}ms > ${upperBound}ms (expected: ${timeoutMs}ms ± ${toleranceMs}ms)"
+        )
+
+        // Verify exception details are correct for short timeouts
+        assertEquals(exception.timeoutDuration, timeout)
+        assert(
+          exception.command.exists(_.contains("sleep")),
+          s"Command should contain 'sleep': ${exception.command}"
+        )
+      }
+    }
+  }
+
+  test(
+    "PROPERTY-3-CONSISTENCY: timeout precision consistency across multiple runs"
+  ) {
+    supervised {
+      given MockLogger = MockLogger()
+
+      // Test that timeout precision is consistent across multiple runs of the same timeout
+      val testTimeout =
+        FiniteDuration(1000, MILLISECONDS) // Use fixed 1s timeout
+      val options = QueryOptions(
+        prompt = "consistency test",
+        cwd = None,
+        executable = None,
+        executableArgs = None,
+        pathToClaudeCodeExecutable = None,
+        maxTurns = None,
+        allowedTools = None,
+        disallowedTools = None,
+        systemPrompt = None,
+        appendSystemPrompt = None,
+        mcpTools = None,
+        permissionMode = None,
+        continueConversation = None,
+        resume = None,
+        model = None,
+        maxThinkingTokens = None,
+        timeout = Some(testTimeout),
+        inheritEnvironment = None,
+        environmentVariables = None
+      )
+
+      val testScript = "/bin/sh"
+      val args = List("-c", "sleep 10") // Sleep longer than timeout
+
+      // Run multiple iterations to verify consistency
+      val durations = (1 to 5).map { iteration =>
+        val startTime = System.currentTimeMillis()
+        val exception = intercept[ProcessTimeoutError] {
+          ProcessManager.executeProcess(testScript, args, options)
+        }
+        val duration = System.currentTimeMillis() - startTime
+
+        // Verify each exception is correct
+        assertEquals(exception.timeoutDuration, testTimeout)
+        assertEquals(exception.command, testScript :: args)
+
+        duration
+      }.toList
+
+      // Verify all durations are within acceptable range
+      val expectedMs = testTimeout.toMillis
+      val toleranceMs = 200.0 // 200ms tolerance for consistency test
+
+      durations.foreach { duration =>
+        assert(
+          duration >= expectedMs - toleranceMs,
+          s"Inconsistent timeout (too fast): ${duration}ms < ${expectedMs - toleranceMs}ms"
+        )
+        assert(
+          duration <= expectedMs + toleranceMs,
+          s"Inconsistent timeout (too slow): ${duration}ms > ${expectedMs + toleranceMs}ms"
+        )
+      }
+
+      // Verify durations don't vary too much between runs (consistency check)
+      val avgDuration = durations.sum / durations.length
+      val maxDeviation = durations.map(d => math.abs(d - avgDuration)).max
+
+      assert(
+        maxDeviation <= 300, // Allow max 300ms deviation between runs
+        s"Timeout precision too inconsistent: max deviation ${maxDeviation}ms from average ${avgDuration}ms"
+      )
+    }
+  }
