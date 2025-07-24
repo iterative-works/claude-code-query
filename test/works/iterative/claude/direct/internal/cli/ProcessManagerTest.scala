@@ -11,7 +11,10 @@ import works.iterative.claude.core.{
 }
 import works.iterative.claude.direct.internal.cli.{ProcessManager, Logger}
 import works.iterative.claude.core.model.QueryOptions
-import works.iterative.claude.direct.internal.testing.{MockCliScript, TestConstants}
+import works.iterative.claude.direct.internal.testing.{
+  MockCliScript,
+  TestConstants
+}
 import java.util.concurrent.{CountDownLatch, TimeUnit, ConcurrentLinkedQueue}
 import scala.collection.concurrent.TrieMap
 import java.util.concurrent.atomic.AtomicInteger
@@ -158,7 +161,8 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
           """{"type":"assistant","message":{"content":[{"type":"text","text":"Hello! How can I help?"}]}}""",
           """{"type":"result","subtype":"conversation_result","duration_ms":1000,"duration_api_ms":500,"is_error":false,"num_turns":1,"session_id":"session_123"}"""
         ),
-        delayBetweenMessages = TestConstants.MockDelays.MOCK_MESSAGE_DELAY_STANDARD
+        delayBetweenMessages =
+          TestConstants.MockDelays.MOCK_MESSAGE_DELAY_STANDARD
       )
       val mockScript = MockCliScript.createTempScript(mockBehavior)
       createdScripts += mockScript
@@ -223,10 +227,19 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
               _
             ) =>
           assertEquals(subtype, "conversation_result")
-          assertEquals(durationMs, TestConstants.MockJsonValues.MOCK_DURATION_MS_STANDARD)
-          assertEquals(durationApiMs, TestConstants.MockJsonValues.MOCK_DURATION_API_MS_STANDARD)
+          assertEquals(
+            durationMs,
+            TestConstants.MockJsonValues.MOCK_DURATION_MS_STANDARD
+          )
+          assertEquals(
+            durationApiMs,
+            TestConstants.MockJsonValues.MOCK_DURATION_API_MS_STANDARD
+          )
           assertEquals(isError, false)
-          assertEquals(numTurns, TestConstants.MockJsonValues.MOCK_NUM_TURNS_SINGLE)
+          assertEquals(
+            numTurns,
+            TestConstants.MockJsonValues.MOCK_NUM_TURNS_SINGLE
+          )
           assertEquals(sessionId, TestConstants.MockJsonValues.MOCK_SESSION_ID)
         case other => fail(s"Expected ResultMessage but got: $other")
 
@@ -541,7 +554,10 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
 
       // Mock command that hangs (sleeps for a long time)
       val testScript = "/bin/sh"
-      val args = List("-c", s"sleep ${TestConstants.WaitIntervals.SLEEP_DURATION_LONG}") // Sleep for 30 seconds
+      val args = List(
+        "-c",
+        s"sleep ${TestConstants.WaitIntervals.SLEEP_DURATION_LONG}"
+      ) // Sleep for 30 seconds
       val timeoutDuration =
         TestConstants.Timeouts.FINITE_TIMEOUT_MEDIUM_SHORT
       val options = QueryOptions(
@@ -761,7 +777,8 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
           """{"type":"user","content":"valid after invalid"}""",
           "more invalid json" * 50
         ),
-        delayBetweenMessages = TestConstants.MockDelays.MOCK_MESSAGE_DELAY_VERY_FAST
+        delayBetweenMessages =
+          TestConstants.MockDelays.MOCK_MESSAGE_DELAY_VERY_FAST
       )
       val mockScript = MockCliScript.createTempScript(mockBehavior)
       createdScripts += mockScript
@@ -885,7 +902,10 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
 
       // Command that will hang for a long time
       val testScript = "/bin/sh"
-      val args = List("-c", s"sleep ${TestConstants.WaitIntervals.SLEEP_DURATION_MEDIUM}") // Sleep longer than timeout
+      val args = List(
+        "-c",
+        s"sleep ${TestConstants.WaitIntervals.SLEEP_DURATION_MEDIUM}"
+      ) // Sleep longer than timeout
       val timeoutDuration =
         TestConstants.Timeouts.FINITE_TIMEOUT_SHORT
       val options = QueryOptions(
@@ -969,7 +989,8 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
       val validScript = MockCliScript.createTempScript(
         MockCliScript.MockBehavior(
           messages = List("""{"type":"user","content":"valid"}"""),
-          delayBetweenMessages = TestConstants.MockDelays.MOCK_MESSAGE_DELAY_FAST
+          delayBetweenMessages =
+            TestConstants.MockDelays.MOCK_MESSAGE_DELAY_FAST
         )
       )
       createdScripts += validScript
@@ -977,7 +998,8 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
       val malformedScript = MockCliScript.createTempScript(
         MockCliScript.MockBehavior(
           messages = List("invalid json content"),
-          delayBetweenMessages = TestConstants.MockDelays.MOCK_MESSAGE_DELAY_FAST
+          delayBetweenMessages =
+            TestConstants.MockDelays.MOCK_MESSAGE_DELAY_FAST
         )
       )
       createdScripts += malformedScript
@@ -1020,7 +1042,10 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
             val timeoutOptions = baseOptions.copy(timeout = Some(100.millis))
             ProcessManager.executeProcess(
               "/bin/sh",
-              List("-c", s"sleep ${TestConstants.WaitIntervals.SLEEP_DURATION_SHORT}"),
+              List(
+                "-c",
+                s"sleep ${TestConstants.WaitIntervals.SLEEP_DURATION_SHORT}"
+              ),
               timeoutOptions
             )
           }
@@ -1131,7 +1156,10 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
       given MockLogger = MockLogger()
 
       // Generate 100+ sequential messages with identifiers for order testing
-      val messageContents = (1 to TestConstants.TestDataSizes.MANY_MESSAGES_COUNT).map(i => s"content-$i").toList
+      val messageContents =
+        (1 to TestConstants.TestDataSizes.MANY_MESSAGES_COUNT)
+          .map(i => s"content-$i")
+          .toList
       val jsonMessages = messageContents.zipWithIndex.map {
         case (content, id) =>
           s"""{"type":"user","content":"msg-$id-$content"}"""
@@ -1458,7 +1486,10 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
 
         // Use sleep command with duration definitely longer than timeout
         val testScript = "/bin/sh"
-        val args = List("-c", s"sleep ${TestConstants.WaitIntervals.SLEEP_DURATION_SHORT}") // Always sleep 5 seconds
+        val args = List(
+          "-c",
+          s"sleep ${TestConstants.WaitIntervals.SLEEP_DURATION_SHORT}"
+        ) // Always sleep 5 seconds
 
         val startTime = System.currentTimeMillis()
         val exception = intercept[ProcessTimeoutError] {
@@ -1468,7 +1499,10 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
 
         // For very short timeouts, be more lenient with tolerance due to system overhead
         val toleranceMs =
-          math.max(timeoutMs * TestConstants.ToleranceValues.TIMING_TOLERANCE_PERCENT_LENIENT, TestConstants.ToleranceValues.TIMING_TOLERANCE_MS_LENIENT) // 80% tolerance or 250ms minimum
+          math.max(
+            timeoutMs * TestConstants.ToleranceValues.TIMING_TOLERANCE_PERCENT_LENIENT,
+            TestConstants.ToleranceValues.TIMING_TOLERANCE_MS_LENIENT
+          ) // 80% tolerance or 250ms minimum
         val lowerBound = Math.max(
           0,
           timeoutMs - toleranceMs
@@ -1526,26 +1560,32 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
       )
 
       val testScript = "/bin/sh"
-      val args = List("-c", s"sleep ${TestConstants.WaitIntervals.SLEEP_DURATION_MEDIUM}") // Sleep longer than timeout
+      val args = List(
+        "-c",
+        s"sleep ${TestConstants.WaitIntervals.SLEEP_DURATION_MEDIUM}"
+      ) // Sleep longer than timeout
 
       // Run multiple iterations to verify consistency
-      val durations = (1 to TestConstants.TestParameters.CONSISTENCY_TEST_ITERATIONS).map { iteration =>
-        val startTime = System.currentTimeMillis()
-        val exception = intercept[ProcessTimeoutError] {
-          ProcessManager.executeProcess(testScript, args, options)
-        }
-        val duration = System.currentTimeMillis() - startTime
+      val durations =
+        (1 to TestConstants.TestParameters.CONSISTENCY_TEST_ITERATIONS).map {
+          iteration =>
+            val startTime = System.currentTimeMillis()
+            val exception = intercept[ProcessTimeoutError] {
+              ProcessManager.executeProcess(testScript, args, options)
+            }
+            val duration = System.currentTimeMillis() - startTime
 
-        // Verify each exception is correct
-        assertEquals(exception.timeoutDuration, testTimeout)
-        assertEquals(exception.command, testScript :: args)
+            // Verify each exception is correct
+            assertEquals(exception.timeoutDuration, testTimeout)
+            assertEquals(exception.command, testScript :: args)
 
-        duration
-      }.toList
+            duration
+        }.toList
 
       // Verify all durations are within acceptable range
       val expectedMs = testTimeout.toMillis
-      val toleranceMs = TestConstants.ToleranceValues.TIMING_TOLERANCE_MS_STRICT // 200ms tolerance for consistency test
+      val toleranceMs =
+        TestConstants.ToleranceValues.TIMING_TOLERANCE_MS_STRICT // 200ms tolerance for consistency test
 
       durations.foreach { duration =>
         assert(

@@ -10,7 +10,10 @@ import works.iterative.claude.core.{
   JsonParsingError,
   ConfigurationError
 }
-import works.iterative.claude.direct.internal.testing.{MockCliScript, TestConstants}
+import works.iterative.claude.direct.internal.testing.{
+  MockCliScript,
+  TestConstants
+}
 import java.nio.file.Path
 import scala.util.{Try, Using}
 import scala.concurrent.duration.Duration
@@ -93,10 +96,19 @@ class ClaudeCodeTest extends munit.FunSuite:
               _
             ) =>
           assertEquals(subtype, "conversation_result")
-          assertEquals(durationMs, TestConstants.MockJsonValues.MOCK_DURATION_MS_STANDARD)
-          assertEquals(durationApiMs, TestConstants.MockJsonValues.MOCK_DURATION_API_MS_STANDARD)
+          assertEquals(
+            durationMs,
+            TestConstants.MockJsonValues.MOCK_DURATION_MS_STANDARD
+          )
+          assertEquals(
+            durationApiMs,
+            TestConstants.MockJsonValues.MOCK_DURATION_API_MS_STANDARD
+          )
           assertEquals(isError, false)
-          assertEquals(numTurns, TestConstants.MockJsonValues.MOCK_NUM_TURNS_SINGLE)
+          assertEquals(
+            numTurns,
+            TestConstants.MockJsonValues.MOCK_NUM_TURNS_SINGLE
+          )
           assertEquals(sessionId, TestConstants.MockJsonValues.MOCK_SESSION_ID)
         case other => fail(s"Expected ResultMessage but got: $other")
     }
@@ -169,10 +181,19 @@ class ClaudeCodeTest extends munit.FunSuite:
               _
             ) =>
           assertEquals(subtype, "conversation_result")
-          assertEquals(durationMs, TestConstants.MockJsonValues.MOCK_DURATION_MS_STANDARD)
-          assertEquals(durationApiMs, TestConstants.MockJsonValues.MOCK_DURATION_API_MS_STANDARD)
+          assertEquals(
+            durationMs,
+            TestConstants.MockJsonValues.MOCK_DURATION_MS_STANDARD
+          )
+          assertEquals(
+            durationApiMs,
+            TestConstants.MockJsonValues.MOCK_DURATION_API_MS_STANDARD
+          )
           assertEquals(isError, false)
-          assertEquals(numTurns, TestConstants.MockJsonValues.MOCK_NUM_TURNS_SINGLE)
+          assertEquals(
+            numTurns,
+            TestConstants.MockJsonValues.MOCK_NUM_TURNS_SINGLE
+          )
           assertEquals(sessionId, TestConstants.MockJsonValues.MOCK_SESSION_ID)
         case other => fail(s"Expected ResultMessage but got: $other")
     }
@@ -323,7 +344,8 @@ class ClaudeCodeTest extends munit.FunSuite:
         continueConversation = Some(true),
         resume = Some("test-session-id"),
         model = Some("claude-3-sonnet"),
-        maxThinkingTokens = Some(TestConstants.TestParameters.MAX_THINKING_TOKENS_SMALL),
+        maxThinkingTokens =
+          Some(TestConstants.TestParameters.MAX_THINKING_TOKENS_SMALL),
         timeout = Some(TestConstants.Timeouts.TEST_TIMEOUT_MAX),
         inheritEnvironment = Some(false),
         environmentVariables = Some(Map("TEST_VAR" -> "test_value"))
@@ -401,7 +423,9 @@ class ClaudeCodeTest extends munit.FunSuite:
         prompt = "Test prompt",
         cwd = None,
         executable = None,
-        executableArgs = Some(List(TestConstants.WaitIntervals.SLEEP_DURATION_MEDIUM)), // Sleep for 10 seconds
+        executableArgs = Some(
+          List(TestConstants.WaitIntervals.SLEEP_DURATION_MEDIUM)
+        ), // Sleep for 10 seconds
         pathToClaudeCodeExecutable = Some("sleep"), // Command that will hang
         timeout = Some(
           TestConstants.Timeouts.TEST_TIMEOUT_MEDIUM_SHORT
@@ -643,7 +667,8 @@ class ClaudeCodeTest extends munit.FunSuite:
           """{"type":"system","subtype":"user_context","context_user_id":"user_123"}""",
           """{"type":"result","subtype":"conversation_result","duration_ms":1000,"duration_api_ms":500,"is_error":false,"num_turns":1,"session_id":"session_123"}"""
         ),
-        delayBetweenMessages = TestConstants.MockDelays.MOCK_MESSAGE_DELAY_STANDARD
+        delayBetweenMessages =
+          TestConstants.MockDelays.MOCK_MESSAGE_DELAY_STANDARD
       )
       val mockScript = MockCliScript.createTempScript(mockBehavior)
       createdScripts += mockScript
@@ -694,7 +719,8 @@ class ClaudeCodeTest extends munit.FunSuite:
           """{"type":"assistant","message":{"content":[]}}""", // Empty content array
           """{"type":"result","subtype":"conversation_result","duration_ms":1000,"duration_api_ms":500,"is_error":false,"num_turns":1,"session_id":"session_123"}"""
         ),
-        delayBetweenMessages = TestConstants.MockDelays.MOCK_MESSAGE_DELAY_STANDARD
+        delayBetweenMessages =
+          TestConstants.MockDelays.MOCK_MESSAGE_DELAY_STANDARD
       )
       val mockScript = MockCliScript.createTempScript(mockBehavior)
       createdScripts += mockScript

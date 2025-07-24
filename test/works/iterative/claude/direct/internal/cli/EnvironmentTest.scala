@@ -286,7 +286,14 @@ class EnvironmentTest extends munit.FunSuite with ScalaCheckSuite:
           "/bin/sh",
           List("-c", "invalid shell syntax {")
         ),
-        ("Command with timeout", "/bin/sh", List("-c", s"sleep ${TestConstants.WaitIntervals.SLEEP_DURATION_MEDIUM}"))
+        (
+          "Command with timeout",
+          "/bin/sh",
+          List(
+            "-c",
+            s"sleep ${TestConstants.WaitIntervals.SLEEP_DURATION_MEDIUM}"
+          )
+        )
       )
 
       failureScenarios.foreach { case (scenarioName, command, args) =>
@@ -524,7 +531,10 @@ class EnvironmentTest extends munit.FunSuite with ScalaCheckSuite:
       ),
       Map("BUILD_NUMBER" -> "123", "VERSION_TAG" -> "v1.0.0"),
       Map("LOG_LEVEL" -> "info", "TIMEOUT_VALUE" -> "30"),
-      Map("WORKER_COUNT" -> "4", "CACHE_SIZE" -> TestConstants.TestDataSizes.MEDIUM_DATA_SIZE.toString),
+      Map(
+        "WORKER_COUNT" -> "4",
+        "CACHE_SIZE" -> TestConstants.TestDataSizes.MEDIUM_DATA_SIZE.toString
+      ),
       Map("MY_CUSTOM_VAR" -> "value with spaces", "BATCH_SIZE" -> "50"),
       Map(
         "ENVIRONMENT" -> "test",

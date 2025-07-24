@@ -54,7 +54,8 @@ class ClaudeCodeIntegrationTest extends munit.FunSuite:
         continueConversation = Some(false),
         resume = None,
         model = Some("claude-3-5-sonnet-20241022"),
-        maxThinkingTokens = Some(TestConstants.TestParameters.MAX_THINKING_TOKENS_MAX),
+        maxThinkingTokens =
+          Some(TestConstants.TestParameters.MAX_THINKING_TOKENS_MAX),
         timeout = None,
         inheritEnvironment = Some(true),
         environmentVariables = Some(
