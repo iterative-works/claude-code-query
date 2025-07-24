@@ -3,22 +3,50 @@
 package works.iterative.claude.direct.internal.cli
 
 object FileSystemOps:
+
+  // == Command Discovery Operations ==
+
   def which(command: String): Option[String] =
-    try
-      val result = os.proc("which", command).call(check = false)
-      if result.exitCode == 0 then Some(result.out.trim())
-      else None
-    catch case _: Exception => None
+    executeWhichCommand(command).flatMap(processWhichResult)
+
+  private def executeWhichCommand(command: String): Option[os.CommandResult] =
+    safeExecute(() => os.proc("which", command).call(check = false))
+
+  private def processWhichResult(result: os.CommandResult): Option[String] =
+    if result.exitCode == 0 then Some(result.out.trim())
+    else None
+
+  // == File System Validation Operations ==
 
   def exists(path: String): Boolean =
-    try os.exists(os.Path(path, os.pwd))
-    catch case _: Exception => false
+    safePathOperation(() => os.exists(pathFromString(path)))
 
   def isExecutable(path: String): Boolean =
-    try
-      val osPath = os.Path(path)
-      if os.exists(osPath) && os.isFile(osPath) then
-        val perms = os.perms(osPath)
-        perms.toString.contains("x")
-      else false
+    safePathOperation(() => checkExecutablePermissions(path))
+
+  private def checkExecutablePermissions(path: String): Boolean =
+    val osPath = pathFromString(path)
+    if fileExistsAndIsRegular(osPath) then hasExecutePermission(osPath)
+    else false
+
+  private def fileExistsAndIsRegular(osPath: os.Path): Boolean =
+    os.exists(osPath) && os.isFile(osPath)
+
+  private def hasExecutePermission(osPath: os.Path): Boolean =
+    val perms = os.perms(osPath)
+    perms.toString.contains("x")
+
+  // == Path Utilities ==
+
+  private def pathFromString(pathString: String): os.Path =
+    os.Path(pathString, os.pwd)
+
+  // == Error Handling ==
+
+  private def safeExecute[T](operation: () => T): Option[T] =
+    try Some(operation())
+    catch case _: Exception => None
+
+  private def safePathOperation(operation: () => Boolean): Boolean =
+    try operation()
     catch case _: Exception => false
