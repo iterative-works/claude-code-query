@@ -295,10 +295,6 @@ class ClaudeCodeTest extends munit.FunSuite:
             reason.nonEmpty,
             "Expected descriptive reason for configuration error"
           )
-        case other =>
-          fail(
-            s"Expected ConfigurationError for invalid working directory but got: $other"
-          )
       }
     }
   }

@@ -379,16 +379,34 @@ class EnvironmentTest extends munit.FunSuite with ScalaCheckSuite:
   }
 
   // ScalaCheck generators for environment variable property tests
-  
-  /** Generate valid environment variable names (uppercase letters, numbers, underscores) */
+
+  /** Generate valid environment variable names (uppercase letters, numbers,
+    * underscores)
+    */
   // Use predefined valid names to avoid shrinking issues with ScalaCheck
   private val validEnvNameGen: Gen[String] = Gen.oneOf(
-    "TEST_VAR_A", "TEST_VAR_B", "TEST_VAR_C", "TEST_VAR_D", "TEST_VAR_E",
-    "MY_CUSTOM_VAR", "API_CONFIG", "DATABASE_HOST", "SERVICE_PORT", "DEBUG_MODE",
-    "BUILD_NUMBER", "VERSION_TAG", "ENVIRONMENT", "LOG_LEVEL", "TIMEOUT_VALUE",
-    "BATCH_SIZE", "WORKER_COUNT", "CACHE_SIZE", "MAX_CONNECTIONS", "RETRY_COUNT"
+    "TEST_VAR_A",
+    "TEST_VAR_B",
+    "TEST_VAR_C",
+    "TEST_VAR_D",
+    "TEST_VAR_E",
+    "MY_CUSTOM_VAR",
+    "API_CONFIG",
+    "DATABASE_HOST",
+    "SERVICE_PORT",
+    "DEBUG_MODE",
+    "BUILD_NUMBER",
+    "VERSION_TAG",
+    "ENVIRONMENT",
+    "LOG_LEVEL",
+    "TIMEOUT_VALUE",
+    "BATCH_SIZE",
+    "WORKER_COUNT",
+    "CACHE_SIZE",
+    "MAX_CONNECTIONS",
+    "RETRY_COUNT"
   )
-  
+
   /** Generate environment variable values with various character patterns */
   private val envValueGen: Gen[String] = Gen.oneOf(
     Gen.alphaNumStr, // Simple alphanumeric
@@ -407,28 +425,49 @@ class EnvironmentTest extends munit.FunSuite with ScalaCheckSuite:
     // Special characters that could cause issues
     Gen.oneOf("!@#$%^&*()_+-={}[]|\\:;\"'<>?,./~`", "unicode: 🚀 αβγ δεζ")
   )
-  
+
   /** Generate maps of environment variables with different sizes */
   private val envMapGen: Gen[Map[String, String]] = for {
-    size <- Gen.choose(1, 10) // Reduce size to make tests faster and more focused
+    size <- Gen.choose(
+      1,
+      10
+    ) // Reduce size to make tests faster and more focused
     pairs <- Gen.listOfN(size, Gen.zip(validEnvNameGen, envValueGen))
     // Filter out any pairs with empty names (shouldn't happen but be safe)
     validPairs = pairs.filter { case (name, _) => name.nonEmpty }
   } yield validPairs.toMap.view.filterKeys(_.nonEmpty).toMap
-  
-  /** Common system environment variables that should NOT appear when inheritEnvironment=false */
+
+  /** Common system environment variables that should NOT appear when
+    * inheritEnvironment=false
+    */
   private val commonSystemVars = Set(
-    "PATH", "HOME", "USER", "SHELL", "TERM", "LANG", "LC_ALL",
-    "TMPDIR", "TMP", "TEMP", "EDITOR", "PAGER", "MANPATH", "DISPLAY",
-    "SSH_AUTH_SOCK", "SSH_AGENT_PID", "XDG_SESSION_ID", "XDG_RUNTIME_DIR"
+    "PATH",
+    "HOME",
+    "USER",
+    "SHELL",
+    "TERM",
+    "LANG",
+    "LC_ALL",
+    "TMPDIR",
+    "TMP",
+    "TEMP",
+    "EDITOR",
+    "PAGER",
+    "MANPATH",
+    "DISPLAY",
+    "SSH_AUTH_SOCK",
+    "SSH_AGENT_PID",
+    "XDG_SESSION_ID",
+    "XDG_RUNTIME_DIR"
   )
 
   test("simple environment isolation verification") {
     supervised {
       given testLogger: MockLogger = MockLogger()
-      
-      val customVars = Map("TEST_VAR" -> "test_value", "ANOTHER_VAR" -> "another_value")
-      
+
+      val customVars =
+        Map("TEST_VAR" -> "test_value", "ANOTHER_VAR" -> "another_value")
+
       val options = QueryOptions(
         prompt = "test",
         cwd = None,
@@ -450,18 +489,19 @@ class EnvironmentTest extends munit.FunSuite with ScalaCheckSuite:
         inheritEnvironment = Some(false),
         environmentVariables = Some(customVars)
       )
-      
+
       // Simple script to list environment variables
       val script = """
         |env_vars=$(env | sort | tr '\n' ',' | sed 's/,$//')
         |echo "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"Environment variables: $env_vars\"}]}}"
       """.stripMargin
-      
-      val messages = ProcessManager.executeProcess("/bin/sh", List("-c", script), options)
+
+      val messages =
+        ProcessManager.executeProcess("/bin/sh", List("-c", script), options)
       val output = messages.map(_.toString).mkString(" ")
-      
+
       println(s"Simple test output: $output")
-      
+
       // Just verify the script ran
       assert(output.contains("TEST_VAR=test_value"))
       assert(output.contains("ANOTHER_VAR=another_value"))
@@ -470,137 +510,152 @@ class EnvironmentTest extends munit.FunSuite with ScalaCheckSuite:
     }
   }
 
-  property("environment isolation prevents system variable leakage when inheritEnvironment=false") {
+  property(
+    "environment isolation prevents system variable leakage when inheritEnvironment=false"
+  ) {
     // Use specific test cases to avoid ScalaCheck shrinking issues
     val testCases = List(
       Map("TEST_VAR_A" -> "simple_value", "API_CONFIG" -> "config_value"),
-      Map("DATABASE_HOST" -> "localhost", "SERVICE_PORT" -> "8080", "DEBUG_MODE" -> "true"),
+      Map(
+        "DATABASE_HOST" -> "localhost",
+        "SERVICE_PORT" -> "8080",
+        "DEBUG_MODE" -> "true"
+      ),
       Map("BUILD_NUMBER" -> "123", "VERSION_TAG" -> "v1.0.0"),
       Map("LOG_LEVEL" -> "info", "TIMEOUT_VALUE" -> "30"),
       Map("WORKER_COUNT" -> "4", "CACHE_SIZE" -> "1000"),
       Map("MY_CUSTOM_VAR" -> "value with spaces", "BATCH_SIZE" -> "50"),
-      Map("ENVIRONMENT" -> "test", "RETRY_COUNT" -> "3", "MAX_CONNECTIONS" -> "100")
+      Map(
+        "ENVIRONMENT" -> "test",
+        "RETRY_COUNT" -> "3",
+        "MAX_CONNECTIONS" -> "100"
+      )
     )
-    
+
     testCases.foreach { customEnvVars =>
-        supervised {
-          given testLogger: MockLogger = MockLogger()
-          
-          val filteredCustomVars = customEnvVars
-        
-          val options = QueryOptions(
-            prompt = "test",
-            cwd = None,
-            executable = None,
-            executableArgs = None,
-            pathToClaudeCodeExecutable = None,
-            maxTurns = None,
-            allowedTools = None,
-            disallowedTools = None,
-            systemPrompt = None,
-            appendSystemPrompt = None,
-            mcpTools = None,
-            permissionMode = None,
-            continueConversation = None,
-            resume = None,
-            model = None,
-            maxThinkingTokens = None,
-            timeout = None,
-            inheritEnvironment = Some(false),
-            environmentVariables = Some(filteredCustomVars)
-          )
-          
-          // Create a shell script that outputs ALL environment variables in a structured format
-          // Using the same pattern as working tests
-          val envListScript = """
+      supervised {
+        given testLogger: MockLogger = MockLogger()
+
+        val filteredCustomVars = customEnvVars
+
+        val options = QueryOptions(
+          prompt = "test",
+          cwd = None,
+          executable = None,
+          executableArgs = None,
+          pathToClaudeCodeExecutable = None,
+          maxTurns = None,
+          allowedTools = None,
+          disallowedTools = None,
+          systemPrompt = None,
+          appendSystemPrompt = None,
+          mcpTools = None,
+          permissionMode = None,
+          continueConversation = None,
+          resume = None,
+          model = None,
+          maxThinkingTokens = None,
+          timeout = None,
+          inheritEnvironment = Some(false),
+          environmentVariables = Some(filteredCustomVars)
+        )
+
+        // Create a shell script that outputs ALL environment variables in a structured format
+        // Using the same pattern as working tests
+        val envListScript = """
           |env_vars=$(env | sort | tr '\n' ',' | sed 's/,$//')
           |echo "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"Environment variables: $env_vars\"}]}}"
           """.stripMargin
-          
-          val testScript = "/bin/sh"
-          val args = List("-c", envListScript)
-          
-          val messages = ProcessManager.executeProcess(testScript, args, options)
-          val output = messages.map(_.toString).mkString(" ")
-          
-          // Verify that the script executed successfully
-          assert(
-            output.nonEmpty,
-            s"Environment listing script should execute successfully. Custom vars: $filteredCustomVars. Output: $output"
-          )
-          
-          // Extract environment variables from the output
-          // The output will contain comma-separated environment variables
-          val prefixToFind = "Environment variables: "
-          val startIndex = output.indexOf(prefixToFind)
-          if (startIndex == -1) {
-            fail(s"Could not find environment variables in output: $output")
-          }
-          val envVarsText = output.substring(startIndex + prefixToFind.length)
-            .takeWhile(_ != ')') // Stop at the first closing parenthesis which ends the JSON
-            .trim
-          
-          val envVarPairs = if (envVarsText.nonEmpty) {
-            envVarsText.split(",").toList.flatMap { envVar =>
-              envVar.split("=", 2) match {
-                case Array(name, value) => Some(name.trim -> value.trim)
-                case Array(name) => Some(name.trim -> "") // Handle variables with no value
-                case _ => None // Skip malformed entries
-              }
+
+        val testScript = "/bin/sh"
+        val args = List("-c", envListScript)
+
+        val messages = ProcessManager.executeProcess(testScript, args, options)
+        val output = messages.map(_.toString).mkString(" ")
+
+        // Verify that the script executed successfully
+        assert(
+          output.nonEmpty,
+          s"Environment listing script should execute successfully. Custom vars: $filteredCustomVars. Output: $output"
+        )
+
+        // Extract environment variables from the output
+        // The output will contain comma-separated environment variables
+        val prefixToFind = "Environment variables: "
+        val startIndex = output.indexOf(prefixToFind)
+        if (startIndex == -1) {
+          fail(s"Could not find environment variables in output: $output")
+        }
+        val envVarsText = output
+          .substring(startIndex + prefixToFind.length)
+          .takeWhile(
+            _ != ')'
+          ) // Stop at the first closing parenthesis which ends the JSON
+          .trim
+
+        val envVarPairs = if (envVarsText.nonEmpty) {
+          envVarsText.split(",").toList.flatMap { envVar =>
+            envVar.split("=", 2) match {
+              case Array(name, value) => Some(name.trim -> value.trim)
+              case Array(name)        =>
+                Some(name.trim -> "") // Handle variables with no value
+              case _ => None // Skip malformed entries
             }
-          } else {
-            List.empty
           }
-          val actualEnvVars = envVarPairs.toMap
-          
-          // Test 1: ALL custom environment variables should be present with correct values
-          filteredCustomVars.foreach { case (expectedName, expectedValue) =>
-            assert(
-              actualEnvVars.contains(expectedName),
-              s"Custom environment variable '$expectedName' should be present in isolated environment. " +
+        } else {
+          List.empty
+        }
+        val actualEnvVars = envVarPairs.toMap
+
+        // Test 1: ALL custom environment variables should be present with correct values
+        filteredCustomVars.foreach { case (expectedName, expectedValue) =>
+          assert(
+            actualEnvVars.contains(expectedName),
+            s"Custom environment variable '$expectedName' should be present in isolated environment. " +
               s"Available vars: ${actualEnvVars.keys.mkString(", ")}"
-            )
-            
-            assert(
-              actualEnvVars(expectedName) == expectedValue,
-              s"Custom environment variable '$expectedName' should have value '$expectedValue' " +
+          )
+
+          assert(
+            actualEnvVars(expectedName) == expectedValue,
+            s"Custom environment variable '$expectedName' should have value '$expectedValue' " +
               s"but got '${actualEnvVars.get(expectedName)}'"
-            )
-          }
-          
-          // Test 2: NO common system environment variables should be present
-          commonSystemVars.foreach { systemVar =>
-            assert(
-              !actualEnvVars.contains(systemVar),
-              s"System environment variable '$systemVar' should NOT be present when inheritEnvironment=false. " +
+          )
+        }
+
+        // Test 2: NO common system environment variables should be present
+        commonSystemVars.foreach { systemVar =>
+          assert(
+            !actualEnvVars.contains(systemVar),
+            s"System environment variable '$systemVar' should NOT be present when inheritEnvironment=false. " +
               s"Found in environment with value: '${actualEnvVars.get(systemVar)}'. " +
               s"This indicates environment isolation is not working properly."
-            )
-          }
-          
-          // Test 3: The ONLY variables present should be our custom ones plus some system vars that are unavoidable
-          // PWD is often set by the shell itself, so we allow it
-          val allowedSystemVars = Set("PWD", "_") // _ is sometimes set by shell
-          val expectedVarNames = filteredCustomVars.keys.toSet ++ allowedSystemVars
-          val unexpectedVars = actualEnvVars.keys.toSet -- expectedVarNames
-          
-          assert(
-            unexpectedVars.isEmpty,
-            s"Found unexpected environment variables that are not in our custom set: ${unexpectedVars.mkString(", ")}. " +
+          )
+        }
+
+        // Test 3: The ONLY variables present should be our custom ones plus some system vars that are unavoidable
+        // PWD is often set by the shell itself, so we allow it
+        val allowedSystemVars = Set("PWD", "_") // _ is sometimes set by shell
+        val expectedVarNames =
+          filteredCustomVars.keys.toSet ++ allowedSystemVars
+        val unexpectedVars = actualEnvVars.keys.toSet -- expectedVarNames
+
+        assert(
+          unexpectedVars.isEmpty,
+          s"Found unexpected environment variables that are not in our custom set: ${unexpectedVars.mkString(", ")}. " +
             s"This suggests environment isolation is leaking variables. " +
             s"Expected only: ${expectedVarNames.mkString(", ")}"
-          )
-          
-          // Test 4: Verify no sensitive information leaked into logs
-          val allLogMessages = testLogger.getAllMessages().mkString(" ")
-          filteredCustomVars.values.foreach { value =>
-            if (value.length >= 8) { // Only check reasonably long values
-              assert(
-                !allLogMessages.contains(value),
-                s"Environment variable value '$value' should not appear in log messages for security"
-              )
-            }
+        )
+
+        // Test 4: Verify no sensitive information leaked into logs
+        val allLogMessages = testLogger.getAllMessages().mkString(" ")
+        filteredCustomVars.values.foreach { value =>
+          if (value.length >= 8) { // Only check reasonably long values
+            assert(
+              !allLogMessages.contains(value),
+              s"Environment variable value '$value' should not appear in log messages for security"
+            )
           }
-        } // End of supervised block
+        }
+      } // End of supervised block
     }
   }
