@@ -38,47 +38,42 @@ object CLIDiscovery:
       fs: FileSystemOperations,
       logger: Logger
   ): Either[CLIError, String] =
-    // First try PATH lookup
-    logger.debug("Searching for claude in PATH")
-    fs.which("claude") match
-      case Some(path) =>
-        logger.info(s"Found claude in PATH: $path")
-        Right(path)
-      case None =>
-        // Try common installation paths as fallback
-        logger.debug("PATH lookup failed, trying common paths")
-        tryCommonPaths(fs, logger)
+    searchInPath(fs, logger)
+      .orElse(searchCommonPaths(fs, logger))
+      .getOrElse(validateNodeJSPrerequisite(fs, logger))
 
-  /** Try common installation paths for Claude CLI */
-  private def tryCommonPaths(
+  /** Search for Claude CLI in system PATH */
+  private def searchInPath(
       fs: FileSystemOperations,
       logger: Logger
-  ): Either[CLIError, String] =
-    val commonPaths = List(
-      "/usr/local/bin/claude",
-      "/usr/bin/claude",
-      "/opt/homebrew/bin/claude",
-      System.getProperty("user.home") + "/.local/bin/claude",
-      System.getProperty("user.home") + "/bin/claude"
-    )
+  ): Option[Either[CLIError, String]] =
+    logger.debug("Searching for claude in PATH")
+    fs.which("claude").map { path =>
+      logger.info(s"Found claude in PATH: $path")
+      Right(path)
+    }
 
-    commonPaths.find(path => fs.exists(path) && fs.isExecutable(path)) match
-      case Some(path) =>
+  /** Search for Claude CLI in common installation paths */
+  private def searchCommonPaths(
+      fs: FileSystemOperations,
+      logger: Logger
+  ): Option[Either[CLIError, String]] =
+    logger.debug("PATH lookup failed, trying common paths")
+    getCommonInstallationPaths()
+      .find(isValidExecutable(fs, _))
+      .map { path =>
         logger.info(s"Found claude at common path: $path")
         Right(path)
-      case None =>
-        // Check if Node.js is available before returning CLINotFoundError
-        checkNodeJSPrerequisite(fs, logger)
+      }
 
-  /** Check if Node.js is available as a prerequisite for Claude CLI */
-  private def checkNodeJSPrerequisite(
+  /** Validate Node.js prerequisite and return appropriate error */
+  private def validateNodeJSPrerequisite(
       fs: FileSystemOperations,
       logger: Logger
   ): Either[CLIError, String] =
     logger.debug("Checking for Node.js")
     fs.which("node") match
       case Some(_) =>
-        // Node.js is available, return CLINotFoundError
         logger.warn(
           "Claude Code CLI not found in PATH or common installation paths"
         )
@@ -88,10 +83,26 @@ object CLIDiscovery:
           )
         )
       case None =>
-        // Node.js is missing, return NodeJSNotFoundError
         logger.error("Node.js not found")
         Left(
           NodeJSNotFoundError(
             "Node.js is required for Claude Code CLI installation. Please install Node.js first."
           )
         )
+
+  /** Get list of common installation paths for Claude CLI */
+  private def getCommonInstallationPaths(): List[String] =
+    List(
+      "/usr/local/bin/claude",
+      "/usr/bin/claude",
+      "/opt/homebrew/bin/claude",
+      System.getProperty("user.home") + "/.local/bin/claude",
+      System.getProperty("user.home") + "/bin/claude"
+    )
+
+  /** Check if path exists and is executable */
+  private def isValidExecutable(
+      fs: FileSystemOperations,
+      path: String
+  ): Boolean =
+    fs.exists(path) && fs.isExecutable(path)
