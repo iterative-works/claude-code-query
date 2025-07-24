@@ -25,7 +25,7 @@ object JsonParser:
   ): Either[JsonParsingError, Option[Message]] =
     handleEmptyLine(line) match
       case Some(result) => result
-      case None => parseNonEmptyJsonLine(line, lineNumber)
+      case None         => parseNonEmptyJsonLine(line, lineNumber)
 
   /** Parse JSON line with context and logging, returning Either for error
     * handling without IO effects
@@ -36,13 +36,17 @@ object JsonParser:
   )(using logger: Logger): Either[JsonParsingError, Option[Message]] =
     handleEmptyLineWithLogging(line, lineNumber) match
       case Some(result) => result
-      case None => parseNonEmptyJsonLineWithLogging(line, lineNumber)
+      case None         => parseNonEmptyJsonLineWithLogging(line, lineNumber)
 
   /** Handle empty line case, returning None if line should be processed */
-  private def handleEmptyLine(line: String): Option[Either[JsonParsingError, Option[Message]]] =
+  private def handleEmptyLine(
+      line: String
+  ): Option[Either[JsonParsingError, Option[Message]]] =
     if line.trim.isEmpty then Some(Right(None)) else None
 
-  /** Handle empty line case with logging, returning None if line should be processed */
+  /** Handle empty line case with logging, returning None if line should be
+    * processed
+    */
   private def handleEmptyLineWithLogging(
       line: String,
       lineNumber: Int
@@ -58,8 +62,9 @@ object JsonParser:
       lineNumber: Int
   ): Either[JsonParsingError, Option[Message]] =
     parseJsonString(line) match
-      case Right(json) => Right(CoreJsonParser.parseMessage(json))
-      case Left(parseError) => Left(JsonParsingError(line, lineNumber, parseError))
+      case Right(json)      => Right(CoreJsonParser.parseMessage(json))
+      case Left(parseError) =>
+        Left(JsonParsingError(line, lineNumber, parseError))
 
   /** Parse non-empty JSON line with logging */
   private def parseNonEmptyJsonLineWithLogging(
@@ -80,17 +85,26 @@ object JsonParser:
   private def parseJsonString(line: String) = parser.parse(line)
 
   /** Log the result of message parsing */
-  private def logParsingResult(message: Option[Message], lineNumber: Int)(using logger: Logger): Unit =
+  private def logParsingResult(message: Option[Message], lineNumber: Int)(using
+      logger: Logger
+  ): Unit =
     message match
       case Some(msg) =>
         val messageType = extractMessageType(msg)
-        logger.debug(s"Successfully parsed message of type $messageType at line $lineNumber")
+        logger.debug(
+          s"Successfully parsed message of type $messageType at line $lineNumber"
+        )
       case None =>
         logger.debug(s"Parsed JSON but no message created at line $lineNumber")
 
   /** Log parsing error */
-  private def logParsingError(parseError: io.circe.ParsingFailure, lineNumber: Int)(using logger: Logger): Unit =
-    logger.error(s"Failed to parse JSON at line $lineNumber: ${parseError.getMessage}")
+  private def logParsingError(
+      parseError: io.circe.ParsingFailure,
+      lineNumber: Int
+  )(using logger: Logger): Unit =
+    logger.error(
+      s"Failed to parse JSON at line $lineNumber: ${parseError.getMessage}"
+    )
 
   /** Extract message type for logging purposes */
   private def extractMessageType(message: Message): String =

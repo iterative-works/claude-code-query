@@ -43,12 +43,12 @@ object ProcessManager:
   )(using logger: Logger, ox: Ox): List[Message] =
     val processBuilder = configureProcess(executablePath, args, options)
     val process = processBuilder.start()
-    
+
     waitForProcessWithTimeout(process, timeoutDuration, command)
     val messages = readProcessOutput(process)
     captureStderrSynchronously(process)
     handleProcessCompletion(process, command)
-    
+
     messages
 
   private def executeProcessWithoutTimeout(
@@ -59,13 +59,13 @@ object ProcessManager:
   )(using logger: Logger, ox: Ox): List[Message] =
     val processBuilder = configureProcess(executablePath, args, options)
     val process = processBuilder.start()
-    
+
     val stderrCapture = captureStderrConcurrently(process)
     val messages = readProcessOutput(process)
     val exitCode = process.waitFor()
     stderrCapture.join()
     handleProcessCompletion(process, command)
-    
+
     messages
 
   def configureProcess(
@@ -78,22 +78,31 @@ object ProcessManager:
     configureEnvironment(processBuilder, options)
     processBuilder
 
-  private def createProcessBuilder(executablePath: String, args: List[String]): ProcessBuilder =
+  private def createProcessBuilder(
+      executablePath: String,
+      args: List[String]
+  ): ProcessBuilder =
     new ProcessBuilder((executablePath :: args).asJava)
 
-  private def setWorkingDirectory(processBuilder: ProcessBuilder, options: QueryOptions): Unit =
+  private def setWorkingDirectory(
+      processBuilder: ProcessBuilder,
+      options: QueryOptions
+  ): Unit =
     options.cwd.foreach { cwdPath =>
       processBuilder.directory(new java.io.File(cwdPath))
     }
 
-  private def configureEnvironment(processBuilder: ProcessBuilder, options: QueryOptions): Unit =
+  private def configureEnvironment(
+      processBuilder: ProcessBuilder,
+      options: QueryOptions
+  ): Unit =
     val environment = processBuilder.environment()
     options.inheritEnvironment match
       case Some(false) =>
         environment.clear()
       case Some(true) | None =>
         ()
-    
+
     options.environmentVariables.foreach { envVars =>
       envVars.foreach { case (key, value) =>
         environment.put(key, value)
@@ -107,54 +116,64 @@ object ProcessManager:
   )(using logger: Logger): Unit =
     val finiteDuration = timeoutDuration match
       case fd: scala.concurrent.duration.FiniteDuration => fd
-      case _ =>
+      case _                                            =>
         scala.concurrent.duration
           .FiniteDuration(timeoutDuration.toMillis, "milliseconds")
-    
+
     val finished = process.waitFor(
       finiteDuration.toMillis,
       java.util.concurrent.TimeUnit.MILLISECONDS
     )
-    
+
     if !finished then
       logger.error(s"Process timed out after ${timeoutDuration}")
       process.destroyForcibly()
       throw ProcessTimeoutError(finiteDuration, command)
 
-  private def readProcessOutput(process: Process)(using logger: Logger): List[Message] =
+  private def readProcessOutput(process: Process)(using
+      logger: Logger
+  ): List[Message] =
     val reader = new BufferedReader(
       new InputStreamReader(process.getInputStream)
     )
     val messages = scala.collection.mutable.ListBuffer[Message]()
-    
+
     var lineNumber = 0
     var line: String = null
     while { line = reader.readLine(); line != null } do
       lineNumber += 1
       parseJsonLineToMessage(line, lineNumber) match
         case Some(message) => messages += message
-        case None => // Skip empty or invalid lines
-    
+        case None          => // Skip empty or invalid lines
+
     reader.close()
     messages.toList
 
-  private def parseJsonLineToMessage(line: String, lineNumber: Int)(using logger: Logger): Option[Message] =
+  private def parseJsonLineToMessage(line: String, lineNumber: Int)(using
+      logger: Logger
+  ): Option[Message] =
     JsonParser.parseJsonLineWithContextWithLogging(line, lineNumber) match
       case Right(Some(message)) => Some(message)
-      case Right(None) => None
-      case Left(error) =>
+      case Right(None)          => None
+      case Left(error)          =>
         logger.error(s"JSON parsing failed: ${error.message}")
         None
 
-  private def captureStderrConcurrently(process: Process)(using logger: Logger, ox: Ox) =
+  private def captureStderrConcurrently(
+      process: Process
+  )(using logger: Logger, ox: Ox) =
     fork {
       captureStderrStream(process)
     }
 
-  private def captureStderrSynchronously(process: Process)(using logger: Logger): List[String] =
+  private def captureStderrSynchronously(process: Process)(using
+      logger: Logger
+  ): List[String] =
     captureStderrStream(process)
 
-  private def captureStderrStream(process: Process)(using logger: Logger): List[String] =
+  private def captureStderrStream(process: Process)(using
+      logger: Logger
+  ): List[String] =
     val stderrReader = new BufferedReader(
       new InputStreamReader(process.getErrorStream)
     )
@@ -166,9 +185,10 @@ object ProcessManager:
     stderrReader.close()
     stderrContent.toList
 
-  private def handleProcessCompletion(process: Process, command: List[String])(using logger: Logger): Unit =
+  private def handleProcessCompletion(process: Process, command: List[String])(
+      using logger: Logger
+  ): Unit =
     val exitCode = process.exitValue()
     logger.info(s"Process completed with exit code: $exitCode")
-    
-    if exitCode != 0 then
-      throw ProcessExecutionError(exitCode, "", command)
+
+    if exitCode != 0 then throw ProcessExecutionError(exitCode, "", command)
