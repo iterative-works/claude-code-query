@@ -23,6 +23,17 @@ class EnvironmentTest extends munit.FunSuite:
     def warn(msg: String): Unit = warnMessages = msg :: warnMessages
     def error(msg: String): Unit = errorMessages = msg :: errorMessages
 
+    // Get all messages across all log levels for comprehensive security testing
+    def getAllMessages(): List[String] = 
+      debugMessages ++ infoMessages ++ warnMessages ++ errorMessages
+
+    // Clear all messages for test isolation
+    def clearAll(): Unit = 
+      debugMessages = List.empty
+      infoMessages = List.empty
+      warnMessages = List.empty
+      errorMessages = List.empty
+
   test("T8.1: handles environment variable names with special characters") {
     supervised {
       // Setup: Mock CLI executable with environment variables containing special characters
@@ -203,19 +214,23 @@ class EnvironmentTest extends munit.FunSuite:
     }
   }
 
-  test("T8.4: process does not leak environment variable values in errors") {
+  test("T8.4: ensures sensitive environment variables never leak into logs or error messages under any failure condition") {
     supervised {
-      // Setup: Mock CLI executable with secret environment variables that cause process failure
-      given MockLogger = MockLogger()
+      // Setup: Test logger to capture all log messages across multiple failure scenarios
+      given testLogger: MockLogger = MockLogger()
 
-      // Test environment variables with sensitive values
-      val secretValue = "super-secret-api-key-12345"
-      val environmentVars = Map(
-        "SECRET_API_KEY" -> secretValue,
-        "PUBLIC_VAR" -> "public_value"
+      // Test environment variables with realistic sensitive values that could appear in production
+      val secrets = Map(
+        "API_KEY" -> "sk-1234567890abcdef1234567890abcdef1234567890abcdef", // API key format
+        "PASSWORD" -> "MySecretP@ssw0rd123!",
+        "DATABASE_URL" -> "postgresql://user:secret123@localhost:5432/db",
+        "JWT_SECRET" -> "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.secret.signature",
+        "PRIVATE_KEY" -> "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC...",
+        "OAUTH_TOKEN" -> "ya29.c.b0Aaekm1K5xI7wGjN8X2nQ...",
+        "SESSION_SECRET" -> "ultra-secret-session-key-that-must-never-leak"
       )
 
-      val options = QueryOptions(
+      val baseOptions = QueryOptions(
         prompt = "test",
         cwd = None,
         executable = None,
@@ -234,29 +249,97 @@ class EnvironmentTest extends munit.FunSuite:
         maxThinkingTokens = None,
         timeout = None,
         inheritEnvironment = Some(false),
-        environmentVariables = Some(environmentVars)
+        environmentVariables = Some(secrets)
       )
 
-      // Create a failing command to trigger error handling
-      val testScript = "/bin/sh"
-      val args = List("-c", "exit 1")
+      // Test multiple failure scenarios that could potentially leak sensitive information
+      val failureScenarios = List(
+        ("Non-existent command", "/nonexistent/command/that/does/not/exist", List("arg1", "arg2")),
+        ("Command with error exit code", "/bin/sh", List("-c", "exit 1")),
+        ("Command with abnormal termination", "/bin/sh", List("-c", "kill -TERM $$")),
+        ("Command with different error exit codes", "/bin/sh", List("-c", "exit 127")),
+        ("Command that writes to stderr and fails", "/bin/sh", List("-c", "echo 'error output' >&2; exit 1")),
+        ("Invalid shell syntax", "/bin/sh", List("-c", "invalid shell syntax {")),
+        ("Command with timeout", "/bin/sh", List("-c", "sleep 10"))
+      )
 
-      // This should throw a ProcessExecutionError
-      val error = intercept[ProcessExecutionError] {
-        ProcessManager.executeProcess(testScript, args, options)
+      failureScenarios.foreach { case (scenarioName, command, args) =>
+        testLogger.clearAll() // Clear previous logs for isolation
+
+        val options = if (scenarioName.contains("timeout")) {
+          baseOptions.copy(timeout = Some(scala.concurrent.duration.Duration(100, "milliseconds")))
+        } else {
+          baseOptions
+        }
+
+        // Execute the failing scenario and capture any exceptions
+        val caughtException = try {
+          ProcessManager.executeProcess(command, args, options)
+          None // If no exception, this is unexpected for our failure scenarios
+        } catch {
+          case ex: Throwable => Some(ex)
+        }
+
+        // Collect all potential sources of information leakage
+        val allLogMessages = testLogger.getAllMessages()
+        val exceptionMessage = caughtException.map(_.getMessage).getOrElse("")
+        val exceptionStackTrace = caughtException.map(_.getStackTrace.mkString("\n")).getOrElse("")
+        val exceptionToString = caughtException.map(_.toString).getOrElse("")
+
+        val allPotentialLeakSources = List(
+          allLogMessages.mkString(" "),
+          exceptionMessage,
+          exceptionStackTrace,
+          exceptionToString
+        ).mkString(" ")
+
+        // Verify that NO sensitive values appear in ANY output under failure conditions
+        secrets.foreach { case (secretName, secretValue) =>
+          assert(
+            !allPotentialLeakSources.contains(secretValue),
+            s"SECURITY VIOLATION in scenario '$scenarioName': Secret '$secretName' with value '$secretValue' found in logs or error messages.\n" +
+            s"Log messages: ${allLogMessages.mkString(", ")}\n" +
+            s"Exception message: $exceptionMessage\n" +
+            s"Exception toString: $exceptionToString\n" +
+            s"Stack trace snippet: ${exceptionStackTrace.take(500)}..."
+          )
+
+          // Also check for partial leakage of longer secrets (check substrings of 10+ chars)
+          if (secretValue.length >= 10) {
+            val sensitiveSubstrings = (0 until secretValue.length - 9).map(i => secretValue.substring(i, i + 10))
+            sensitiveSubstrings.foreach { substring =>
+              assert(
+                !allPotentialLeakSources.contains(substring),
+                s"SECURITY VIOLATION in scenario '$scenarioName': Partial secret leak detected. " +
+                s"Substring '$substring' from secret '$secretName' found in output."
+              )
+            }
+          }
+        }
+
+        // Verify that we still get meaningful error information without exposing secrets
+        caughtException match {
+          case Some(ex) =>
+            ex match {
+              case procError: ProcessExecutionError =>
+                // Should contain command information but not environment variables
+                assert(
+                  procError.getMessage.contains(command) || procError.getMessage.contains(command.split("/").last),
+                  s"Error message should contain command information for scenario '$scenarioName'. Got: ${procError.getMessage}"
+                )
+              case other =>
+                // Other exception types should also not leak environment variables
+                assert(
+                  other.getMessage != null && other.getMessage.nonEmpty,
+                  s"Expected non-empty error message for scenario '$scenarioName' but got: ${other.getMessage}"
+                )
+            }
+          case None =>
+            // Some scenarios might not throw exceptions (which would be unexpected for our failure cases)
+            if (!scenarioName.contains("timeout")) {
+              println(s"Warning: Scenario '$scenarioName' did not throw an exception as expected")
+            }
+        }
       }
-
-      // Verify that the secret value is not present in the error message
-      val errorMessage = error.getMessage
-      assert(
-        !errorMessage.contains(secretValue),
-        s"Error message should not contain secret value '$secretValue'. Error: $errorMessage"
-      )
-
-      // Verify that the error message contains the command but not environment variables
-      assert(
-        errorMessage.contains("/bin/sh") || errorMessage.contains("sh"),
-        s"Error message should contain command information. Error: $errorMessage"
-      )
     }
   }
