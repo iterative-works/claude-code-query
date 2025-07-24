@@ -219,7 +219,9 @@ class ClaudeCodeTest extends munit.FunSuite:
             s"Expected 'Cannot run program' in IOException: ${ioException.getMessage}"
           )
           assert(
-            ioException.getMessage.contains("/this/path/definitely/does/not/exist/claude"),
+            ioException.getMessage.contains(
+              "/this/path/definitely/does/not/exist/claude"
+            ),
             s"Expected specific invalid path in IOException: ${ioException.getMessage}"
           )
           assert(
@@ -228,14 +230,19 @@ class ClaudeCodeTest extends munit.FunSuite:
           )
         case ProcessExecutionError(exitCode, stderr, command) =>
           // If the error gets wrapped into ProcessExecutionError (alternate implementation)
-          assert(exitCode != 0, s"Expected non-zero exit code but got: $exitCode")
+          assert(
+            exitCode != 0,
+            s"Expected non-zero exit code but got: $exitCode"
+          )
           assert(command.nonEmpty, "Expected command information in error")
           assert(
             command.contains("/this/path/definitely/does/not/exist/claude"),
             s"Expected specific invalid path in command: ${command.mkString(" ")}"
           )
         case other =>
-          fail(s"Expected IOException or ProcessExecutionError for non-existent executable but got: $other")
+          fail(
+            s"Expected IOException or ProcessExecutionError for non-existent executable but got: $other"
+          )
       }
     }
   }
@@ -284,9 +291,14 @@ class ClaudeCodeTest extends munit.FunSuite:
             value.contains("/this/directory/definitely/does/not/exist"),
             s"Expected specific invalid directory path in value: $value"
           )
-          assert(reason.nonEmpty, "Expected descriptive reason for configuration error")
+          assert(
+            reason.nonEmpty,
+            "Expected descriptive reason for configuration error"
+          )
         case other =>
-          fail(s"Expected ConfigurationError for invalid working directory but got: $other")
+          fail(
+            s"Expected ConfigurationError for invalid working directory but got: $other"
+          )
       }
     }
   }
@@ -364,8 +376,15 @@ class ClaudeCodeTest extends munit.FunSuite:
       }
 
       // Verify: Should fail with ProcessExecutionError with specific exit code and command details
-      assertEquals(exception.exitCode, 1, "Expected exit code 1 from /bin/false")
-      assert(exception.command.nonEmpty, "Expected command information in error")
+      assertEquals(
+        exception.exitCode,
+        1,
+        "Expected exit code 1 from /bin/false"
+      )
+      assert(
+        exception.command.nonEmpty,
+        "Expected command information in error"
+      )
       assert(
         exception.command.contains("/bin/false"),
         s"Expected /bin/false in command: ${exception.command.mkString(" ")}"
@@ -410,10 +429,14 @@ class ClaudeCodeTest extends munit.FunSuite:
 
       // Verify: Should fail with ProcessTimeoutError with exact timeout duration and command details
       assertEquals(
-        exception.timeoutDuration.toMillis, 500L, 
+        exception.timeoutDuration.toMillis,
+        500L,
         "Expected exactly 500ms timeout duration"
       )
-      assert(exception.command.nonEmpty, "Expected command information in error")
+      assert(
+        exception.command.nonEmpty,
+        "Expected command information in error"
+      )
       assert(
         exception.command.contains("sleep"),
         s"Expected 'sleep' command in timeout error: ${exception.command.mkString(" ")}"
@@ -548,13 +571,23 @@ class ClaudeCodeTest extends munit.FunSuite:
       }
 
       // Verify: Should propagate same ProcessExecutionError as query() method with specific details
-      assertEquals(exception.exitCode, 1, "Expected exit code 1 from /bin/false in querySync")
-      assert(exception.command.nonEmpty, "Expected command information in error")
+      assertEquals(
+        exception.exitCode,
+        1,
+        "Expected exit code 1 from /bin/false in querySync"
+      )
+      assert(
+        exception.command.nonEmpty,
+        "Expected command information in error"
+      )
       assert(
         exception.command.contains("/bin/false"),
         s"Expected /bin/false in command from querySync: ${exception.command.mkString(" ")}"
       )
-      assert(exception.stderr != null, "Expected stderr field to be accessible in querySync error")
+      assert(
+        exception.stderr != null,
+        "Expected stderr field to be accessible in querySync error"
+      )
       // Verify that this is the same type of error as would be thrown by query()
       assert(
         exception.message.contains("Process failed with exit code 1"),

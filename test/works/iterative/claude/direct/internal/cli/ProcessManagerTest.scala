@@ -20,8 +20,11 @@ import java.lang.management.ManagementFactory
 import scala.util.{Try, Success, Failure}
 import scala.concurrent.duration.*
 import java.nio.file.Path
+import org.scalacheck.*
+import org.scalacheck.Prop.*
+import munit.ScalaCheckSuite
 
-class ProcessManagerTest extends munit.FunSuite:
+class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
 
   // Track created mock scripts for cleanup
   private val createdScripts = scala.collection.mutable.ListBuffer[Path]()
@@ -1110,5 +1113,208 @@ class ProcessManagerTest extends munit.FunSuite:
           s"Expected zombie count to return to $initialZombieCount but got $currentZombieCount"
         )
       }
+    }
+  }
+
+  // === Property-Based Testing for Concurrent Message Processing ===
+
+  test(
+    "PROPERTY-1: concurrent message processing maintains order and completeness (100+ messages)"
+  ) {
+    supervised {
+      given MockLogger = MockLogger()
+
+      // Generate 100+ sequential messages with identifiers for order testing
+      val messageContents = (1 to 100).map(i => s"content-$i").toList
+      val jsonMessages = messageContents.zipWithIndex.map {
+        case (content, id) =>
+          s"""{"type":"user","content":"msg-$id-$content"}"""
+      }
+
+      // Create mock CLI script that outputs messages progressively
+      val mockBehavior = MockCliScript.MockBehavior(
+        messages = jsonMessages,
+        delayBetweenMessages =
+          Duration(1, "milliseconds") // Small delay for realistic streaming
+      )
+      val mockScript = MockCliScript.createTempScript(mockBehavior)
+      createdScripts += mockScript
+
+      val options = QueryOptions(
+        prompt = "concurrent order test",
+        cwd = None,
+        executable = None,
+        executableArgs = None,
+        pathToClaudeCodeExecutable = None,
+        maxTurns = None,
+        allowedTools = None,
+        disallowedTools = None,
+        systemPrompt = None,
+        appendSystemPrompt = None,
+        mcpTools = None,
+        permissionMode = None,
+        continueConversation = None,
+        resume = None,
+        model = None,
+        maxThinkingTokens = None,
+        timeout = None,
+        inheritEnvironment = None,
+        environmentVariables = None
+      )
+
+      // Execute concurrent processing
+      val messages = ProcessManager.executeProcess(
+        mockScript.toString,
+        List.empty[String],
+        options
+      )
+
+      // Property 1: All messages should be processed (no message loss)
+      assertEquals(
+        messages.length,
+        jsonMessages.length,
+        "All messages should be processed without loss"
+      )
+
+      // Property 2: Message order should be preserved
+      val orderPreserved = messages.zipWithIndex.forall { case (msg, index) =>
+        msg match {
+          case UserMessage(content) =>
+            content.startsWith(s"msg-$index-")
+          case _ => false
+        }
+      }
+      assert(
+        orderPreserved,
+        "Message order should be preserved under concurrent processing"
+      )
+
+      // Property 3: All messages should have correct sequential identifiers
+      messages.zipWithIndex.foreach { case (msg, index) =>
+        msg match {
+          case UserMessage(content) =>
+            val expectedPrefix = s"msg-$index-content-${index + 1}"
+            assertEquals(
+              content,
+              expectedPrefix,
+              s"Message $index should have correct sequential identifier"
+            )
+          case other =>
+            fail(s"Expected UserMessage at index $index but got: $other")
+        }
+      }
+
+      // Property 4: No data corruption during concurrent parsing
+      val corruptionFree = messages.forall {
+        case UserMessage(content) =>
+          content.startsWith("msg-") && content.contains("content-")
+        case _ => false
+      }
+      assert(
+        corruptionFree,
+        "No data corruption should occur during concurrent parsing"
+      )
+    }
+  }
+
+  test(
+    "PROPERTY-2: concurrent processing handles mixed content types correctly"
+  ) {
+    supervised {
+      given MockLogger = MockLogger()
+
+      // Generate mixed message types with deterministic content
+      val mixedMessages = List(
+        """{"type":"user","content":"user-msg-1"}""",
+        """{"type":"assistant","message":{"content":[{"type":"text","text":"assistant-response-1"}]}}""",
+        """{"type":"system","subtype":"user_context","context_user_id":"system-ctx-1"}""",
+        """{"type":"user","content":"user-msg-2"}""",
+        """{"type":"assistant","message":{"content":[{"type":"text","text":"assistant-response-2"}]}}""",
+        """{"type":"system","subtype":"user_context","context_user_id":"system-ctx-2"}""",
+        """{"type":"user","content":"user-msg-3"}""",
+        """{"type":"assistant","message":{"content":[{"type":"text","text":"assistant-response-3"}]}}""",
+        """{"type":"system","subtype":"user_context","context_user_id":"system-ctx-3"}""",
+        """{"type":"user","content":"user-msg-4"}"""
+      )
+
+      // Create mock CLI script with mixed message types
+      val mockBehavior = MockCliScript.MockBehavior(
+        messages = mixedMessages,
+        delayBetweenMessages = Duration(2, "milliseconds")
+      )
+      val mockScript = MockCliScript.createTempScript(mockBehavior)
+      createdScripts += mockScript
+
+      val options = QueryOptions(
+        prompt = "mixed type test",
+        cwd = None,
+        executable = None,
+        executableArgs = None,
+        pathToClaudeCodeExecutable = None,
+        maxTurns = None,
+        allowedTools = None,
+        disallowedTools = None,
+        systemPrompt = None,
+        appendSystemPrompt = None,
+        mcpTools = None,
+        permissionMode = None,
+        continueConversation = None,
+        resume = None,
+        model = None,
+        maxThinkingTokens = None,
+        timeout = None,
+        inheritEnvironment = None,
+        environmentVariables = None
+      )
+
+      // Execute concurrent processing
+      val messages = ProcessManager.executeProcess(
+        mockScript.toString,
+        List.empty[String],
+        options
+      )
+
+      // Property 1: All messages should be processed
+      assertEquals(
+        messages.length,
+        mixedMessages.length,
+        "All mixed-type messages should be processed"
+      )
+
+      // Property 2: Message types and content should be preserved
+      assertEquals(messages.length, 10, "Should process all 10 mixed messages")
+
+      // Verify specific message types and their content preservation
+      messages(0) match {
+        case UserMessage(content) => assertEquals(content, "user-msg-1")
+        case other => fail(s"Expected UserMessage but got: $other")
+      }
+
+      messages(1) match {
+        case AssistantMessage(content) =>
+          assertEquals(content.length, 1)
+          content.head match {
+            case TextBlock(text) => assertEquals(text, "assistant-response-1")
+            case other           => fail(s"Expected TextBlock but got: $other")
+          }
+        case other => fail(s"Expected AssistantMessage but got: $other")
+      }
+
+      messages(2) match {
+        case SystemMessage(subtype, data) =>
+          assertEquals(subtype, "user_context")
+          assertEquals(data.get("context_user_id"), Some("system-ctx-1"))
+        case other => fail(s"Expected SystemMessage but got: $other")
+      }
+
+      // Property 3: Concurrent processing maintains data integrity for all message types
+      val hasUserMessages = messages.count(_.isInstanceOf[UserMessage]) == 4
+      val hasAssistantMessages =
+        messages.count(_.isInstanceOf[AssistantMessage]) == 3
+      val hasSystemMessages = messages.count(_.isInstanceOf[SystemMessage]) == 3
+
+      assert(hasUserMessages, "Should have 4 UserMessages")
+      assert(hasAssistantMessages, "Should have 3 AssistantMessages")
+      assert(hasSystemMessages, "Should have 3 SystemMessages")
     }
   }
