@@ -202,7 +202,7 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
     given Arbitrary[SystemMessage] = Arbitrary(systemMessageGen)
     given Arbitrary[ResultMessage] = Arbitrary(resultMessageGen)
 
-  test("T3.1: parseJsonLineWithContext handles valid JSON messages") {
+  test("should parse valid JSON messages with line context") {
     // Setup: Valid JSON message strings from CLI output
     val validSystemMessage =
       """{"type":"system","subtype":"user_context","context_user_id":"user_01JHD7Y82DBTRS66XHKZ1CKZH4"}"""
@@ -271,7 +271,7 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
         fail(s"Expected Right(Some(ResultMessage(...))) but got: $other")
   }
 
-  test("T3.2: parseJsonLineWithContext handles empty lines gracefully") {
+  test("should handle empty lines gracefully during parsing") {
     // Setup: Empty and whitespace-only strings
     val emptyLine = ""
     val whitespaceLine = "   \t  \n  "
@@ -289,7 +289,7 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
     assertEquals(spacesResult, Right(None))
   }
 
-  test("T3.3: parseJsonLineWithContext handles malformed JSON gracefully") {
+  test("should handle malformed JSON gracefully with appropriate errors") {
     // Setup: Invalid JSON strings with context
     val malformedJson1 = """{"type":"system","missing_quote:true}"""
     val malformedJson2 = """{"type":"user","content":"Hello" extra_text}"""
@@ -336,7 +336,7 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
         fail(s"Expected Left(JsonParsingError(...)) but got: $other")
   }
 
-  test("T3.4: parseJsonLineWithContext logs parsing attempts") {
+  test("should log parsing attempts and results appropriately") {
     // Setup: Mock logger capturing debug messages
     given MockLogger = MockLogger()
 
@@ -387,7 +387,7 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
   // Property-Based Tests - JSON Parsing Idempotency
 
   property(
-    "T3.5: JSON parsing idempotency - re-parsing serialized messages yields identical results"
+    "should maintain idempotency when re-parsing serialized messages"
   ) {
     import MessageGenerators.given
     import JsonSerializationUtils.*
@@ -419,7 +419,7 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
     }
   }
 
-  property("T3.6: JSON parsing idempotency for UserMessage specifically") {
+  property("should maintain idempotency for UserMessage parsing specifically") {
     import MessageGenerators.*
     import JsonSerializationUtils.*
 
@@ -437,7 +437,7 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
     }
   }
 
-  property("T3.7: JSON parsing idempotency for AssistantMessage specifically") {
+  property("should maintain idempotency for AssistantMessage parsing specifically") {
     import MessageGenerators.*
     import JsonSerializationUtils.*
 
@@ -455,7 +455,7 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
     }
   }
 
-  property("T3.8: JSON parsing idempotency for SystemMessage specifically") {
+  property("should maintain idempotency for SystemMessage parsing specifically") {
     import MessageGenerators.*
     import JsonSerializationUtils.*
 
@@ -473,7 +473,7 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
     }
   }
 
-  property("T3.9: JSON parsing idempotency for ResultMessage specifically") {
+  property("should maintain idempotency for ResultMessage parsing specifically") {
     import MessageGenerators.*
     import JsonSerializationUtils.*
 
@@ -491,7 +491,7 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
     }
   }
 
-  test("T3.10: Edge cases - empty content and special characters") {
+  test("should handle edge cases with empty content and special characters") {
     import JsonSerializationUtils.*
 
     // Test edge cases that the generators might not cover adequately
@@ -538,7 +538,7 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
     }
   }
 
-  test("T3.11: Large content handling") {
+  test("should handle large content blocks correctly during parsing") {
     import JsonSerializationUtils.*
 
     // Test with large content blocks

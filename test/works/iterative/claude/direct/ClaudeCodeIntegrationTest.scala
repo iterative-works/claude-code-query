@@ -22,7 +22,7 @@ class ClaudeCodeIntegrationTest extends munit.FunSuite:
     def warn(msg: String): Unit = warnMessages = msg :: warnMessages
     def error(msg: String): Unit = errorMessages = msg :: errorMessages
 
-  test("T9.1: complete workflow with real mock CLI executable") {
+  test("should execute complete workflow with comprehensive mock CLI") {
     supervised {
       // Setup: Create a comprehensive mock CLI script
       given MockLogger = MockLogger()
@@ -102,7 +102,7 @@ class ClaudeCodeIntegrationTest extends munit.FunSuite:
     }
   }
 
-  test("T9.2: environment variable integration works end-to-end") {
+  test("should handle environment variables correctly in end-to-end integration") {
     supervised {
       // Setup: Mock CLI script that outputs environment variables
       given MockLogger = MockLogger()
@@ -163,7 +163,7 @@ class ClaudeCodeIntegrationTest extends munit.FunSuite:
     }
   }
 
-  test("T9.3: working directory integration works end-to-end") {
+  test("should handle working directory correctly in end-to-end integration") {
     supervised {
       // Setup: Mock CLI script that outputs current working directory
       given MockLogger = MockLogger()
@@ -220,7 +220,7 @@ class ClaudeCodeIntegrationTest extends munit.FunSuite:
     }
   }
 
-  test("T9.4: real CLI discovery and execution (when available)") {
+  test("should discover and execute real CLI when available") {
     supervised {
       // Setup: Test real CLI discovery (conditional on CLI availability)
       given MockLogger = MockLogger()

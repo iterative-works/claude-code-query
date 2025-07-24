@@ -37,7 +37,7 @@ class EnvironmentTest extends munit.FunSuite with ScalaCheckSuite:
       warnMessages = List.empty
       errorMessages = List.empty
 
-  test("T8.1: handles environment variable names with special characters") {
+  test("should handle environment variable names with special characters") {
     supervised {
       // Setup: Mock CLI executable with environment variables containing special characters
       given MockLogger = MockLogger()
@@ -100,7 +100,7 @@ class EnvironmentTest extends munit.FunSuite with ScalaCheckSuite:
     }
   }
 
-  test("T8.2: handles environment variable values with special characters") {
+  test("should handle environment variable values with special characters") {
     supervised {
       // Setup: Mock CLI executable with environment variables containing special values
       given MockLogger = MockLogger()
@@ -159,7 +159,7 @@ class EnvironmentTest extends munit.FunSuite with ScalaCheckSuite:
     }
   }
 
-  test("T8.3: handles empty environment variable names and values") {
+  test("should handle empty environment variable values correctly") {
     supervised {
       // Setup: Mock CLI executable with empty environment variables
       given MockLogger = MockLogger()
@@ -218,7 +218,7 @@ class EnvironmentTest extends munit.FunSuite with ScalaCheckSuite:
   }
 
   test(
-    "T8.4: ensures sensitive environment variables never leak into logs or error messages under any failure condition"
+    "should never leak sensitive environment variables into logs or error messages"
   ) {
     supervised {
       // Setup: Test logger to capture all log messages across multiple failure scenarios
@@ -461,7 +461,7 @@ class EnvironmentTest extends munit.FunSuite with ScalaCheckSuite:
     "XDG_RUNTIME_DIR"
   )
 
-  test("simple environment isolation verification") {
+  test("should verify basic environment isolation functionality") {
     supervised {
       given testLogger: MockLogger = MockLogger()
 
@@ -511,7 +511,7 @@ class EnvironmentTest extends munit.FunSuite with ScalaCheckSuite:
   }
 
   property(
-    "environment isolation prevents system variable leakage when inheritEnvironment=false"
+    "should prevent system variable leakage when inheritEnvironment=false"
   ) {
     // Use specific test cases to avoid ScalaCheck shrinking issues
     val testCases = List(

@@ -143,7 +143,7 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
     def hasErrorMessage(predicate: String => Boolean): Boolean =
       getErrorMessages.exists(predicate)
 
-  test("T4.1: executeProcess returns List of messages from stdout") {
+  test("should return List of parsed messages from stdout when executing process") {
     supervised {
       // Setup: Mock CLI executable outputting valid JSON messages
       given MockLogger = MockLogger()
@@ -240,7 +240,7 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
     }
   }
 
-  test("T4.2: executeProcess captures stderr concurrently") {
+  test("should capture stderr concurrently during process execution") {
     supervised {
       // Setup: Mock CLI executable that writes to both stdout and stderr
       given MockLogger = MockLogger()
@@ -290,7 +290,7 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
     }
   }
 
-  test("T5.1: configureProcess sets working directory when provided") {
+  test("should set working directory when provided in process configuration") {
     // Setup: QueryOptions with cwd specified
     given MockLogger = MockLogger()
 
@@ -325,7 +325,7 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
     assertEquals(processBuilder.directory().getAbsolutePath, testCwd)
   }
 
-  test("T5.2: configureProcess handles missing working directory gracefully") {
+  test("should handle missing working directory gracefully in process configuration") {
     // Setup: QueryOptions with None for cwd
     given MockLogger = MockLogger()
 
@@ -359,7 +359,7 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
     assertEquals(processBuilder.directory(), null)
   }
 
-  test("T5.3: configureProcess sets environment variables when specified") {
+  test("should set custom environment variables when specified in process configuration") {
     // Setup: QueryOptions with custom environment variables
     given MockLogger = MockLogger()
 
@@ -398,7 +398,7 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
   }
 
   test(
-    "T5.4: configureProcess inherits environment when inheritEnvironment is true"
+    "should inherit parent environment when inheritEnvironment is true"
   ) {
     // Setup: QueryOptions with inheritEnvironment=true
     given MockLogger = MockLogger()
@@ -438,7 +438,7 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
   }
 
   test(
-    "T5.5: configureProcess isolates environment when inheritEnvironment is false"
+    "should isolate environment when inheritEnvironment is false"
   ) {
     // Setup: QueryOptions with inheritEnvironment=false
     given MockLogger = MockLogger()
@@ -476,7 +476,7 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
     assert(!environment.containsKey("PATH"))
   }
 
-  test("T4.3: executeProcess handles process failure with exit codes") {
+  test("should handle process failures with non-zero exit codes") {
     supervised {
       // Setup: Mock CLI that exits with non-zero code and stderr
       given MockLogger = MockLogger()
@@ -528,7 +528,7 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
     }
   }
 
-  test("T4.4: executeProcess applies timeout when specified") {
+  test("should apply timeout when specified and terminate hanging processes") {
     supervised {
       // Setup: Mock hanging process with short timeout
       given MockLogger = MockLogger()
@@ -589,7 +589,7 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
     }
   }
 
-  test("T4.5: executeProcess handles JSON parsing errors gracefully") {
+  test("should handle JSON parsing errors gracefully and continue processing") {
     supervised {
       // Setup: Mock CLI outputting malformed JSON
       given MockLogger = MockLogger()
@@ -658,7 +658,7 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
     }
   }
 
-  test("T4.6: executeProcess logs process lifecycle events") {
+  test("should log process lifecycle events during execution") {
     supervised {
       // Setup: Any simple command with logging verification
       given MockLogger = MockLogger()
@@ -740,7 +740,7 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
   // during JSON parsing, process execution failures, and timeout scenarios.
 
   test(
-    "CLEANUP-1: should cleanup process resources when JSON parsing fails with large malformed output"
+    "should cleanup process resources when JSON parsing fails with large malformed output"
   ) {
     supervised {
       given MockLogger = MockLogger()
@@ -812,7 +812,7 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
   }
 
   test(
-    "CLEANUP-2: should cleanup process resources when process execution fails"
+    "should cleanup process resources when process execution fails"
   ) {
     supervised {
       given MockLogger = MockLogger()
@@ -871,7 +871,7 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
     }
   }
 
-  test("CLEANUP-3: should cleanup process resources when timeout occurs") {
+  test("should cleanup process resources when timeout occurs") {
     supervised {
       given MockLogger = MockLogger()
 
@@ -930,7 +930,7 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
   }
 
   test(
-    "CLEANUP-4: should cleanup resources during concurrent operations with mixed failures"
+    "should cleanup resources during concurrent operations with mixed failures"
   ) {
     supervised {
       given MockLogger = MockLogger()
@@ -1048,7 +1048,7 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
   }
 
   test(
-    "CLEANUP-5: should cleanup resources when process failure occurs during stderr capture"
+    "should cleanup resources when process failure occurs during stderr capture"
   ) {
     supervised {
       given MockLogger = MockLogger()
@@ -1119,7 +1119,7 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
   // === Property-Based Testing for Concurrent Message Processing ===
 
   test(
-    "PROPERTY-1: concurrent message processing maintains order and completeness (100+ messages)"
+    "should maintain order and completeness during concurrent message processing with many messages"
   ) {
     supervised {
       given MockLogger = MockLogger()
@@ -1218,7 +1218,7 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
   }
 
   test(
-    "PROPERTY-2: concurrent processing handles mixed content types correctly"
+    "should handle mixed content types correctly during concurrent processing"
   ) {
     supervised {
       given MockLogger = MockLogger()
@@ -1322,7 +1322,7 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
   // === Property-Based Testing for Timeout Precision ===
 
   test(
-    "PROPERTY-3: timeout precision - timeouts trigger within reasonable bounds of specified duration"
+    "should trigger timeouts within reasonable bounds of specified duration"
   ) {
     // Manually test specific timeout values to ensure reliable results
     val testTimeouts =
@@ -1418,7 +1418,7 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
   }
 
   test(
-    "PROPERTY-3-EDGE: timeout precision edge cases with short timeouts"
+    "should handle timeout precision edge cases with short timeouts"
   ) {
     // Test specific short timeout values
     val shortTimeouts = List(100, 250, 500) // Short but reliable timeout values
@@ -1489,7 +1489,7 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
   }
 
   test(
-    "PROPERTY-3-CONSISTENCY: timeout precision consistency across multiple runs"
+    "should maintain timeout precision consistency across multiple runs"
   ) {
     supervised {
       given MockLogger = MockLogger()

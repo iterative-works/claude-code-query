@@ -26,7 +26,7 @@ class ClaudeCodeTest extends munit.FunSuite:
     createdScripts.clear()
     super.afterEach(context)
 
-  test("T6.1: query with simple prompt returns Flow of messages") {
+  test("should return streaming Flow of parsed messages for valid CLI output") {
     supervised {
       // Setup: Create realistic mock CLI script with progressive output
       val mockBehavior =
@@ -102,7 +102,7 @@ class ClaudeCodeTest extends munit.FunSuite:
     }
   }
 
-  test("T6.2: query executes successfully with mock CLI path") {
+  test("should execute successfully with configured CLI path") {
     supervised {
       // Setup: Create realistic mock CLI script
       val mockBehavior =
@@ -178,7 +178,7 @@ class ClaudeCodeTest extends munit.FunSuite:
     }
   }
 
-  test("T6.3: query handles CLI discovery failure gracefully") {
+  test("should handle CLI discovery failure gracefully with appropriate error") {
     supervised {
       // Setup: Use an invalid executable path that will definitely fail
       val options = QueryOptions(
@@ -247,7 +247,7 @@ class ClaudeCodeTest extends munit.FunSuite:
     }
   }
 
-  test("T6.4: query validates configuration before execution") {
+  test("should validate configuration before execution and fail for invalid working directory") {
     supervised {
       // Setup: QueryOptions with invalid working directory
       val options = QueryOptions(
@@ -299,7 +299,7 @@ class ClaudeCodeTest extends munit.FunSuite:
     }
   }
 
-  test("T6.5: query passes CLI arguments correctly") {
+  test("should pass CLI arguments correctly when building command") {
     supervised {
       // Setup: QueryOptions with various CLI parameters to test argument building
       val options = QueryOptions(
@@ -339,7 +339,7 @@ class ClaudeCodeTest extends munit.FunSuite:
     }
   }
 
-  test("T6.6: query handles process execution errors") {
+  test("should handle process execution errors with specific exit codes") {
     supervised {
       // Setup: Use an executable that will fail with non-zero exit code
       val options = QueryOptions(
@@ -390,7 +390,7 @@ class ClaudeCodeTest extends munit.FunSuite:
     }
   }
 
-  test("T6.7: query handles process timeout errors") {
+  test("should handle process timeout errors when execution exceeds limit") {
     supervised {
       // Setup: Use a command that hangs with a short timeout
       val options = QueryOptions(
@@ -444,7 +444,7 @@ class ClaudeCodeTest extends munit.FunSuite:
     }
   }
 
-  test("T6.8: query handles JSON parsing errors in stream") {
+  test("should handle JSON parsing errors gracefully during streaming") {
     supervised {
       // Setup: Use mock CLI that outputs malformed JSON mid-stream
       val options = QueryOptions(
@@ -492,7 +492,7 @@ class ClaudeCodeTest extends munit.FunSuite:
     }
   }
 
-  test("T7.1: querySync collects all messages from query Flow") {
+  test("should collect all messages from query Flow when using querySync") {
     supervised {
       // Setup: QueryOptions that will produce multiple messages
       val options = QueryOptions(
@@ -535,7 +535,7 @@ class ClaudeCodeTest extends munit.FunSuite:
     }
   }
 
-  test("T7.2: querySync propagates errors from underlying query") {
+  test("should propagate errors from underlying query when using querySync") {
     supervised {
       // Setup: QueryOptions that will cause ProcessExecutionError
       val options = QueryOptions(
@@ -592,7 +592,7 @@ class ClaudeCodeTest extends munit.FunSuite:
     }
   }
 
-  test("T7.3: queryResult extracts text from AssistantMessage") {
+  test("should extract text content from AssistantMessage when using queryResult") {
     supervised {
       // Setup: QueryOptions that will produce AssistantMessage with TextBlock
       val options = QueryOptions(
@@ -627,7 +627,7 @@ class ClaudeCodeTest extends munit.FunSuite:
     }
   }
 
-  test("T7.4: queryResult handles missing AssistantMessage gracefully") {
+  test("should return empty string when no AssistantMessage found in queryResult") {
     supervised {
       // Setup: Create mock CLI script that outputs only SystemMessage and ResultMessage (no AssistantMessage)
       val mockBehavior = MockCliScript.MockBehavior(
@@ -674,7 +674,7 @@ class ClaudeCodeTest extends munit.FunSuite:
     }
   }
 
-  test("T7.5: queryResult handles AssistantMessage without TextBlock") {
+  test("should return empty string when AssistantMessage has no TextBlock content") {
     supervised {
       // Setup: Create mock CLI script that outputs AssistantMessage without TextBlock content
       // This is a theoretical edge case but we should handle it gracefully

@@ -39,7 +39,7 @@ class CLIDiscoveryTest extends munit.FunSuite:
     def warn(msg: String): Unit = warnMessages = msg :: warnMessages
     def error(msg: String): Unit = errorMessages = msg :: errorMessages
 
-  test("T2.1: findClaude succeeds when claude is found in PATH") {
+  test("should find Claude CLI when available in PATH") {
     // Setup: Mock FileSystemOps to return claude path from which
     val mockFs = MockFileSystemOps()
     mockFs.whichResponses = Map("claude" -> Some("/usr/local/bin/claude"))
@@ -63,7 +63,7 @@ class CLIDiscoveryTest extends munit.FunSuite:
     )
   }
 
-  test("T2.2: findClaude falls back to common paths when PATH lookup fails") {
+  test("should fall back to common paths when PATH lookup fails") {
     // Setup: Mock FileSystemOps with PATH failure but common path success
     val mockFs = MockFileSystemOps()
     mockFs.whichResponses = Map("claude" -> None) // PATH lookup fails
@@ -96,7 +96,7 @@ class CLIDiscoveryTest extends munit.FunSuite:
     )
   }
 
-  test("T2.3: findClaude returns NodeJSNotFoundError when Node.js is missing") {
+  test("should return NodeJSNotFoundError when Node.js is missing") {
     // Setup: Mock FileSystemOps returning no claude and no node
     val mockFs = MockFileSystemOps()
     mockFs.whichResponses = Map("claude" -> None, "node" -> None) // Both fail
@@ -126,7 +126,7 @@ class CLIDiscoveryTest extends munit.FunSuite:
   }
 
   test(
-    "T2.4: findClaude returns CLINotFoundError when claude not found anywhere"
+    "should return CLINotFoundError when Claude CLI is not found anywhere"
   ) {
     // Setup: Mock FileSystemOps returning no claude, but node available
     val mockFs = MockFileSystemOps()
@@ -164,7 +164,7 @@ class CLIDiscoveryTest extends munit.FunSuite:
     )
   }
 
-  test("T2.5: findClaude logs PATH search attempt and results") {
+  test("should log PATH search attempts and results during CLI discovery") {
     // Setup: Mock FileSystemOps for successful PATH lookup
     val mockFs = MockFileSystemOps()
     mockFs.whichResponses = Map("claude" -> Some("/opt/claude/bin/claude"))
