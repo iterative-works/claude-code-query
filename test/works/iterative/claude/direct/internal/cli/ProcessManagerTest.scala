@@ -24,15 +24,20 @@ class ProcessManagerTest extends munit.FunSuite:
   // Process resource tracking utilities for cleanup verification
   private def countRunningProcesses(): Int =
     Try {
-      val processBuilder = new ProcessBuilder("ps", "-eo", "pid,ppid,comm", "--no-headers")
+      val processBuilder =
+        new ProcessBuilder("ps", "-eo", "pid,ppid,comm", "--no-headers")
       val process = processBuilder.start()
-      val reader = new java.io.BufferedReader(new java.io.InputStreamReader(process.getInputStream))
+      val reader = new java.io.BufferedReader(
+        new java.io.InputStreamReader(process.getInputStream)
+      )
       var count = 0
       var line: String = null
       while { line = reader.readLine(); line != null } do
         // Count processes related to our tests (sh, echo, sleep, etc.)
-        if line.contains("sh") || line.contains("echo") || line.contains("sleep") then
-          count += 1
+        if line.contains("sh") || line.contains("echo") || line.contains(
+            "sleep"
+          )
+        then count += 1
       reader.close()
       process.waitFor()
       count
@@ -41,9 +46,12 @@ class ProcessManagerTest extends munit.FunSuite:
   // Check for zombie processes specifically
   private def countZombieProcesses(): Int =
     Try {
-      val processBuilder = new ProcessBuilder("ps", "-eo", "pid,stat", "--no-headers")
+      val processBuilder =
+        new ProcessBuilder("ps", "-eo", "pid,stat", "--no-headers")
       val process = processBuilder.start()
-      val reader = new java.io.BufferedReader(new java.io.InputStreamReader(process.getInputStream))
+      val reader = new java.io.BufferedReader(
+        new java.io.InputStreamReader(process.getInputStream)
+      )
       var zombieCount = 0
       var line: String = null
       while { line = reader.readLine(); line != null } do
@@ -54,22 +62,26 @@ class ProcessManagerTest extends munit.FunSuite:
     }.getOrElse(0)
 
   // Eventually utility for asynchronous resource cleanup verification
-  private def eventually[T](assertion: => T, timeout: Duration = 5.seconds, interval: Duration = 100.millis): T =
+  private def eventually[T](
+      assertion: => T,
+      timeout: Duration = 5.seconds,
+      interval: Duration = 100.millis
+  ): T =
     val startTime = System.currentTimeMillis()
     val timeoutMs = timeout.toMillis
     var lastException: Option[Throwable] = None
-    
+
     while (System.currentTimeMillis() - startTime) < timeoutMs do
-      try
-        return assertion
+      try return assertion
       catch
         case e: Throwable =>
           lastException = Some(e)
           Thread.sleep(interval.toMillis)
-    
+
     lastException match
       case Some(e) => throw e
-      case None => throw new RuntimeException(s"Eventually timed out after $timeout")
+      case None    =>
+        throw new RuntimeException(s"Eventually timed out after $timeout")
 
   // Thread-safe Mock Logger for testing with synchronization capabilities
   class MockLogger extends Logger:
@@ -705,18 +717,20 @@ class ProcessManagerTest extends munit.FunSuite:
   // These tests verify that process resources are properly cleaned up when exceptions occur
   // during JSON parsing, process execution failures, and timeout scenarios.
 
-  test("CLEANUP-1: should cleanup process resources when JSON parsing fails with large malformed output") {
+  test(
+    "CLEANUP-1: should cleanup process resources when JSON parsing fails with large malformed output"
+  ) {
     supervised {
       given MockLogger = MockLogger()
-      
+
       // Capture initial zombie process count
       val initialZombieCount = countZombieProcesses()
-      
+
       // Create large amount of malformed JSON that will cause parsing failures
-      val malformedOutput = "invalid json " * 1000 + "\n" + 
+      val malformedOutput = "invalid json " * 1000 + "\n" +
         """{"type":"user","content":"valid after invalid"}""" + "\n" +
         "more invalid json" * 500
-      
+
       val testScript = "/bin/echo"
       val args = List(malformedOutput)
       val options = QueryOptions(
@@ -743,36 +757,43 @@ class ProcessManagerTest extends munit.FunSuite:
 
       // Execute process - should continue despite JSON parsing errors
       val messages = ProcessManager.executeProcess(testScript, args, options)
-      
+
       // Verify that valid JSON was still parsed
       assertEquals(messages.length, 1)
       messages(0) match
-        case UserMessage(content) => assertEquals(content, "valid after invalid")
+        case UserMessage(content) =>
+          assertEquals(content, "valid after invalid")
         case other => fail(s"Expected UserMessage but got: $other")
-      
+
       // Verify JSON parsing errors were logged
       val logger = summon[MockLogger]
       assert(logger.waitForProcessCompletion())
       assert(logger.hasErrorMessage(_.contains("JSON parsing failed")))
-      
+
       // Verify no zombie processes remain after cleanup
       eventually {
         val currentZombieCount = countZombieProcesses()
-        assertEquals(currentZombieCount, initialZombieCount, 
-          s"Expected zombie count to return to $initialZombieCount but got $currentZombieCount")
+        assertEquals(
+          currentZombieCount,
+          initialZombieCount,
+          s"Expected zombie count to return to $initialZombieCount but got $currentZombieCount"
+        )
       }
     }
   }
 
-  test("CLEANUP-2: should cleanup process resources when process execution fails") {
+  test(
+    "CLEANUP-2: should cleanup process resources when process execution fails"
+  ) {
     supervised {
       given MockLogger = MockLogger()
-      
+
       val initialZombieCount = countZombieProcesses()
-      
+
       // Command that will fail with exit code 1
       val testScript = "/bin/sh"
-      val args = List("-c", "echo 'some output'; echo 'stderr content' >&2; exit 1")
+      val args =
+        List("-c", "echo 'some output'; echo 'stderr content' >&2; exit 1")
       val options = QueryOptions(
         prompt = "test cleanup on failure",
         cwd = None,
@@ -799,21 +820,24 @@ class ProcessManagerTest extends munit.FunSuite:
       val exception = intercept[ProcessExecutionError] {
         ProcessManager.executeProcess(testScript, args, options)
       }
-      
+
       // Verify exception details
       assertEquals(exception.exitCode, 1)
       assertEquals(exception.command.head, testScript)
-      
+
       // Verify stderr was captured
       val logger = summon[MockLogger]
       assert(logger.waitForProcessCompletion())
       assert(logger.hasDebugMessage(_.contains("stderr content")))
-      
+
       // Verify no zombie processes remain after exception cleanup
       eventually {
         val currentZombieCount = countZombieProcesses()
-        assertEquals(currentZombieCount, initialZombieCount,
-          s"Expected zombie count to return to $initialZombieCount but got $currentZombieCount")
+        assertEquals(
+          currentZombieCount,
+          initialZombieCount,
+          s"Expected zombie count to return to $initialZombieCount but got $currentZombieCount"
+        )
       }
     }
   }
@@ -821,13 +845,14 @@ class ProcessManagerTest extends munit.FunSuite:
   test("CLEANUP-3: should cleanup process resources when timeout occurs") {
     supervised {
       given MockLogger = MockLogger()
-      
+
       val initialZombieCount = countZombieProcesses()
-      
+
       // Command that will hang for a long time
-      val testScript = "/bin/sh"  
+      val testScript = "/bin/sh"
       val args = List("-c", "sleep 10") // Sleep longer than timeout
-      val timeoutDuration = scala.concurrent.duration.FiniteDuration(200, "milliseconds")
+      val timeoutDuration =
+        scala.concurrent.duration.FiniteDuration(200, "milliseconds")
       val options = QueryOptions(
         prompt = "test cleanup on timeout",
         cwd = None,
@@ -854,30 +879,35 @@ class ProcessManagerTest extends munit.FunSuite:
       val exception = intercept[ProcessTimeoutError] {
         ProcessManager.executeProcess(testScript, args, options)
       }
-      
+
       // Verify timeout exception details
       assertEquals(exception.timeoutDuration, timeoutDuration)
       assertEquals(exception.command.head, testScript)
-      
+
       // Verify timeout was logged
       val logger = summon[MockLogger]
       assert(logger.hasErrorMessage(_.contains("Process timed out")))
-      
+
       // Verify no zombie processes remain after timeout cleanup
       eventually {
         val currentZombieCount = countZombieProcesses()
-        assertEquals(currentZombieCount, initialZombieCount,
-          s"Expected zombie count to return to $initialZombieCount but got $currentZombieCount")
+        assertEquals(
+          currentZombieCount,
+          initialZombieCount,
+          s"Expected zombie count to return to $initialZombieCount but got $currentZombieCount"
+        )
       }
     }
   }
 
-  test("CLEANUP-4: should cleanup resources during concurrent operations with mixed failures") {
+  test(
+    "CLEANUP-4: should cleanup resources during concurrent operations with mixed failures"
+  ) {
     supervised {
       given MockLogger = MockLogger()
-      
+
       val initialZombieCount = countZombieProcesses()
-      
+
       val baseOptions = QueryOptions(
         prompt = "concurrent test",
         cwd = None,
@@ -899,76 +929,99 @@ class ProcessManagerTest extends munit.FunSuite:
         inheritEnvironment = None,
         environmentVariables = None
       )
-      
+
       // Run multiple concurrent operations with different failure modes
       val operations = List(
         // Valid operation
         fork {
           Try {
-            ProcessManager.executeProcess("/bin/echo", 
-              List("""{"type":"user","content":"valid"}"""), baseOptions)
+            ProcessManager.executeProcess(
+              "/bin/echo",
+              List("""{"type":"user","content":"valid"}"""),
+              baseOptions
+            )
           }
         },
         // JSON parsing failure
         fork {
           Try {
-            ProcessManager.executeProcess("/bin/echo", 
-              List("invalid json content"), baseOptions)
+            ProcessManager.executeProcess(
+              "/bin/echo",
+              List("invalid json content"),
+              baseOptions
+            )
           }
         },
         // Process execution failure
         fork {
           Try {
-            ProcessManager.executeProcess("/bin/sh", 
-              List("-c", "exit 2"), baseOptions)
+            ProcessManager.executeProcess(
+              "/bin/sh",
+              List("-c", "exit 2"),
+              baseOptions
+            )
           }
         },
         // Timeout failure
         fork {
           Try {
             val timeoutOptions = baseOptions.copy(timeout = Some(100.millis))
-            ProcessManager.executeProcess("/bin/sh", 
-              List("-c", "sleep 1"), timeoutOptions)
+            ProcessManager.executeProcess(
+              "/bin/sh",
+              List("-c", "sleep 1"),
+              timeoutOptions
+            )
           }
         }
       )
-      
+
       // Wait for all operations to complete
       val results = operations.map(_.join())
-      
+
       // Verify we got expected mix of success and failures
       val successes = results.count(_.isSuccess)
       val failures = results.count(_.isFailure)
-      
+
       assert(successes >= 1, s"Expected at least 1 success, got $successes")
-      assert(failures >= 2, s"Expected at least 2 failures, got $failures") // Some operations might succeed due to timing
+      assert(
+        failures >= 2,
+        s"Expected at least 2 failures, got $failures"
+      ) // Some operations might succeed due to timing
       assertEquals(results.length, 4, "Expected 4 total operations")
-      
+
       // Verify all processes were cleaned up despite concurrent failures
       eventually {
         val currentZombieCount = countZombieProcesses()
-        assertEquals(currentZombieCount, initialZombieCount,
-          s"Expected zombie count to return to $initialZombieCount but got $currentZombieCount after concurrent operations")
+        assertEquals(
+          currentZombieCount,
+          initialZombieCount,
+          s"Expected zombie count to return to $initialZombieCount but got $currentZombieCount after concurrent operations"
+        )
       }
     }
   }
 
-  test("CLEANUP-5: should cleanup resources when process failure occurs during stderr capture") {
+  test(
+    "CLEANUP-5: should cleanup resources when process failure occurs during stderr capture"
+  ) {
     supervised {
       given MockLogger = MockLogger()
-      
+
       val initialZombieCount = countZombieProcesses()
-      
+
       // Command that outputs to both stdout and stderr then fails
       val testScript = "/bin/sh"
-      val args = List("-c", """
+      val args = List(
+        "-c",
+        """
         echo '{"type":"user","content":"partial output"}'
         echo 'error line 1' >&2
         sleep 0.1
         echo 'error line 2' >&2  
         echo 'some more stdout'
         exit 3
-      """)
+      """
+      )
       val options = QueryOptions(
         prompt = "test stderr cleanup",
         cwd = None,
@@ -995,21 +1048,24 @@ class ProcessManagerTest extends munit.FunSuite:
       val exception = intercept[ProcessExecutionError] {
         ProcessManager.executeProcess(testScript, args, options)
       }
-      
+
       // Verify exception details
       assertEquals(exception.exitCode, 3)
-      
+
       // Verify stderr was captured concurrently
       val logger = summon[MockLogger]
       assert(logger.waitForStderrCapture())
       assert(logger.waitForProcessCompletion())
       assert(logger.hasDebugMessage(_.contains("error line")))
-      
+
       // Verify no zombie processes remain after concurrent stderr capture cleanup
       eventually {
         val currentZombieCount = countZombieProcesses()
-        assertEquals(currentZombieCount, initialZombieCount,
-          s"Expected zombie count to return to $initialZombieCount but got $currentZombieCount")
+        assertEquals(
+          currentZombieCount,
+          initialZombieCount,
+          s"Expected zombie count to return to $initialZombieCount but got $currentZombieCount"
+        )
       }
     }
   }

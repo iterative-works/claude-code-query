@@ -24,11 +24,11 @@ class EnvironmentTest extends munit.FunSuite:
     def error(msg: String): Unit = errorMessages = msg :: errorMessages
 
     // Get all messages across all log levels for comprehensive security testing
-    def getAllMessages(): List[String] = 
+    def getAllMessages(): List[String] =
       debugMessages ++ infoMessages ++ warnMessages ++ errorMessages
 
     // Clear all messages for test isolation
-    def clearAll(): Unit = 
+    def clearAll(): Unit =
       debugMessages = List.empty
       infoMessages = List.empty
       warnMessages = List.empty
@@ -214,7 +214,9 @@ class EnvironmentTest extends munit.FunSuite:
     }
   }
 
-  test("T8.4: ensures sensitive environment variables never leak into logs or error messages under any failure condition") {
+  test(
+    "T8.4: ensures sensitive environment variables never leak into logs or error messages under any failure condition"
+  ) {
     supervised {
       // Setup: Test logger to capture all log messages across multiple failure scenarios
       given testLogger: MockLogger = MockLogger()
@@ -254,12 +256,32 @@ class EnvironmentTest extends munit.FunSuite:
 
       // Test multiple failure scenarios that could potentially leak sensitive information
       val failureScenarios = List(
-        ("Non-existent command", "/nonexistent/command/that/does/not/exist", List("arg1", "arg2")),
+        (
+          "Non-existent command",
+          "/nonexistent/command/that/does/not/exist",
+          List("arg1", "arg2")
+        ),
         ("Command with error exit code", "/bin/sh", List("-c", "exit 1")),
-        ("Command with abnormal termination", "/bin/sh", List("-c", "kill -TERM $$")),
-        ("Command with different error exit codes", "/bin/sh", List("-c", "exit 127")),
-        ("Command that writes to stderr and fails", "/bin/sh", List("-c", "echo 'error output' >&2; exit 1")),
-        ("Invalid shell syntax", "/bin/sh", List("-c", "invalid shell syntax {")),
+        (
+          "Command with abnormal termination",
+          "/bin/sh",
+          List("-c", "kill -TERM $$")
+        ),
+        (
+          "Command with different error exit codes",
+          "/bin/sh",
+          List("-c", "exit 127")
+        ),
+        (
+          "Command that writes to stderr and fails",
+          "/bin/sh",
+          List("-c", "echo 'error output' >&2; exit 1")
+        ),
+        (
+          "Invalid shell syntax",
+          "/bin/sh",
+          List("-c", "invalid shell syntax {")
+        ),
         ("Command with timeout", "/bin/sh", List("-c", "sleep 10"))
       )
 
@@ -267,23 +289,27 @@ class EnvironmentTest extends munit.FunSuite:
         testLogger.clearAll() // Clear previous logs for isolation
 
         val options = if (scenarioName.contains("timeout")) {
-          baseOptions.copy(timeout = Some(scala.concurrent.duration.Duration(100, "milliseconds")))
+          baseOptions.copy(timeout =
+            Some(scala.concurrent.duration.Duration(100, "milliseconds"))
+          )
         } else {
           baseOptions
         }
 
         // Execute the failing scenario and capture any exceptions
-        val caughtException = try {
-          ProcessManager.executeProcess(command, args, options)
-          None // If no exception, this is unexpected for our failure scenarios
-        } catch {
-          case ex: Throwable => Some(ex)
-        }
+        val caughtException =
+          try {
+            ProcessManager.executeProcess(command, args, options)
+            None // If no exception, this is unexpected for our failure scenarios
+          } catch {
+            case ex: Throwable => Some(ex)
+          }
 
         // Collect all potential sources of information leakage
         val allLogMessages = testLogger.getAllMessages()
         val exceptionMessage = caughtException.map(_.getMessage).getOrElse("")
-        val exceptionStackTrace = caughtException.map(_.getStackTrace.mkString("\n")).getOrElse("")
+        val exceptionStackTrace =
+          caughtException.map(_.getStackTrace.mkString("\n")).getOrElse("")
         val exceptionToString = caughtException.map(_.toString).getOrElse("")
 
         val allPotentialLeakSources = List(
@@ -298,20 +324,22 @@ class EnvironmentTest extends munit.FunSuite:
           assert(
             !allPotentialLeakSources.contains(secretValue),
             s"SECURITY VIOLATION in scenario '$scenarioName': Secret '$secretName' with value '$secretValue' found in logs or error messages.\n" +
-            s"Log messages: ${allLogMessages.mkString(", ")}\n" +
-            s"Exception message: $exceptionMessage\n" +
-            s"Exception toString: $exceptionToString\n" +
-            s"Stack trace snippet: ${exceptionStackTrace.take(500)}..."
+              s"Log messages: ${allLogMessages.mkString(", ")}\n" +
+              s"Exception message: $exceptionMessage\n" +
+              s"Exception toString: $exceptionToString\n" +
+              s"Stack trace snippet: ${exceptionStackTrace.take(500)}..."
           )
 
           // Also check for partial leakage of longer secrets (check substrings of 10+ chars)
           if (secretValue.length >= 10) {
-            val sensitiveSubstrings = (0 until secretValue.length - 9).map(i => secretValue.substring(i, i + 10))
+            val sensitiveSubstrings = (0 until secretValue.length - 9).map(i =>
+              secretValue.substring(i, i + 10)
+            )
             sensitiveSubstrings.foreach { substring =>
               assert(
                 !allPotentialLeakSources.contains(substring),
                 s"SECURITY VIOLATION in scenario '$scenarioName': Partial secret leak detected. " +
-                s"Substring '$substring' from secret '$secretName' found in output."
+                  s"Substring '$substring' from secret '$secretName' found in output."
               )
             }
           }
@@ -324,7 +352,8 @@ class EnvironmentTest extends munit.FunSuite:
               case procError: ProcessExecutionError =>
                 // Should contain command information but not environment variables
                 assert(
-                  procError.getMessage.contains(command) || procError.getMessage.contains(command.split("/").last),
+                  procError.getMessage.contains(command) || procError.getMessage
+                    .contains(command.split("/").last),
                   s"Error message should contain command information for scenario '$scenarioName'. Got: ${procError.getMessage}"
                 )
               case other =>
@@ -337,7 +366,9 @@ class EnvironmentTest extends munit.FunSuite:
           case None =>
             // Some scenarios might not throw exceptions (which would be unexpected for our failure cases)
             if (!scenarioName.contains("timeout")) {
-              println(s"Warning: Scenario '$scenarioName' did not throw an exception as expected")
+              println(
+                s"Warning: Scenario '$scenarioName' did not throw an exception as expected"
+              )
             }
         }
       }
