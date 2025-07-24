@@ -256,7 +256,7 @@ class ClaudeCodeTest extends munit.FunSuite:
       // Setup: QueryOptions with various CLI parameters to test argument building
       val options = QueryOptions(
         prompt = "Test prompt",
-        cwd = Some("/tmp"), // Valid directory that should exist
+        cwd = None, // Use current working directory so relative path works
         executable = Some("test-executable"),
         executableArgs = None, // Don't override - let it build real arguments
         pathToClaudeCodeExecutable =
