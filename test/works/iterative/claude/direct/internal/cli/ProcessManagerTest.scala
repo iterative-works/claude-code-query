@@ -143,7 +143,9 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
     def hasErrorMessage(predicate: String => Boolean): Boolean =
       getErrorMessages.exists(predicate)
 
-  test("should return List of parsed messages from stdout when executing process") {
+  test(
+    "should return List of parsed messages from stdout when executing process"
+  ) {
     supervised {
       // Setup: Mock CLI executable outputting valid JSON messages
       given MockLogger = MockLogger()
@@ -325,7 +327,9 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
     assertEquals(processBuilder.directory().getAbsolutePath, testCwd)
   }
 
-  test("should handle missing working directory gracefully in process configuration") {
+  test(
+    "should handle missing working directory gracefully in process configuration"
+  ) {
     // Setup: QueryOptions with None for cwd
     given MockLogger = MockLogger()
 
@@ -359,7 +363,9 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
     assertEquals(processBuilder.directory(), null)
   }
 
-  test("should set custom environment variables when specified in process configuration") {
+  test(
+    "should set custom environment variables when specified in process configuration"
+  ) {
     // Setup: QueryOptions with custom environment variables
     given MockLogger = MockLogger()
 

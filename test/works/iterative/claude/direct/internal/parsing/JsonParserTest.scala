@@ -437,7 +437,9 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
     }
   }
 
-  property("should maintain idempotency for AssistantMessage parsing specifically") {
+  property(
+    "should maintain idempotency for AssistantMessage parsing specifically"
+  ) {
     import MessageGenerators.*
     import JsonSerializationUtils.*
 
@@ -455,7 +457,9 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
     }
   }
 
-  property("should maintain idempotency for SystemMessage parsing specifically") {
+  property(
+    "should maintain idempotency for SystemMessage parsing specifically"
+  ) {
     import MessageGenerators.*
     import JsonSerializationUtils.*
 
@@ -473,7 +477,9 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
     }
   }
 
-  property("should maintain idempotency for ResultMessage parsing specifically") {
+  property(
+    "should maintain idempotency for ResultMessage parsing specifically"
+  ) {
     import MessageGenerators.*
     import JsonSerializationUtils.*
 

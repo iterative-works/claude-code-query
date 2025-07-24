@@ -178,7 +178,9 @@ class ClaudeCodeTest extends munit.FunSuite:
     }
   }
 
-  test("should handle CLI discovery failure gracefully with appropriate error") {
+  test(
+    "should handle CLI discovery failure gracefully with appropriate error"
+  ) {
     supervised {
       // Setup: Use an invalid executable path that will definitely fail
       val options = QueryOptions(
@@ -247,7 +249,9 @@ class ClaudeCodeTest extends munit.FunSuite:
     }
   }
 
-  test("should validate configuration before execution and fail for invalid working directory") {
+  test(
+    "should validate configuration before execution and fail for invalid working directory"
+  ) {
     supervised {
       // Setup: QueryOptions with invalid working directory
       val options = QueryOptions(
@@ -592,7 +596,9 @@ class ClaudeCodeTest extends munit.FunSuite:
     }
   }
 
-  test("should extract text content from AssistantMessage when using queryResult") {
+  test(
+    "should extract text content from AssistantMessage when using queryResult"
+  ) {
     supervised {
       // Setup: QueryOptions that will produce AssistantMessage with TextBlock
       val options = QueryOptions(
@@ -627,7 +633,9 @@ class ClaudeCodeTest extends munit.FunSuite:
     }
   }
 
-  test("should return empty string when no AssistantMessage found in queryResult") {
+  test(
+    "should return empty string when no AssistantMessage found in queryResult"
+  ) {
     supervised {
       // Setup: Create mock CLI script that outputs only SystemMessage and ResultMessage (no AssistantMessage)
       val mockBehavior = MockCliScript.MockBehavior(
@@ -674,7 +682,9 @@ class ClaudeCodeTest extends munit.FunSuite:
     }
   }
 
-  test("should return empty string when AssistantMessage has no TextBlock content") {
+  test(
+    "should return empty string when AssistantMessage has no TextBlock content"
+  ) {
     supervised {
       // Setup: Create mock CLI script that outputs AssistantMessage without TextBlock content
       // This is a theoretical edge case but we should handle it gracefully

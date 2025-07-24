@@ -102,7 +102,9 @@ class ClaudeCodeIntegrationTest extends munit.FunSuite:
     }
   }
 
-  test("should handle environment variables correctly in end-to-end integration") {
+  test(
+    "should handle environment variables correctly in end-to-end integration"
+  ) {
     supervised {
       // Setup: Mock CLI script that outputs environment variables
       given MockLogger = MockLogger()
