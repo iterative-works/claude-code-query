@@ -11,38 +11,6 @@ import scala.jdk.CollectionConverters.*
 
 object ProcessManager:
 
-  def configureProcess(
-      executablePath: String,
-      args: List[String],
-      options: QueryOptions
-  ): ProcessBuilder =
-    // GREEN Phase: Implementation to make T5.1, T5.2, T5.3, T5.4, T5.5 tests pass
-    val processBuilder = new ProcessBuilder((executablePath :: args).asJava)
-
-    // Set working directory when provided
-    options.cwd.foreach { cwdPath =>
-      processBuilder.directory(new java.io.File(cwdPath))
-    }
-
-    // Handle environment inheritance
-    val environment = processBuilder.environment()
-    options.inheritEnvironment match
-      case Some(false) =>
-        // Clear all inherited environment variables
-        environment.clear()
-      case Some(true) | None =>
-        // Keep inherited environment (default ProcessBuilder behavior)
-        ()
-
-    // Set environment variables when provided
-    options.environmentVariables.foreach { envVars =>
-      envVars.foreach { case (key, value) =>
-        environment.put(key, value)
-      }
-    }
-
-    processBuilder
-
   def executeProcess(
       executablePath: String,
       args: List[String],
@@ -73,52 +41,120 @@ object ProcessManager:
       command: List[String],
       timeoutDuration: scala.concurrent.duration.Duration
   )(using logger: Logger, ox: Ox): List[Message] =
-    // Create process builder using configureProcess to handle environment variables
     val processBuilder = configureProcess(executablePath, args, options)
-
-    // Start the process
     val process = processBuilder.start()
+    
+    waitForProcessWithTimeout(process, timeoutDuration, command)
+    val messages = readProcessOutput(process)
+    captureStderrSynchronously(process)
+    handleProcessCompletion(process, command)
+    
+    messages
 
-    // Convert Duration to FiniteDuration for timeout
+  private def executeProcessWithoutTimeout(
+      executablePath: String,
+      args: List[String],
+      options: QueryOptions,
+      command: List[String]
+  )(using logger: Logger, ox: Ox): List[Message] =
+    val processBuilder = configureProcess(executablePath, args, options)
+    val process = processBuilder.start()
+    
+    val stderrCapture = captureStderrConcurrently(process)
+    val messages = readProcessOutput(process)
+    val exitCode = process.waitFor()
+    stderrCapture.join()
+    handleProcessCompletion(process, command)
+    
+    messages
+
+  def configureProcess(
+      executablePath: String,
+      args: List[String],
+      options: QueryOptions
+  ): ProcessBuilder =
+    val processBuilder = createProcessBuilder(executablePath, args)
+    setWorkingDirectory(processBuilder, options)
+    configureEnvironment(processBuilder, options)
+    processBuilder
+
+  private def createProcessBuilder(executablePath: String, args: List[String]): ProcessBuilder =
+    new ProcessBuilder((executablePath :: args).asJava)
+
+  private def setWorkingDirectory(processBuilder: ProcessBuilder, options: QueryOptions): Unit =
+    options.cwd.foreach { cwdPath =>
+      processBuilder.directory(new java.io.File(cwdPath))
+    }
+
+  private def configureEnvironment(processBuilder: ProcessBuilder, options: QueryOptions): Unit =
+    val environment = processBuilder.environment()
+    options.inheritEnvironment match
+      case Some(false) =>
+        environment.clear()
+      case Some(true) | None =>
+        ()
+    
+    options.environmentVariables.foreach { envVars =>
+      envVars.foreach { case (key, value) =>
+        environment.put(key, value)
+      }
+    }
+
+  private def waitForProcessWithTimeout(
+      process: Process,
+      timeoutDuration: scala.concurrent.duration.Duration,
+      command: List[String]
+  )(using logger: Logger): Unit =
     val finiteDuration = timeoutDuration match
       case fd: scala.concurrent.duration.FiniteDuration => fd
-      case _                                            =>
+      case _ =>
         scala.concurrent.duration
           .FiniteDuration(timeoutDuration.toMillis, "milliseconds")
-
-    // Wait for process to complete with timeout first (like we did in the working version)
+    
     val finished = process.waitFor(
       finiteDuration.toMillis,
       java.util.concurrent.TimeUnit.MILLISECONDS
     )
-
+    
     if !finished then
       logger.error(s"Process timed out after ${timeoutDuration}")
       process.destroyForcibly()
       throw ProcessTimeoutError(finiteDuration, command)
 
-    val exitCode = process.exitValue()
-
-    // Process completed within timeout, now read stdout
+  private def readProcessOutput(process: Process)(using logger: Logger): List[Message] =
     val reader = new BufferedReader(
       new InputStreamReader(process.getInputStream)
     )
     val messages = scala.collection.mutable.ListBuffer[Message]()
-
+    
     var lineNumber = 0
     var line: String = null
     while { line = reader.readLine(); line != null } do
       lineNumber += 1
-      JsonParser.parseJsonLineWithContextWithLogging(line, lineNumber) match
-        case Right(Some(message)) => messages += message
-        case Right(None)          => // Skip empty lines
-        case Left(error)          =>
-          logger.error(s"JSON parsing failed: ${error.message}")
-          // For this minimal implementation, continue processing other lines
-
+      parseJsonLineToMessage(line, lineNumber) match
+        case Some(message) => messages += message
+        case None => // Skip empty or invalid lines
+    
     reader.close()
+    messages.toList
 
-    // Read stderr synchronously after process completes - it won't hang since process is done
+  private def parseJsonLineToMessage(line: String, lineNumber: Int)(using logger: Logger): Option[Message] =
+    JsonParser.parseJsonLineWithContextWithLogging(line, lineNumber) match
+      case Right(Some(message)) => Some(message)
+      case Right(None) => None
+      case Left(error) =>
+        logger.error(s"JSON parsing failed: ${error.message}")
+        None
+
+  private def captureStderrConcurrently(process: Process)(using logger: Logger, ox: Ox) =
+    fork {
+      captureStderrStream(process)
+    }
+
+  private def captureStderrSynchronously(process: Process)(using logger: Logger): List[String] =
+    captureStderrStream(process)
+
+  private def captureStderrStream(process: Process)(using logger: Logger): List[String] =
     val stderrReader = new BufferedReader(
       new InputStreamReader(process.getErrorStream)
     )
@@ -128,67 +164,11 @@ object ProcessManager:
       stderrContent += stderrLine
       logger.debug(s"stderr: $stderrLine")
     stderrReader.close()
-    val stderrLines = stderrContent.toList
+    stderrContent.toList
 
+  private def handleProcessCompletion(process: Process, command: List[String])(using logger: Logger): Unit =
+    val exitCode = process.exitValue()
     logger.info(s"Process completed with exit code: $exitCode")
-
-    if exitCode != 0 then throw ProcessExecutionError(exitCode, "", command)
-
-    messages.toList
-
-  private def executeProcessWithoutTimeout(
-      executablePath: String,
-      args: List[String],
-      options: QueryOptions,
-      command: List[String]
-  )(using logger: Logger, ox: Ox): List[Message] =
-    // Create process builder using configureProcess to handle environment variables
-    val processBuilder = configureProcess(executablePath, args, options)
-
-    // Start the process
-    val process = processBuilder.start()
-
-    // Concurrently capture stderr using Ox fork
-    val stderrCapture = fork {
-      val stderrReader = new BufferedReader(
-        new InputStreamReader(process.getErrorStream)
-      )
-      val stderrContent = scala.collection.mutable.ListBuffer[String]()
-      var stderrLine: String = null
-      while { stderrLine = stderrReader.readLine(); stderrLine != null } do
-        stderrContent += stderrLine
-        logger.debug(s"stderr: $stderrLine")
-      stderrReader.close()
-      stderrContent.toList
-    }
-
-    // Read stdout and parse JSON messages
-    val reader = new BufferedReader(
-      new InputStreamReader(process.getInputStream)
-    )
-    val messages = scala.collection.mutable.ListBuffer[Message]()
-
-    var lineNumber = 0
-    var line: String = null
-    while { line = reader.readLine(); line != null } do
-      lineNumber += 1
-      JsonParser.parseJsonLineWithContextWithLogging(line, lineNumber) match
-        case Right(Some(message)) => messages += message
-        case Right(None)          => // Skip empty lines
-        case Left(error)          =>
-          logger.error(s"JSON parsing failed: ${error.message}")
-          // For this minimal implementation, continue processing other lines
-
-    reader.close()
-
-    // Wait for process to complete
-    val exitCode = process.waitFor()
-
-    // Wait for stderr capture to complete
-    val stderrLines = stderrCapture.join()
-
-    logger.info(s"Process completed with exit code: $exitCode")
-
-    if exitCode != 0 then throw ProcessExecutionError(exitCode, "", command)
-
-    messages.toList
+    
+    if exitCode != 0 then
+      throw ProcessExecutionError(exitCode, "", command)
