@@ -25,22 +25,37 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
 
   // JSON serialization utilities for property testing
   object JsonSerializationUtils:
-    
+
     def serializeMessage(message: Message): String = message match
       case UserMessage(content) =>
         s"""{"type":"user","content":${escapeJsonString(content)}}"""
-      
+
       case AssistantMessage(content) =>
-        val contentJson = content.map(serializeContentBlock).mkString("[", ",", "]")
+        val contentJson =
+          content.map(serializeContentBlock).mkString("[", ",", "]")
         s"""{"type":"assistant","message":{"content":$contentJson}}"""
-      
+
       case SystemMessage(subtype, data) =>
-        val dataJson = data.map { case (key, value) =>
-          s""""$key":${serializeJsonValue(value)}"""
-        }.mkString(",")
-        s"""{"type":"system","subtype":${escapeJsonString(subtype)}${if dataJson.nonEmpty then "," + dataJson else ""}}"""
-      
-      case ResultMessage(subtype, durationMs, durationApiMs, isError, numTurns, sessionId, totalCostUsd, usage, result) =>
+        val dataJson = data
+          .map { case (key, value) =>
+            s""""$key":${serializeJsonValue(value)}"""
+          }
+          .mkString(",")
+        s"""{"type":"system","subtype":${escapeJsonString(subtype)}${
+            if dataJson.nonEmpty then "," + dataJson else ""
+          }}"""
+
+      case ResultMessage(
+            subtype,
+            durationMs,
+            durationApiMs,
+            isError,
+            numTurns,
+            sessionId,
+            totalCostUsd,
+            usage,
+            result
+          ) =>
         val optionalFields = List(
           totalCostUsd.map(cost => s""""total_cost_usd":$cost"""),
           usage.map(u => s""""usage":{}"""), // Simplified usage serialization
@@ -60,29 +75,42 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
     private def serializeContentBlock(block: ContentBlock): String = block match
       case TextBlock(text) =>
         s"""{"type":"text","text":${escapeJsonString(text)}}"""
-      
+
       case ToolUseBlock(id, name, input) =>
-        s"""{"type":"tool_use","id":${escapeJsonString(id)},"name":${escapeJsonString(name)},"input":{}}"""
-      
+        s"""{"type":"tool_use","id":${escapeJsonString(
+            id
+          )},"name":${escapeJsonString(name)},"input":{}}"""
+
       case ToolResultBlock(toolUseId, content, isError) =>
-        val contentField = content.map(c => s""""content":${escapeJsonString(c)}""").getOrElse("")
+        val contentField = content
+          .map(c => s""""content":${escapeJsonString(c)}""")
+          .getOrElse("")
         val errorField = isError.map(e => s""""is_error":$e""").getOrElse("")
-        val fields = List(s""""tool_use_id":${escapeJsonString(toolUseId)}""", contentField, errorField).filter(_.nonEmpty)
+        val fields = List(
+          s""""tool_use_id":${escapeJsonString(toolUseId)}""",
+          contentField,
+          errorField
+        ).filter(_.nonEmpty)
         s"""{"type":"tool_result",${fields.mkString(",")}}"""
 
     private def escapeJsonString(str: String): String =
-      "\"" + str.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t") + "\""
+      "\"" + str
+        .replace("\\", "\\\\")
+        .replace("\"", "\\\"")
+        .replace("\n", "\\n")
+        .replace("\r", "\\r")
+        .replace("\t", "\\t") + "\""
 
     private def serializeJsonValue(value: Any): String = value match
-      case null => "null"
+      case null       => "null"
       case b: Boolean => b.toString
-      case n: Number => n.toString
-      case s: String => escapeJsonString(s)
-      case _ => escapeJsonString(value.toString)
+      case n: Number  => n.toString
+      case s: String  => escapeJsonString(s)
+      case _          => escapeJsonString(value.toString)
 
   // ScalaCheck generators for property testing
   object MessageGenerators:
-    
+
     // Generator for safe text content (avoiding control characters that might break JSON)
     val safeTextGen: Gen[String] = Gen.oneOf(
       Gen.const(""), // Empty string
@@ -121,8 +149,10 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
     val userMessageGen: Gen[UserMessage] = safeTextGen.map(UserMessage.apply)
 
     // Generator for AssistantMessage
-    val assistantMessageGen: Gen[AssistantMessage] = 
-      Gen.listOfN(Gen.choose(1, 3).sample.getOrElse(1), contentBlockGen).map(AssistantMessage.apply)
+    val assistantMessageGen: Gen[AssistantMessage] =
+      Gen
+        .listOfN(Gen.choose(1, 3).sample.getOrElse(1), contentBlockGen)
+        .map(AssistantMessage.apply)
 
     // Generator for SystemMessage
     val systemMessageGen: Gen[SystemMessage] = for {
@@ -132,7 +162,11 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
 
     // Generator for ResultMessage
     val resultMessageGen: Gen[ResultMessage] = for {
-      subtype <- Gen.oneOf("conversation_result", "error_result", "timeout_result")
+      subtype <- Gen.oneOf(
+        "conversation_result",
+        "error_result",
+        "timeout_result"
+      )
       durationMs <- Gen.choose(100, 10000)
       durationApiMs <- Gen.choose(50, 5000)
       isError <- Gen.oneOf(true, false)
@@ -141,7 +175,17 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
       totalCostUsd <- Gen.option(Gen.choose(0.001, 1.0))
       usage <- Gen.option(Gen.const(Map.empty[String, Any]))
       result <- Gen.option(safeTextGen)
-    } yield ResultMessage(subtype, durationMs, durationApiMs, isError, numTurns, sessionId, totalCostUsd, usage, result)
+    } yield ResultMessage(
+      subtype,
+      durationMs,
+      durationApiMs,
+      isError,
+      numTurns,
+      sessionId,
+      totalCostUsd,
+      usage,
+      result
+    )
 
     // Generator for any Message type
     val messageGen: Gen[Message] = Gen.oneOf(
@@ -341,147 +385,183 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
   }
 
   // Property-Based Tests - JSON Parsing Idempotency
-  
-  property("T3.5: JSON parsing idempotency - re-parsing serialized messages yields identical results") {
+
+  property(
+    "T3.5: JSON parsing idempotency - re-parsing serialized messages yields identical results"
+  ) {
     import MessageGenerators.given
     import JsonSerializationUtils.*
-    
+
     forAll { (originalMessage: Message) =>
       // Serialize the original message to JSON
       val jsonString = serializeMessage(originalMessage)
-      
+
       // Parse the JSON back to a Message object
       val parseResult = JsonParser.parseJsonLineWithContext(jsonString, 1)
-      
+
       // Verify successful parsing and idempotency
       parseResult match
         case Right(Some(parsedMessage)) =>
-          assertEquals(parsedMessage, originalMessage,
+          assertEquals(
+            parsedMessage,
+            originalMessage,
             s"Round-trip parsing failed for message type ${originalMessage.getClass.getSimpleName}.\n" +
-            s"Original: $originalMessage\n" +
-            s"JSON: $jsonString\n" +
-            s"Parsed: $parsedMessage")
+              s"Original: $originalMessage\n" +
+              s"JSON: $jsonString\n" +
+              s"Parsed: $parsedMessage"
+          )
         case Right(None) =>
           fail(s"Expected parsed message but got None for JSON: $jsonString")
         case Left(error) =>
-          fail(s"Expected successful parsing but got error: $error for JSON: $jsonString")
+          fail(
+            s"Expected successful parsing but got error: $error for JSON: $jsonString"
+          )
     }
   }
 
   property("T3.6: JSON parsing idempotency for UserMessage specifically") {
     import MessageGenerators.*
     import JsonSerializationUtils.*
-    
+
     forAll(userMessageGen) { originalMessage =>
       val jsonString = serializeMessage(originalMessage)
       val parseResult = JsonParser.parseJsonLineWithContext(jsonString, 1)
-      
+
       parseResult match
         case Right(Some(UserMessage(content))) =>
           assertEquals(UserMessage(content), originalMessage)
         case other =>
-          fail(s"Expected Right(Some(UserMessage(...))) but got: $other for JSON: $jsonString")
+          fail(
+            s"Expected Right(Some(UserMessage(...))) but got: $other for JSON: $jsonString"
+          )
     }
   }
 
   property("T3.7: JSON parsing idempotency for AssistantMessage specifically") {
     import MessageGenerators.*
     import JsonSerializationUtils.*
-    
+
     forAll(assistantMessageGen) { originalMessage =>
       val jsonString = serializeMessage(originalMessage)
       val parseResult = JsonParser.parseJsonLineWithContext(jsonString, 1)
-      
+
       parseResult match
         case Right(Some(AssistantMessage(content))) =>
           assertEquals(AssistantMessage(content), originalMessage)
         case other =>
-          fail(s"Expected Right(Some(AssistantMessage(...))) but got: $other for JSON: $jsonString")
+          fail(
+            s"Expected Right(Some(AssistantMessage(...))) but got: $other for JSON: $jsonString"
+          )
     }
   }
 
   property("T3.8: JSON parsing idempotency for SystemMessage specifically") {
     import MessageGenerators.*
     import JsonSerializationUtils.*
-    
+
     forAll(systemMessageGen) { originalMessage =>
-      val jsonString = serializeMessage(originalMessage)  
+      val jsonString = serializeMessage(originalMessage)
       val parseResult = JsonParser.parseJsonLineWithContext(jsonString, 1)
-      
+
       parseResult match
         case Right(Some(SystemMessage(subtype, data))) =>
           assertEquals(SystemMessage(subtype, data), originalMessage)
         case other =>
-          fail(s"Expected Right(Some(SystemMessage(...))) but got: $other for JSON: $jsonString")
+          fail(
+            s"Expected Right(Some(SystemMessage(...))) but got: $other for JSON: $jsonString"
+          )
     }
   }
 
   property("T3.9: JSON parsing idempotency for ResultMessage specifically") {
     import MessageGenerators.*
     import JsonSerializationUtils.*
-    
+
     forAll(resultMessageGen) { originalMessage =>
       val jsonString = serializeMessage(originalMessage)
       val parseResult = JsonParser.parseJsonLineWithContext(jsonString, 1)
-      
+
       parseResult match
         case Right(Some(resultMessage: ResultMessage)) =>
           assertEquals(resultMessage, originalMessage)
         case other =>
-          fail(s"Expected Right(Some(ResultMessage(...))) but got: $other for JSON: $jsonString")
+          fail(
+            s"Expected Right(Some(ResultMessage(...))) but got: $other for JSON: $jsonString"
+          )
     }
   }
 
   test("T3.10: Edge cases - empty content and special characters") {
     import JsonSerializationUtils.*
-    
+
     // Test edge cases that the generators might not cover adequately
     val edgeCases = List(
       UserMessage(""), // Empty content
-      UserMessage("Line1\nLine2\nLine3"), // Multiline 
+      UserMessage("Line1\nLine2\nLine3"), // Multiline
       UserMessage("Quotes: \"hello\" and 'world'"), // Mixed quotes
       UserMessage("Backslashes: \\ and forward / slashes"), // Escape characters
       UserMessage("Tab\tcharacter"), // Tab character
       AssistantMessage(List(TextBlock(""))), // Empty text block
-      AssistantMessage(List(TextBlock("Special: \n\r\t\\\""))), // All escape chars
+      AssistantMessage(
+        List(TextBlock("Special: \n\r\t\\\""))
+      ), // All escape chars
       SystemMessage("test", Map.empty), // Empty data
       SystemMessage("test", Map("key" -> "")), // Empty value
-      ResultMessage("test", 0, 0, false, 0, "", None, None, Some("")) // Minimal result with empty result
+      ResultMessage(
+        "test",
+        0,
+        0,
+        false,
+        0,
+        "",
+        None,
+        None,
+        Some("")
+      ) // Minimal result with empty result
     )
-    
+
     edgeCases.foreach { originalMessage =>
       val jsonString = serializeMessage(originalMessage)
       val parseResult = JsonParser.parseJsonLineWithContext(jsonString, 1)
-      
+
       parseResult match
         case Right(Some(parsedMessage)) =>
-          assertEquals(parsedMessage, originalMessage,
-            s"Edge case failed for: $originalMessage\nJSON: $jsonString")
+          assertEquals(
+            parsedMessage,
+            originalMessage,
+            s"Edge case failed for: $originalMessage\nJSON: $jsonString"
+          )
         case other =>
-          fail(s"Expected successful parsing for edge case: $originalMessage\nJSON: $jsonString\nGot: $other")
+          fail(
+            s"Expected successful parsing for edge case: $originalMessage\nJSON: $jsonString\nGot: $other"
+          )
     }
   }
 
   test("T3.11: Large content handling") {
     import JsonSerializationUtils.*
-    
+
     // Test with large content blocks
     val largeText = "x" * 10000
     val largeUserMessage = UserMessage(largeText)
-    val largeAssistantMessage = AssistantMessage(List(
-      TextBlock(largeText),
-      TextBlock("normal text"),
-      TextBlock(largeText + " with suffix")
-    ))
-    
+    val largeAssistantMessage = AssistantMessage(
+      List(
+        TextBlock(largeText),
+        TextBlock("normal text"),
+        TextBlock(largeText + " with suffix")
+      )
+    )
+
     List(largeUserMessage, largeAssistantMessage).foreach { originalMessage =>
       val jsonString = serializeMessage(originalMessage)
       val parseResult = JsonParser.parseJsonLineWithContext(jsonString, 1)
-      
+
       parseResult match
         case Right(Some(parsedMessage)) =>
           assertEquals(parsedMessage, originalMessage)
         case other =>
-          fail(s"Large content test failed for: ${originalMessage.getClass.getSimpleName}")
+          fail(
+            s"Large content test failed for: ${originalMessage.getClass.getSimpleName}"
+          )
     }
   }
