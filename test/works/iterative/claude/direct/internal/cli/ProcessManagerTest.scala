@@ -11,20 +11,57 @@ import works.iterative.claude.core.{
 }
 import works.iterative.claude.direct.internal.cli.{ProcessManager, Logger}
 import works.iterative.claude.core.model.QueryOptions
+import java.util.concurrent.{CountDownLatch, TimeUnit, ConcurrentLinkedQueue}
+import scala.collection.concurrent.TrieMap
+import java.util.concurrent.atomic.AtomicInteger
+import scala.jdk.CollectionConverters.*
 
 class ProcessManagerTest extends munit.FunSuite:
 
-  // Mock Logger for testing
+  // Thread-safe Mock Logger for testing with synchronization capabilities
   class MockLogger extends Logger:
-    var debugMessages: List[String] = List.empty
-    var infoMessages: List[String] = List.empty
-    var warnMessages: List[String] = List.empty
-    var errorMessages: List[String] = List.empty
+    private val debugMessages = new ConcurrentLinkedQueue[String]()
+    private val infoMessages = new ConcurrentLinkedQueue[String]()
+    private val warnMessages = new ConcurrentLinkedQueue[String]()
+    private val errorMessages = new ConcurrentLinkedQueue[String]()
+    
+    // Optional synchronization points for testing
+    private val stderrLatch = new CountDownLatch(1)
+    private val processCompletionLatch = new CountDownLatch(1)
 
-    def debug(msg: String): Unit = debugMessages = msg :: debugMessages
-    def info(msg: String): Unit = infoMessages = msg :: infoMessages
-    def warn(msg: String): Unit = warnMessages = msg :: warnMessages
-    def error(msg: String): Unit = errorMessages = msg :: errorMessages
+    def debug(msg: String): Unit = 
+      debugMessages.add(msg)
+      if msg.contains("stderr") then stderrLatch.countDown()
+      
+    def info(msg: String): Unit = 
+      infoMessages.add(msg)
+      if msg.contains("Process completed") then processCompletionLatch.countDown()
+      
+    def warn(msg: String): Unit = warnMessages.add(msg)
+    def error(msg: String): Unit = errorMessages.add(msg)
+    
+    // Thread-safe accessors that return immutable collections
+    def getDebugMessages: List[String] = debugMessages.asScala.toList
+    def getInfoMessages: List[String] = infoMessages.asScala.toList
+    def getWarnMessages: List[String] = warnMessages.asScala.toList
+    def getErrorMessages: List[String] = errorMessages.asScala.toList
+    
+    // Synchronization helpers for tests
+    def waitForStderrCapture(timeoutSeconds: Long = 5): Boolean = 
+      stderrLatch.await(timeoutSeconds, TimeUnit.SECONDS)
+      
+    def waitForProcessCompletion(timeoutSeconds: Long = 5): Boolean = 
+      processCompletionLatch.await(timeoutSeconds, TimeUnit.SECONDS)
+    
+    // Helper methods for assertions with proper synchronization
+    def hasDebugMessage(predicate: String => Boolean): Boolean = 
+      getDebugMessages.exists(predicate)
+      
+    def hasInfoMessage(predicate: String => Boolean): Boolean = 
+      getInfoMessages.exists(predicate)
+      
+    def hasErrorMessage(predicate: String => Boolean): Boolean = 
+      getErrorMessages.exists(predicate)
 
   test("T4.1: executeProcess returns List of messages from stdout") {
     supervised {
@@ -109,9 +146,10 @@ class ProcessManagerTest extends munit.FunSuite:
 
       // Verify: Should log process start and completion
       val logger = summon[MockLogger]
-      assert(logger.infoMessages.exists(_.contains("Starting process:")))
+      assert(logger.hasInfoMessage(_.contains("Starting process:")))
+      assert(logger.waitForProcessCompletion())
       assert(
-        logger.infoMessages.exists(
+        logger.hasInfoMessage(
           _.contains("Process completed with exit code: 0")
         )
       )
@@ -162,7 +200,9 @@ class ProcessManagerTest extends munit.FunSuite:
 
       // Verify: Should capture stderr concurrently and make it available for error handling
       val logger = summon[MockLogger]
-      assert(logger.debugMessages.exists(_.contains("stderr output")))
+      // Wait for stderr capture to complete before asserting
+      assert(logger.waitForStderrCapture())
+      assert(logger.hasDebugMessage(_.contains("stderr output")))
     }
   }
 
@@ -393,9 +433,11 @@ class ProcessManagerTest extends munit.FunSuite:
 
       // Verify: Should capture and log stderr information
       val logger = summon[MockLogger]
-      assert(logger.debugMessages.exists(_.contains("error message")))
+      // Wait for process completion and stderr capture
+      assert(logger.waitForProcessCompletion())
+      assert(logger.hasDebugMessage(_.contains("error message")))
       assert(
-        logger.infoMessages.exists(
+        logger.hasInfoMessage(
           _.contains("Process completed with exit code: 1")
         )
       )
@@ -410,6 +452,7 @@ class ProcessManagerTest extends munit.FunSuite:
       // Mock command that hangs (sleeps for a long time)
       val testScript = "/bin/sh"
       val args = List("-c", "sleep 30") // Sleep for 30 seconds
+      val timeoutDuration = scala.concurrent.duration.FiniteDuration(500, "milliseconds")
       val options = QueryOptions(
         prompt = "test prompt",
         cwd = None,
@@ -427,28 +470,31 @@ class ProcessManagerTest extends munit.FunSuite:
         resume = None,
         model = None,
         maxThinkingTokens = None,
-        timeout = Some(
-          scala.concurrent.duration.FiniteDuration(500, "milliseconds")
-        ), // 500ms timeout
+        timeout = Some(timeoutDuration),
         inheritEnvironment = None,
         environmentVariables = None
       )
 
       // Execute: Call executeProcess with hanging CLI and short timeout
+      // Measure actual timeout duration to verify timing precision
+      val startTime = System.currentTimeMillis()
       val exception = intercept[ProcessTimeoutError] {
         ProcessManager.executeProcess(testScript, args, options)
       }
+      val actualDuration = System.currentTimeMillis() - startTime
 
       // Verify: Should throw ProcessTimeoutError after specified duration
-      assertEquals(
-        exception.timeoutDuration,
-        scala.concurrent.duration.FiniteDuration(500, "milliseconds")
-      )
+      assertEquals(exception.timeoutDuration, timeoutDuration)
       assertEquals(exception.command, testScript :: args)
+      
+      // Verify: Timeout should occur within reasonable bounds (allow for some overhead)
+      val expectedMs = timeoutDuration.toMillis
+      assert(actualDuration >= expectedMs, s"Timeout too fast: ${actualDuration}ms < ${expectedMs}ms")
+      assert(actualDuration <= expectedMs + 200, s"Timeout too slow: ${actualDuration}ms > ${expectedMs + 200}ms")
 
-      // Verify: Should log timeout information
+      // Verify: Should log timeout information with proper synchronization
       val logger = summon[MockLogger]
-      assert(logger.errorMessages.exists(_.contains("Process timed out")))
+      assert(logger.hasErrorMessage(_.contains("Process timed out")))
     }
   }
 
@@ -513,9 +559,10 @@ class ProcessManagerTest extends munit.FunSuite:
 
       // Verify: Should log JSON parsing error but continue processing
       val logger = summon[MockLogger]
-      assert(logger.errorMessages.exists(_.contains("JSON parsing failed")))
+      assert(logger.waitForProcessCompletion())
+      assert(logger.hasErrorMessage(_.contains("JSON parsing failed")))
       assert(
-        logger.infoMessages.exists(
+        logger.hasInfoMessage(
           _.contains("Process completed with exit code: 0")
         )
       )
@@ -564,9 +611,12 @@ class ProcessManagerTest extends munit.FunSuite:
       // Verify: Should log process lifecycle events throughout execution
       val logger = summon[MockLogger]
 
+      // Wait for process completion to ensure all logging is done
+      assert(logger.waitForProcessCompletion())
+
       // Should log process start
       assert(
-        logger.infoMessages.exists(msg =>
+        logger.hasInfoMessage(msg =>
           msg.contains("Starting process:") &&
             msg.contains("/bin/echo") &&
             msg.contains(mockOutput)
@@ -574,16 +624,16 @@ class ProcessManagerTest extends munit.FunSuite:
       )
 
       // Should log JSON parsing attempts (via parseJsonLineWithContextWithLogging)
-      assert(logger.debugMessages.exists(_.contains("Parsing JSON line")))
+      assert(logger.hasDebugMessage(_.contains("Parsing JSON line")))
       assert(
-        logger.debugMessages.exists(
+        logger.hasDebugMessage(
           _.contains("Successfully parsed message of type user")
         )
       )
 
       // Should log process completion
       assert(
-        logger.infoMessages.exists(
+        logger.hasInfoMessage(
           _.contains("Process completed with exit code: 0")
         )
       )
