@@ -2,9 +2,13 @@
 // PURPOSE: Verify PATH lookup and file existence checking without IO effects
 package works.iterative.claude.direct.internal.cli
 
+import works.iterative.claude.direct.internal.testing.TestAssumptions.*
+
 class FileSystemOpsTest extends munit.FunSuite:
 
   test("should find existing commands in PATH using which"):
+    assumeUnixWithCommands("sh", "which")
+
     // Test with 'sh' command which exists on Unix systems
     val result = FileSystemOps.which("sh")
 
@@ -14,6 +18,8 @@ class FileSystemOpsTest extends munit.FunSuite:
     assert(result.get.endsWith("sh"), "path should end with sh")
 
   test("should return None for non-existent commands when using which"):
+    assumeUnixWithCommands("which")
+
     // Test with an impossible command name that definitely doesn't exist
     val result = FileSystemOps.which(
       "this-command-absolutely-does-not-exist-anywhere-12345"
@@ -23,15 +29,22 @@ class FileSystemOpsTest extends munit.FunSuite:
     assert(result.isEmpty, "non-existent command should return None")
 
   test("should correctly identify existing files using exists"):
+    assumeUnixSystem()
+
     // Test with a known existing file (this test file itself)
-    val testFilePath =
-      "test/works/iterative/claude/direct/internal/cli/FileSystemOpsTest.scala"
+    val testFilePath = System.getProperty(
+      "user.dir"
+    ) + "/test/works/iterative/claude/direct/internal/cli/FileSystemOpsTest.scala"
+    assumeFileExists(testFilePath)
+
     val result = FileSystemOps.exists(testFilePath)
 
     // Should return true for existing files
     assert(result, "existing file should return true")
 
   test("should correctly identify executable files using isExecutable"):
+    assumeUnixWithCommands("sh", "which")
+
     // Test with sh executable that should be found and executable
     val shPath = FileSystemOps.which("sh")
     assert(shPath.isDefined, "sh should be found in PATH for this test")
