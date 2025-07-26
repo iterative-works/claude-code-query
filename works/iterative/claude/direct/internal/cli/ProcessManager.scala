@@ -42,12 +42,12 @@ object ProcessManager:
       timeoutDuration: scala.concurrent.duration.Duration
   )(using logger: Logger, ox: Ox): List[Message] =
     val processBuilder = configureProcess(executablePath, args, options)
-    
+
     // Log the command being executed for debugging
     logger.debug(s"Executing command: $executablePath ${args.mkString(" ")}")
-    
+
     val process = processBuilder.start()
-    
+
     // Close stdin immediately since prompt is passed as command-line argument
     try {
       process.getOutputStream().close()
@@ -62,13 +62,15 @@ object ProcessManager:
         scala.concurrent.duration
           .FiniteDuration(timeoutDuration.toMillis, "milliseconds")
     }
-    
+
     try {
       timeout(finiteDuration) {
         // Simple pattern that we know works
         val (stdout, stderr) = par(
           {
-            val reader = new java.io.BufferedReader(new java.io.InputStreamReader(process.getInputStream))
+            val reader = new java.io.BufferedReader(
+              new java.io.InputStreamReader(process.getInputStream)
+            )
             val lines = scala.collection.mutable.ListBuffer[String]()
             var line: String = null
             while ({ line = reader.readLine(); line != null }) {
@@ -76,9 +78,10 @@ object ProcessManager:
             }
             reader.close()
             lines.toList
-          },
-          {
-            val reader = new java.io.BufferedReader(new java.io.InputStreamReader(process.getErrorStream))
+          }, {
+            val reader = new java.io.BufferedReader(
+              new java.io.InputStreamReader(process.getErrorStream)
+            )
             val lines = scala.collection.mutable.ListBuffer[String]()
             var line: String = null
             while ({ line = reader.readLine(); line != null }) {
@@ -88,14 +91,14 @@ object ProcessManager:
             lines.toList
           }
         )
-        
+
         val exitCode = process.waitFor() // Should return immediately
-        
+
         // Parse the stdout lines into messages
         stdout.zipWithIndex.flatMap { case (line, index) =>
           JsonParser.parseJsonLineWithContext(line, index + 1) match {
             case Right(Some(message)) => Some(message)
-            case _ => None
+            case _                    => None
           }
         }
       }
@@ -112,12 +115,12 @@ object ProcessManager:
       command: List[String]
   )(using logger: Logger, ox: Ox): List[Message] =
     val processBuilder = configureProcess(executablePath, args, options)
-    
+
     // Log the command being executed for debugging
     logger.debug(s"Executing command: $executablePath ${args.mkString(" ")}")
-    
+
     val process = processBuilder.start()
-    
+
     // Close stdin immediately since prompt is passed as command-line argument
     try {
       process.getOutputStream().close()
@@ -125,10 +128,12 @@ object ProcessManager:
       case _: Exception => // Ignore if already closed
     }
 
-    // Use the same simple working pattern  
+    // Use the same simple working pattern
     val (stdout, stderr) = par(
       {
-        val reader = new java.io.BufferedReader(new java.io.InputStreamReader(process.getInputStream))
+        val reader = new java.io.BufferedReader(
+          new java.io.InputStreamReader(process.getInputStream)
+        )
         val lines = scala.collection.mutable.ListBuffer[String]()
         var line: String = null
         while ({ line = reader.readLine(); line != null }) {
@@ -136,9 +141,10 @@ object ProcessManager:
         }
         reader.close()
         lines.toList
-      },
-      {
-        val reader = new java.io.BufferedReader(new java.io.InputStreamReader(process.getErrorStream))
+      }, {
+        val reader = new java.io.BufferedReader(
+          new java.io.InputStreamReader(process.getErrorStream)
+        )
         val lines = scala.collection.mutable.ListBuffer[String]()
         var line: String = null
         while ({ line = reader.readLine(); line != null }) {
@@ -148,14 +154,14 @@ object ProcessManager:
         lines.toList
       }
     )
-    
+
     val exitCode = process.waitFor() // Should return immediately
-    
+
     // Parse the stdout lines into messages
     stdout.zipWithIndex.flatMap { case (line, index) =>
       JsonParser.parseJsonLineWithContext(line, index + 1) match {
         case Right(Some(message)) => Some(message)
-        case _ => None
+        case _                    => None
       }
     }
 
