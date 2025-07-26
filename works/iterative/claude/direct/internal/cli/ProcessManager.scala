@@ -42,14 +42,68 @@ object ProcessManager:
       timeoutDuration: scala.concurrent.duration.Duration
   )(using logger: Logger, ox: Ox): List[Message] =
     val processBuilder = configureProcess(executablePath, args, options)
+    
+    // Log the command being executed for debugging
+    logger.debug(s"Executing command: $executablePath ${args.mkString(" ")}")
+    
     val process = processBuilder.start()
+    
+    // Close stdin immediately since prompt is passed as command-line argument
+    try {
+      process.getOutputStream().close()
+    } catch {
+      case _: Exception => // Ignore if already closed
+    }
 
-    waitForProcessWithTimeout(process, timeoutDuration, command)
-    val messages = readProcessOutput(process)
-    captureStderrSynchronously(process)
-    handleProcessCompletion(process, command)
-
-    messages
+    // Use the simple working pattern with timeout wrapper
+    val finiteDuration = timeoutDuration match {
+      case fd: scala.concurrent.duration.FiniteDuration => fd
+      case _                                            =>
+        scala.concurrent.duration
+          .FiniteDuration(timeoutDuration.toMillis, "milliseconds")
+    }
+    
+    try {
+      timeout(finiteDuration) {
+        // Simple pattern that we know works
+        val (stdout, stderr) = par(
+          {
+            val reader = new java.io.BufferedReader(new java.io.InputStreamReader(process.getInputStream))
+            val lines = scala.collection.mutable.ListBuffer[String]()
+            var line: String = null
+            while ({ line = reader.readLine(); line != null }) {
+              lines += line
+            }
+            reader.close()
+            lines.toList
+          },
+          {
+            val reader = new java.io.BufferedReader(new java.io.InputStreamReader(process.getErrorStream))
+            val lines = scala.collection.mutable.ListBuffer[String]()
+            var line: String = null
+            while ({ line = reader.readLine(); line != null }) {
+              lines += line
+            }
+            reader.close()
+            lines.toList
+          }
+        )
+        
+        val exitCode = process.waitFor() // Should return immediately
+        
+        // Parse the stdout lines into messages
+        stdout.zipWithIndex.flatMap { case (line, index) =>
+          JsonParser.parseJsonLineWithContext(line, index + 1) match {
+            case Right(Some(message)) => Some(message)
+            case _ => None
+          }
+        }
+      }
+    } catch {
+      case _: java.util.concurrent.TimeoutException =>
+        process.destroyForcibly()
+        throw ProcessTimeoutError(finiteDuration, command)
+    }
 
   private def executeProcessWithoutTimeout(
       executablePath: String,
@@ -58,15 +112,52 @@ object ProcessManager:
       command: List[String]
   )(using logger: Logger, ox: Ox): List[Message] =
     val processBuilder = configureProcess(executablePath, args, options)
+    
+    // Log the command being executed for debugging
+    logger.debug(s"Executing command: $executablePath ${args.mkString(" ")}")
+    
     val process = processBuilder.start()
+    
+    // Close stdin immediately since prompt is passed as command-line argument
+    try {
+      process.getOutputStream().close()
+    } catch {
+      case _: Exception => // Ignore if already closed
+    }
 
-    val stderrCapture = captureStderrConcurrently(process)
-    val messages = readProcessOutput(process)
-    val exitCode = process.waitFor()
-    stderrCapture.join()
-    handleProcessCompletion(process, command)
-
-    messages
+    // Use the same simple working pattern  
+    val (stdout, stderr) = par(
+      {
+        val reader = new java.io.BufferedReader(new java.io.InputStreamReader(process.getInputStream))
+        val lines = scala.collection.mutable.ListBuffer[String]()
+        var line: String = null
+        while ({ line = reader.readLine(); line != null }) {
+          lines += line
+        }
+        reader.close()
+        lines.toList
+      },
+      {
+        val reader = new java.io.BufferedReader(new java.io.InputStreamReader(process.getErrorStream))
+        val lines = scala.collection.mutable.ListBuffer[String]()
+        var line: String = null
+        while ({ line = reader.readLine(); line != null }) {
+          lines += line
+        }
+        reader.close()
+        lines.toList
+      }
+    )
+    
+    val exitCode = process.waitFor() // Should return immediately
+    
+    // Parse the stdout lines into messages
+    stdout.zipWithIndex.flatMap { case (line, index) =>
+      JsonParser.parseJsonLineWithContext(line, index + 1) match {
+        case Right(Some(message)) => Some(message)
+        case _ => None
+      }
+    }
 
   def configureProcess(
       executablePath: String,

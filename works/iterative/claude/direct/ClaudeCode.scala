@@ -62,7 +62,9 @@ object ClaudeCode:
 
   private def buildCliArguments(options: QueryOptions): List[String] =
     options.executableArgs.getOrElse {
-      CLIArgumentBuilder.buildArgs(options) :+ options.prompt
+      List("--print", "--verbose", "--output-format", "stream-json") ++
+        CLIArgumentBuilder.buildArgs(options) ++
+        List(options.prompt)
     }
 
   // ==== DETAILED IMPLEMENTATION ====

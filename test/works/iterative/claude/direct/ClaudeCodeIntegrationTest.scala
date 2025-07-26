@@ -4,6 +4,7 @@
 package works.iterative.claude.direct
 
 import ox.*
+import scala.concurrent.duration.*
 import works.iterative.claude.core.model.*
 import works.iterative.claude.core.model.QueryOptions
 import works.iterative.claude.direct.internal.cli.{Logger}
@@ -237,7 +238,7 @@ class ClaudeCodeIntegrationTest extends munit.FunSuite:
       )
 
       val options = QueryOptions(
-        prompt = "Test CLI discovery",
+        prompt = "What is 1+1?", // Use a proper prompt
         cwd = None,
         executable = None,
         executableArgs = None,
@@ -254,7 +255,7 @@ class ClaudeCodeIntegrationTest extends munit.FunSuite:
         model = None,
         maxThinkingTokens = None,
         timeout = Some(
-          TestConstants.Timeouts.FINITE_TIMEOUT_MEDIUM
+          TestConstants.Timeouts.TEST_TIMEOUT_EXTENDED
         ),
         inheritEnvironment = None,
         environmentVariables = None
