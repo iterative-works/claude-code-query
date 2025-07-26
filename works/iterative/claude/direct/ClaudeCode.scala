@@ -14,6 +14,9 @@ import works.iterative.claude.direct.internal.cli.{
   FileSystemOps
 }
 
+// Type alias for convenient single-import usage
+type QueryOptions = works.iterative.claude.core.model.QueryOptions
+
 object ClaudeCode:
 
   // Simple logger implementation for minimal functionality
