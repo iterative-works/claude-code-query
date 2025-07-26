@@ -226,8 +226,15 @@ class ClaudeCodeIntegrationTest extends munit.FunSuite:
 
   test("should discover and execute real CLI when available") {
     supervised {
-      // Setup: Test real CLI discovery (conditional on CLI availability)
       given MockLogger = MockLogger()
+
+      // Explicit environmental assumptions - fail fast if prerequisites aren't met
+      assume(isClaudeCliInstalled(), "Test requires Claude CLI to be installed")
+      assume(isNodeJsAvailable(), "Test requires Node.js to be available")
+      assume(
+        hasApiKeyOrMockSetup(),
+        "Test requires API key configuration or mock setup"
+      )
 
       val options = QueryOptions(
         prompt = "Test CLI discovery",
@@ -248,47 +255,56 @@ class ClaudeCodeIntegrationTest extends munit.FunSuite:
         maxThinkingTokens = None,
         timeout = Some(
           TestConstants.Timeouts.FINITE_TIMEOUT_MEDIUM
-        ), // Short timeout
+        ),
         inheritEnvironment = None,
         environmentVariables = None
       )
 
-      // This test is conditional - it only runs if the Claude CLI is available
-      // If CLI is not found, the test should handle the error gracefully
-      try {
-        val messageFlow = ClaudeCode.query(options)
-        val messages = messageFlow.runToList()
+      // Now test authentically - if we reach here, environment should support the test
+      val messageFlow = ClaudeCode.query(options)
+      val messages = messageFlow.runToList()
 
-        // If we reach here, the CLI was found and executed successfully
-        // Verify we got some kind of response
-        assert(
-          messages.nonEmpty,
-          "Expected some messages from real CLI execution"
-        )
+      // Verify CLI discovery and execution worked
+      assert(
+        messages.nonEmpty,
+        "Should receive messages from CLI execution"
+      )
 
-        // Log success for debugging
-        println(
-          s"T9.4: Successfully discovered and executed Claude CLI with ${messages.length} messages"
-        )
-      } catch {
-        case _: works.iterative.claude.core.CLINotFoundError =>
-          // This is expected if Claude CLI is not installed
-          println(
-            "T9.4: Claude CLI not found - test skipped (this is expected in CI/test environments)"
-          )
-        case _: works.iterative.claude.core.NodeJSNotFoundError =>
-          // This is expected if Node.js is not available
-          println(
-            "T9.4: Node.js not found - test skipped (this is expected in environments without Node.js)"
-          )
-        case _: works.iterative.claude.core.ProcessTimeoutError =>
-          // This is expected if the real CLI takes too long (e.g., waiting for input)
-          println(
-            "T9.4: Claude CLI discovered but timed out - test skipped (real CLI likely needs API key or interactive input)"
-          )
-        case other =>
-          // Any other error should fail the test
-          fail(s"Unexpected error during CLI discovery: $other")
-      }
+      // Log success for debugging
+      println(
+        s"T9.4: Successfully discovered and executed Claude CLI with ${messages.length} messages"
+      )
     }
+  }
+
+  // Environmental assumption helper functions
+  private def isClaudeCliInstalled(): Boolean = {
+    try {
+      val process = ProcessBuilder("claude", "--version").start()
+      val exitCode = process.waitFor()
+      exitCode == 0
+    } catch {
+      case _: Exception => false
+    }
+  }
+
+  private def isNodeJsAvailable(): Boolean = {
+    try {
+      val process = ProcessBuilder("node", "--version").start()
+      val exitCode = process.waitFor()
+      exitCode == 0
+    } catch {
+      case _: Exception => false
+    }
+  }
+
+  private def hasApiKeyOrMockSetup(): Boolean = {
+    // Check for API key in environment
+    val hasApiKey = sys.env.contains("ANTHROPIC_API_KEY")
+
+    // Check if mock CLI is available for testing
+    val mockCliPath = java.nio.file.Paths.get("./test/bin/mock-claude")
+    val hasMockCli = java.nio.file.Files.exists(mockCliPath)
+
+    hasApiKey || hasMockCli
   }
