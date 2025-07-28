@@ -9,7 +9,8 @@ import works.iterative.claude.core.{
   ProcessTimeoutError,
   JsonParsingError
 }
-import works.iterative.claude.direct.internal.cli.{ProcessManager, Logger}
+import works.iterative.claude.direct.internal.cli.ProcessManager
+import works.iterative.claude.direct.Logger
 import works.iterative.claude.core.model.QueryOptions
 import works.iterative.claude.direct.internal.testing.{
   MockCliScript,
@@ -111,17 +112,20 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
     private val stderrLatch = new CountDownLatch(1)
     private val processCompletionLatch = new CountDownLatch(1)
 
-    def debug(msg: String): Unit =
-      debugMessages.add(msg)
-      if msg.contains("stderr") then stderrLatch.countDown()
+    def debug(msg: => String): Unit =
+      val message = msg
+      debugMessages.add(message)
+      if message.contains("stderr") then stderrLatch.countDown()
 
-    def info(msg: String): Unit =
-      infoMessages.add(msg)
-      if msg.contains("Process completed") then
+    def info(msg: => String): Unit =
+      val message = msg
+      infoMessages.add(message)
+      if message.contains("Process completed") then
         processCompletionLatch.countDown()
 
-    def warn(msg: String): Unit = warnMessages.add(msg)
-    def error(msg: String): Unit = errorMessages.add(msg)
+    def warn(msg: => String): Unit = warnMessages.add(msg)
+    def error(msg: => String): Unit = errorMessages.add(msg)
+    def error(msg: => String, exception: Throwable): Unit = errorMessages.add(s"$msg: ${exception.getMessage}")
 
     // Thread-safe accessors that return immutable collections
     def getDebugMessages: List[String] = debugMessages.asScala.toList

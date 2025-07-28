@@ -9,9 +9,9 @@ import works.iterative.claude.core.{
 }
 import works.iterative.claude.direct.internal.cli.{
   CLIDiscovery,
-  Logger,
   FileSystemOperations
 }
+import works.iterative.claude.direct.Logger
 
 class CLIDiscoveryTest extends munit.FunSuite:
 
@@ -34,10 +34,11 @@ class CLIDiscoveryTest extends munit.FunSuite:
     var warnMessages: List[String] = List.empty
     var errorMessages: List[String] = List.empty
 
-    def debug(msg: String): Unit = debugMessages = msg :: debugMessages
-    def info(msg: String): Unit = infoMessages = msg :: infoMessages
-    def warn(msg: String): Unit = warnMessages = msg :: warnMessages
-    def error(msg: String): Unit = errorMessages = msg :: errorMessages
+    def debug(msg: => String): Unit = debugMessages = msg :: debugMessages
+    def info(msg: => String): Unit = infoMessages = msg :: infoMessages
+    def warn(msg: => String): Unit = warnMessages = msg :: warnMessages
+    def error(msg: => String): Unit = errorMessages = msg :: errorMessages
+    def error(msg: => String, exception: Throwable): Unit = errorMessages = s"$msg: ${exception.getMessage}" :: errorMessages
 
   test("should find Claude CLI when available in PATH") {
     // Setup: Mock FileSystemOps to return claude path from which

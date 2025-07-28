@@ -11,7 +11,7 @@ import works.iterative.claude.core.model.{
   ResultMessage
 }
 import works.iterative.claude.core.parsing.{JsonParser as CoreJsonParser}
-import works.iterative.claude.direct.internal.cli.Logger
+import works.iterative.claude.direct.Logger
 import io.circe.parser
 
 object JsonParser:

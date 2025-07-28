@@ -7,7 +7,8 @@ import ox.*
 import works.iterative.claude.core.model.*
 import works.iterative.claude.core.model.QueryOptions
 import works.iterative.claude.core.ProcessExecutionError
-import works.iterative.claude.direct.internal.cli.{ProcessManager, Logger}
+import works.iterative.claude.direct.internal.cli.ProcessManager
+import works.iterative.claude.direct.Logger
 import works.iterative.claude.direct.internal.testing.TestConstants
 import works.iterative.claude.direct.internal.testing.TestAssumptions.*
 import org.scalacheck.*
@@ -23,10 +24,11 @@ class EnvironmentTest extends munit.FunSuite with ScalaCheckSuite:
     var warnMessages: List[String] = List.empty
     var errorMessages: List[String] = List.empty
 
-    def debug(msg: String): Unit = debugMessages = msg :: debugMessages
-    def info(msg: String): Unit = infoMessages = msg :: infoMessages
-    def warn(msg: String): Unit = warnMessages = msg :: warnMessages
-    def error(msg: String): Unit = errorMessages = msg :: errorMessages
+    def debug(msg: => String): Unit = debugMessages = msg :: debugMessages
+    def info(msg: => String): Unit = infoMessages = msg :: infoMessages
+    def warn(msg: => String): Unit = warnMessages = msg :: warnMessages
+    def error(msg: => String): Unit = errorMessages = msg :: errorMessages
+    def error(msg: => String, exception: Throwable): Unit = errorMessages = s"$msg: ${exception.getMessage}" :: errorMessages
 
     // Get all messages across all log levels for comprehensive security testing
     def getAllMessages(): List[String] =

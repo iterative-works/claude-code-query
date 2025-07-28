@@ -6,6 +6,7 @@ import ox.*
 import works.iterative.claude.core.model.*
 import works.iterative.claude.core.{ProcessExecutionError, ProcessTimeoutError}
 import works.iterative.claude.direct.internal.parsing.JsonParser
+import works.iterative.claude.direct.Logger
 import java.io.{BufferedReader, InputStreamReader}
 import scala.jdk.CollectionConverters.*
 

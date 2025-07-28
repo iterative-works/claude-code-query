@@ -10,46 +10,39 @@ import works.iterative.claude.core.ConfigurationError
 import works.iterative.claude.direct.internal.cli.{
   ProcessManager,
   CLIDiscovery,
-  Logger,
   FileSystemOps
 }
+import works.iterative.claude.direct.Logger
 
 // Type alias for convenient single-import usage
 type QueryOptions = works.iterative.claude.core.model.QueryOptions
 
 object ClaudeCode:
 
-  // Simple logger implementation for minimal functionality
-  given Logger = new Logger:
-    def debug(msg: String): Unit = () // Silent for minimal implementation
-    def info(msg: String): Unit = ()
-    def warn(msg: String): Unit = ()
-    def error(msg: String): Unit = ()
-
   // ==== HIGH-LEVEL PUBLIC API ====
 
   /** Executes a query and returns a Flow of messages from the Claude CLI. Uses
     * Ox direct-style programming for structured concurrency.
     */
-  def query(options: QueryOptions)(using ox: Ox): Flow[Message] =
+  def query(options: QueryOptions)(using Logger, Ox): Flow[Message] =
     Flow.fromIterable(executeQuery(options))
 
   /** Executes a query and returns all messages as a List. This is a convenience
     * method that collects all messages from the query Flow synchronously.
     */
-  def querySync(options: QueryOptions)(using ox: Ox): List[Message] =
+  def querySync(options: QueryOptions)(using Logger, Ox): List[Message] =
     executeQuery(options)
 
   /** Executes a query and extracts the text content from AssistantMessage. This
     * is a convenience method for getting just the assistant's response text.
     */
-  def queryResult(options: QueryOptions)(using ox: Ox): String =
+  def queryResult(options: QueryOptions)(using Logger, Ox): String =
     val messages = executeQuery(options)
     extractAssistantTextContent(messages)
 
   // ==== MAIN EXECUTION LOGIC ====
 
-  private def executeQuery(options: QueryOptions)(using ox: Ox): List[Message] =
+  private def executeQuery(options: QueryOptions)(using Logger, Ox): List[Message] =
     validateQueryConfiguration(options)
     val executablePath = resolveClaudeExecutablePath(options)
     val args = buildCliArguments(options)

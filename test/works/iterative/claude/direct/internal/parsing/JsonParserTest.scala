@@ -5,7 +5,7 @@ package works.iterative.claude.direct.internal.parsing
 import works.iterative.claude.core.{JsonParsingError}
 import works.iterative.claude.core.model.*
 import works.iterative.claude.direct.internal.parsing.JsonParser
-import works.iterative.claude.direct.internal.cli.Logger
+import works.iterative.claude.direct.Logger
 import works.iterative.claude.direct.internal.testing.TestConstants
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalacheck.Prop.forAll
@@ -19,10 +19,11 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
     var warnMessages: List[String] = List.empty
     var errorMessages: List[String] = List.empty
 
-    def debug(msg: String): Unit = debugMessages = msg :: debugMessages
-    def info(msg: String): Unit = infoMessages = msg :: infoMessages
-    def warn(msg: String): Unit = warnMessages = msg :: warnMessages
-    def error(msg: String): Unit = errorMessages = msg :: errorMessages
+    def debug(msg: => String): Unit = debugMessages = msg :: debugMessages
+    def info(msg: => String): Unit = infoMessages = msg :: infoMessages
+    def warn(msg: => String): Unit = warnMessages = msg :: warnMessages
+    def error(msg: => String): Unit = errorMessages = msg :: errorMessages
+    def error(msg: => String, exception: Throwable): Unit = errorMessages = s"$msg: ${exception.getMessage}" :: errorMessages
 
   // JSON serialization utilities for property testing
   object JsonSerializationUtils:

@@ -7,12 +7,7 @@ import works.iterative.claude.core.{
   CLINotFoundError,
   NodeJSNotFoundError
 }
-
-trait Logger:
-  def debug(msg: String): Unit
-  def info(msg: String): Unit
-  def warn(msg: String): Unit
-  def error(msg: String): Unit
+import works.iterative.claude.direct.Logger
 
 trait FileSystemOperations:
   def which(command: String): Option[String]
