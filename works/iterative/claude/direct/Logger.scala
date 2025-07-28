@@ -15,12 +15,16 @@ object Logger:
   // Slf4j-based logger implementation for default logging
   class Slf4jLogger(name: String = "ClaudeCode") extends Logger:
     private val slf4jLogger = LoggerFactory.getLogger(name)
-    
-    def debug(msg: => String): Unit = if slf4jLogger.isDebugEnabled then slf4jLogger.debug(msg)
-    def info(msg: => String): Unit = if slf4jLogger.isInfoEnabled then slf4jLogger.info(msg)
-    def warn(msg: => String): Unit = if slf4jLogger.isWarnEnabled then slf4jLogger.warn(msg)
-    def error(msg: => String): Unit = if slf4jLogger.isErrorEnabled then slf4jLogger.error(msg)
-    def error(msg: => String, exception: Throwable): Unit = 
+
+    def debug(msg: => String): Unit =
+      if slf4jLogger.isDebugEnabled then slf4jLogger.debug(msg)
+    def info(msg: => String): Unit =
+      if slf4jLogger.isInfoEnabled then slf4jLogger.info(msg)
+    def warn(msg: => String): Unit =
+      if slf4jLogger.isWarnEnabled then slf4jLogger.warn(msg)
+    def error(msg: => String): Unit =
+      if slf4jLogger.isErrorEnabled then slf4jLogger.error(msg)
+    def error(msg: => String, exception: Throwable): Unit =
       if slf4jLogger.isErrorEnabled then slf4jLogger.error(msg, exception)
 
   // Default slf4j-based logger - automatically used via given resolution

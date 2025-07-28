@@ -42,7 +42,9 @@ object ClaudeCode:
 
   // ==== MAIN EXECUTION LOGIC ====
 
-  private def executeQuery(options: QueryOptions)(using Logger, Ox): List[Message] =
+  private def executeQuery(
+      options: QueryOptions
+  )(using Logger, Ox): List[Message] =
     validateQueryConfiguration(options)
     val executablePath = resolveClaudeExecutablePath(options)
     val args = buildCliArguments(options)

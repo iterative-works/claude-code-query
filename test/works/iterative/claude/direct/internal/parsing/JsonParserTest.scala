@@ -23,7 +23,8 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
     def info(msg: => String): Unit = infoMessages = msg :: infoMessages
     def warn(msg: => String): Unit = warnMessages = msg :: warnMessages
     def error(msg: => String): Unit = errorMessages = msg :: errorMessages
-    def error(msg: => String, exception: Throwable): Unit = errorMessages = s"$msg: ${exception.getMessage}" :: errorMessages
+    def error(msg: => String, exception: Throwable): Unit = errorMessages =
+      s"$msg: ${exception.getMessage}" :: errorMessages
 
   // JSON serialization utilities for property testing
   object JsonSerializationUtils:

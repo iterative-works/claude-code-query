@@ -23,7 +23,8 @@ class ClaudeCodeIntegrationTest extends munit.FunSuite:
     def info(msg: => String): Unit = infoMessages = msg :: infoMessages
     def warn(msg: => String): Unit = warnMessages = msg :: warnMessages
     def error(msg: => String): Unit = errorMessages = msg :: errorMessages
-    def error(msg: => String, exception: Throwable): Unit = errorMessages = s"$msg: ${exception.getMessage}" :: errorMessages
+    def error(msg: => String, exception: Throwable): Unit = errorMessages =
+      s"$msg: ${exception.getMessage}" :: errorMessages
 
   test("should execute complete workflow with comprehensive mock CLI") {
     supervised {

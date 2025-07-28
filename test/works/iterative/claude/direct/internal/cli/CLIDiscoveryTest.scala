@@ -38,7 +38,8 @@ class CLIDiscoveryTest extends munit.FunSuite:
     def info(msg: => String): Unit = infoMessages = msg :: infoMessages
     def warn(msg: => String): Unit = warnMessages = msg :: warnMessages
     def error(msg: => String): Unit = errorMessages = msg :: errorMessages
-    def error(msg: => String, exception: Throwable): Unit = errorMessages = s"$msg: ${exception.getMessage}" :: errorMessages
+    def error(msg: => String, exception: Throwable): Unit = errorMessages =
+      s"$msg: ${exception.getMessage}" :: errorMessages
 
   test("should find Claude CLI when available in PATH") {
     // Setup: Mock FileSystemOps to return claude path from which

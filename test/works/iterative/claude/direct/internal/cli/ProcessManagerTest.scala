@@ -125,7 +125,8 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
 
     def warn(msg: => String): Unit = warnMessages.add(msg)
     def error(msg: => String): Unit = errorMessages.add(msg)
-    def error(msg: => String, exception: Throwable): Unit = errorMessages.add(s"$msg: ${exception.getMessage}")
+    def error(msg: => String, exception: Throwable): Unit =
+      errorMessages.add(s"$msg: ${exception.getMessage}")
 
     // Thread-safe accessors that return immutable collections
     def getDebugMessages: List[String] = debugMessages.asScala.toList
