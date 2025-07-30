@@ -398,12 +398,11 @@ class EnvironmentTest extends munit.FunSuite with ScalaCheckSuite:
                 )
             }
           case None =>
-            // Some scenarios might not throw exceptions (which would be unexpected for our failure cases)
-            if (!scenarioName.contains("timeout")) {
-              println(
-                s"Warning: Scenario '$scenarioName' did not throw an exception as expected"
-              )
-            }
+            // All failure scenarios should throw exceptions - if they don't, the test should fail
+            fail(
+              s"Expected scenario '$scenarioName' to throw an exception but it completed successfully. " +
+                s"This indicates the failure scenario is not actually failing as intended."
+            )
         }
       }
     }
