@@ -26,7 +26,8 @@ class ClaudeCode(using logger: Logger, ox: Ox):
     queryResult(QueryOptions.simple(prompt))
 
   /** Executes a query and returns a Flow of messages from the Claude CLI. Uses
-    * Ox direct-style programming for structured concurrency with real streaming.
+    * Ox direct-style programming for structured concurrency with real
+    * streaming.
     */
   def query(options: QueryOptions): Flow[Message] =
     ClaudeCode.validateQueryConfiguration(options)
