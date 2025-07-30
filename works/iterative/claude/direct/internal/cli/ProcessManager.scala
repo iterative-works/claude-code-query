@@ -46,6 +46,15 @@ object ProcessManager:
     // Log the command being executed for debugging
     logger.debug(s"Executing command: $executablePath ${args.mkString(" ")}")
 
+    // Convert timeout duration to FiniteDuration for Ox
+    val finiteDuration = timeoutDuration match {
+      case fd: scala.concurrent.duration.FiniteDuration => fd
+      case _                                            =>
+        scala.concurrent.duration
+          .FiniteDuration(timeoutDuration.toMillis, "milliseconds")
+    }
+
+    // Start the process outside the timeout block so we can access it in the catch block
     val process = processBuilder.start()
 
     // Close stdin immediately since prompt is passed as command-line argument
@@ -55,57 +64,69 @@ object ProcessManager:
       case _: Exception => // Ignore if already closed
     }
 
-    // Use the simple working pattern with timeout wrapper
-    val finiteDuration = timeoutDuration match {
-      case fd: scala.concurrent.duration.FiniteDuration => fd
-      case _                                            =>
-        scala.concurrent.duration
-          .FiniteDuration(timeoutDuration.toMillis, "milliseconds")
+    // Use direct process timeout without relying on Ox timeout for stream operations
+    val finished = process.waitFor(
+      finiteDuration.toMillis,
+      java.util.concurrent.TimeUnit.MILLISECONDS
+    )
+
+    if (!finished) {
+      // Process timed out - destroy it and throw timeout error
+      process.destroyForcibly()
+      logger.error(s"Process timed out after ${finiteDuration}")
+      throw ProcessTimeoutError(finiteDuration, command)
     }
 
-    try {
-      timeout(finiteDuration) {
-        // Simple pattern that we know works
-        val (stdout, stderr) = par(
-          {
-            val reader = new java.io.BufferedReader(
-              new java.io.InputStreamReader(process.getInputStream)
-            )
-            val lines = scala.collection.mutable.ListBuffer[String]()
-            var line: String = null
-            while ({ line = reader.readLine(); line != null }) {
-              lines += line
-            }
-            reader.close()
-            lines.toList
-          }, {
-            val reader = new java.io.BufferedReader(
-              new java.io.InputStreamReader(process.getErrorStream)
-            )
-            val lines = scala.collection.mutable.ListBuffer[String]()
-            var line: String = null
-            while ({ line = reader.readLine(); line != null }) {
-              lines += line
-            }
-            reader.close()
-            lines.toList
-          }
+    // Process completed within timeout - read streams concurrently
+    val (stdout, stderr) = par(
+      {
+        val reader = new java.io.BufferedReader(
+          new java.io.InputStreamReader(process.getInputStream)
         )
-
-        val exitCode = process.waitFor() // Should return immediately
-
-        // Parse the stdout lines into messages
-        stdout.zipWithIndex.flatMap { case (line, index) =>
-          JsonParser.parseJsonLineWithContext(line, index + 1) match {
-            case Right(Some(message)) => Some(message)
-            case _                    => None
-          }
+        val lines = scala.collection.mutable.ListBuffer[String]()
+        var line: String = null
+        while ({ line = reader.readLine(); line != null }) {
+          lines += line
         }
+        reader.close()
+        lines.toList
+      }, {
+        val reader = new java.io.BufferedReader(
+          new java.io.InputStreamReader(process.getErrorStream)
+        )
+        val lines = scala.collection.mutable.ListBuffer[String]()
+        var line: String = null
+        while ({ line = reader.readLine(); line != null }) {
+          lines += line
+        }
+        reader.close()
+        lines.toList
       }
-    } catch {
-      case _: java.util.concurrent.TimeoutException =>
-        process.destroyForcibly()
-        throw ProcessTimeoutError(finiteDuration, command)
+    )
+
+    val exitCode = process.exitValue()
+
+    // Log process completion (required by tests)
+    logger.info(s"Process completed with exit code: $exitCode")
+
+    // Log stderr content if present (required by tests)
+    if stderr.nonEmpty then
+      stderr.foreach(line => logger.debug(s"stderr: $line"))
+
+    // Check for process execution errors (essential for tests)
+    if exitCode != 0 then
+      val stderrContent = stderr.mkString("\n")
+      throw ProcessExecutionError(exitCode, stderrContent, command)
+
+    // Parse the stdout lines into messages with logging
+    stdout.zipWithIndex.flatMap { case (line, index) =>
+      JsonParser.parseJsonLineWithContextWithLogging(line, index + 1) match {
+        case Right(Some(message)) => Some(message)
+        case Right(None)          => None // Empty line, skip
+        case Left(error)          =>
+          logger.error(s"JSON parsing failed: ${error.message}")
+          None
+      }
     }
 
   private def executeProcessWithoutTimeout(
@@ -157,11 +178,26 @@ object ProcessManager:
 
     val exitCode = process.waitFor() // Should return immediately
 
-    // Parse the stdout lines into messages
+    // Log process completion (required by tests)
+    logger.info(s"Process completed with exit code: $exitCode")
+
+    // Log stderr content if present (required by tests)
+    if stderr.nonEmpty then
+      stderr.foreach(line => logger.debug(s"stderr: $line"))
+
+    // Check for process execution errors (essential for tests)
+    if exitCode != 0 then
+      val stderrContent = stderr.mkString("\n")
+      throw ProcessExecutionError(exitCode, stderrContent, command)
+
+    // Parse the stdout lines into messages with logging
     stdout.zipWithIndex.flatMap { case (line, index) =>
-      JsonParser.parseJsonLineWithContext(line, index + 1) match {
+      JsonParser.parseJsonLineWithContextWithLogging(line, index + 1) match {
         case Right(Some(message)) => Some(message)
-        case _                    => None
+        case Right(None)          => None // Empty line, skip
+        case Left(error)          =>
+          logger.error(s"JSON parsing failed: ${error.message}")
+          None
       }
     }
 
@@ -255,6 +291,48 @@ object ProcessManager:
       case Left(error)          =>
         logger.error(s"JSON parsing failed: ${error.message}")
         None
+
+  /** Reads from an InputStream with proper interruption handling for Ox
+    * timeout. This method checks for thread interruption during blocking
+    * readLine() operations and handles InterruptedException properly for
+    * structured concurrency.
+    */
+  private def readStreamWithInterruption(
+      stream: java.io.InputStream
+  ): List[String] =
+    val reader = new java.io.BufferedReader(
+      new java.io.InputStreamReader(stream)
+    )
+    val lines = scala.collection.mutable.ListBuffer[String]()
+
+    try {
+      var line: String = null
+      while ({
+        // Check for interruption before each blocking read
+        if (Thread.currentThread().isInterrupted()) {
+          throw new InterruptedException("Stream reading interrupted")
+        }
+        line = reader.readLine()
+        line != null && !Thread.currentThread().isInterrupted()
+      }) {
+        lines += line
+      }
+      lines.toList
+    } catch {
+      case _: InterruptedException =>
+        // Restore interrupt status and return partial results
+        Thread.currentThread().interrupt()
+        lines.toList
+      case _: java.io.IOException =>
+        // Stream was closed (e.g., process terminated), return partial results
+        lines.toList
+    } finally {
+      try {
+        reader.close()
+      } catch {
+        case _: Exception => // Ignore close errors
+      }
+    }
 
   private def captureStderrConcurrently(
       process: Process

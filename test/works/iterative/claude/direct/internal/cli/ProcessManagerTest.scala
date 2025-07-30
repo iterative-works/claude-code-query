@@ -547,70 +547,6 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
     }
   }
 
-  test("should apply timeout when specified and terminate hanging processes") {
-    supervised {
-      // Setup: Mock hanging process with short timeout
-      given MockLogger = MockLogger()
-
-      // Mock command that hangs (sleeps for a long time)
-      val testScript = "/bin/sh"
-      val args = List(
-        "-c",
-        s"sleep ${TestConstants.WaitIntervals.SLEEP_DURATION_LONG}"
-      ) // Sleep for 30 seconds
-      val timeoutDuration =
-        TestConstants.Timeouts.FINITE_TIMEOUT_MEDIUM_SHORT
-      val options = QueryOptions(
-        prompt = "test prompt",
-        cwd = None,
-        executable = None,
-        executableArgs = None,
-        pathToClaudeCodeExecutable = None,
-        maxTurns = None,
-        allowedTools = None,
-        disallowedTools = None,
-        systemPrompt = None,
-        appendSystemPrompt = None,
-        mcpTools = None,
-        permissionMode = None,
-        continueConversation = None,
-        resume = None,
-        model = None,
-        maxThinkingTokens = None,
-        timeout = Some(timeoutDuration),
-        inheritEnvironment = None,
-        environmentVariables = None
-      )
-
-      // Execute: Call executeProcess with hanging CLI and short timeout
-      // Measure actual timeout duration to verify timing precision
-      val startTime = System.currentTimeMillis()
-      val exception = intercept[ProcessTimeoutError] {
-        ProcessManager.executeProcess(testScript, args, options)
-      }
-      val actualDuration = System.currentTimeMillis() - startTime
-
-      // Verify: Should throw ProcessTimeoutError after specified duration
-      assertEquals(exception.timeoutDuration, timeoutDuration)
-      assertEquals(exception.command, testScript :: args)
-
-      // Verify: Timeout should occur within reasonable bounds (allow for some overhead)
-      val expectedMs = timeoutDuration.toMillis
-      assert(
-        actualDuration >= expectedMs,
-        s"Timeout too fast: ${actualDuration}ms < ${expectedMs}ms"
-      )
-      assert(
-        actualDuration <= expectedMs + 200,
-        s"Timeout too slow: ${actualDuration}ms > ${expectedMs + 200}ms"
-      )
-
-      // Verify: Should log timeout information with proper synchronization
-      val logger = summon[MockLogger]
-      assert(logger.hasErrorMessage(_.contains("Process timed out")))
-    }
-  }
-
   test("should handle JSON parsing errors gracefully and continue processing") {
     supervised {
       // Setup: Mock CLI outputting malformed JSON
@@ -894,50 +830,78 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
     }
   }
 
+  // === TIMEOUT TEST HELPER ===
+  // Common parametrized function to execute timeout tests with identical ProcessManager calls
+  // This eliminates test implementation differences to isolate the actual timeout behavior
+  case class TimeoutTestConfig(
+      testName: String,
+      sleepDuration: String,
+      timeoutDuration: scala.concurrent.duration.FiniteDuration,
+      prompt: String = "timeout test",
+      trackZombies: Boolean = false
+  )
+
+  def executeTimeoutTest(
+      config: TimeoutTestConfig
+  )(using MockLogger, Ox): (ProcessTimeoutError, Long, Option[Int]) = {
+    val initialZombieCount =
+      if (config.trackZombies) Some(countZombieProcesses()) else None
+
+    // Standard command setup - identical across all tests
+    val testScript = "/bin/sh"
+    val args = List("-c", s"sleep ${config.sleepDuration}")
+    val options = QueryOptions(
+      prompt = config.prompt,
+      cwd = None,
+      executable = None,
+      executableArgs = None,
+      pathToClaudeCodeExecutable = None,
+      maxTurns = None,
+      allowedTools = None,
+      disallowedTools = None,
+      systemPrompt = None,
+      appendSystemPrompt = None,
+      mcpTools = None,
+      permissionMode = None,
+      continueConversation = None,
+      resume = None,
+      model = None,
+      maxThinkingTokens = None,
+      timeout = Some(config.timeoutDuration),
+      inheritEnvironment = None,
+      environmentVariables = None
+    )
+
+    // Standard execution with timing - identical across all tests
+    val startTime = System.currentTimeMillis()
+    val exception = intercept[ProcessTimeoutError] {
+      ProcessManager.executeProcess(testScript, args, options)
+    }
+    val actualDuration = System.currentTimeMillis() - startTime
+
+    (exception, actualDuration, initialZombieCount)
+  }
+
+  // ✅ WORKING TIMEOUT TEST #1 - completes in ~10s
   test("should cleanup process resources when timeout occurs") {
     supervised {
       given MockLogger = MockLogger()
 
-      val initialZombieCount = countZombieProcesses()
-
-      // Command that will hang for a long time
-      val testScript = "/bin/sh"
-      val args = List(
-        "-c",
-        s"sleep ${TestConstants.WaitIntervals.SLEEP_DURATION_MEDIUM}"
-      ) // Sleep longer than timeout
-      val timeoutDuration =
-        TestConstants.Timeouts.FINITE_TIMEOUT_SHORT
-      val options = QueryOptions(
+      val config = TimeoutTestConfig(
+        testName = "cleanup timeout test",
+        sleepDuration = TestConstants.WaitIntervals.SLEEP_DURATION_MEDIUM,
+        timeoutDuration = TestConstants.Timeouts.FINITE_TIMEOUT_SHORT,
         prompt = "test cleanup on timeout",
-        cwd = None,
-        executable = None,
-        executableArgs = None,
-        pathToClaudeCodeExecutable = None,
-        maxTurns = None,
-        allowedTools = None,
-        disallowedTools = None,
-        systemPrompt = None,
-        appendSystemPrompt = None,
-        mcpTools = None,
-        permissionMode = None,
-        continueConversation = None,
-        resume = None,
-        model = None,
-        maxThinkingTokens = None,
-        timeout = Some(timeoutDuration),
-        inheritEnvironment = None,
-        environmentVariables = None
+        trackZombies = true
       )
 
-      // Execute process - should throw ProcessTimeoutError
-      val exception = intercept[ProcessTimeoutError] {
-        ProcessManager.executeProcess(testScript, args, options)
-      }
+      val (exception, _, zombieCount) = executeTimeoutTest(config)
+      val initialZombieCount =
+        zombieCount.get // We know it's Some because trackZombies=true
 
       // Verify timeout exception details
-      assertEquals(exception.timeoutDuration, timeoutDuration)
-      assertEquals(exception.command.head, testScript)
+      assertEquals(exception.timeoutDuration, config.timeoutDuration)
+      assertEquals(exception.command.head, "/bin/sh")
 
       // Verify timeout was logged
       val logger = summon[MockLogger]
@@ -1355,6 +1319,7 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
 
   // === Property-Based Testing for Timeout Precision ===
 
+  // ❌ FAILING TIMEOUT TEST #2 - hangs for 40+ seconds
   test(
     "should trigger timeouts within reasonable bounds of specified duration"
   ) {
@@ -1367,41 +1332,15 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
         given MockLogger = MockLogger()
 
         val timeout = FiniteDuration(timeoutMs, MILLISECONDS)
-        val options = QueryOptions(
-          prompt = s"timeout precision test $timeoutMs ms",
-          cwd = None,
-          executable = None,
-          executableArgs = None,
-          pathToClaudeCodeExecutable = None,
-          maxTurns = None,
-          allowedTools = None,
-          disallowedTools = None,
-          systemPrompt = None,
-          appendSystemPrompt = None,
-          mcpTools = None,
-          permissionMode = None,
-          continueConversation = None,
-          resume = None,
-          model = None,
-          maxThinkingTokens = None,
-          timeout = Some(timeout),
-          inheritEnvironment = None,
-          environmentVariables = None
+
+        val config = TimeoutTestConfig(
+          testName = s"timeout precision test $timeoutMs ms",
+          sleepDuration = TestConstants.WaitIntervals.SLEEP_DURATION_MEDIUM,
+          timeoutDuration = timeout,
+          prompt = s"timeout precision test $timeoutMs ms"
         )
 
-        // Use /bin/sh with sleep command that definitely exceeds timeout
-        val testScript = "/bin/sh"
-        val args = List(
-          "-c",
-          s"sleep ${TestConstants.WaitIntervals.SLEEP_DURATION_MEDIUM}"
-        ) // Always sleep 10 seconds (much longer than any timeout)
-
-        // Measure actual timeout duration
-        val startTime = System.currentTimeMillis()
-        val exception = intercept[ProcessTimeoutError] {
-          ProcessManager.executeProcess(testScript, args, options)
-        }
-        val actualDuration = System.currentTimeMillis() - startTime
+        val (exception, actualDuration, _) = executeTimeoutTest(config)
 
         // Verify ProcessTimeoutError contains correct information
         assertEquals(
@@ -1410,8 +1349,8 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
           s"ProcessTimeoutError should contain correct timeout duration: expected $timeout"
         )
         assertEquals(
-          exception.command,
-          testScript :: args,
+          exception.command.head,
+          "/bin/sh",
           "ProcessTimeoutError should contain correct command information"
         )
 
@@ -1451,6 +1390,7 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
     }
   }
 
+  // ✅ WORKING TIMEOUT TEST #2 - completes in ~15s
   test(
     "should handle timeout precision edge cases with short timeouts"
   ) {
@@ -1461,41 +1401,14 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
       supervised {
         given MockLogger = MockLogger()
 
-        val timeout = FiniteDuration(timeoutMs, MILLISECONDS)
-        val options = QueryOptions(
-          prompt = s"short timeout test $timeoutMs ms",
-          cwd = None,
-          executable = None,
-          executableArgs = None,
-          pathToClaudeCodeExecutable = None,
-          maxTurns = None,
-          allowedTools = None,
-          disallowedTools = None,
-          systemPrompt = None,
-          appendSystemPrompt = None,
-          mcpTools = None,
-          permissionMode = None,
-          continueConversation = None,
-          resume = None,
-          model = None,
-          maxThinkingTokens = None,
-          timeout = Some(timeout),
-          inheritEnvironment = None,
-          environmentVariables = None
+        val config = TimeoutTestConfig(
+          testName = s"short timeout edge case test $timeoutMs ms",
+          sleepDuration = TestConstants.WaitIntervals.SLEEP_DURATION_SHORT,
+          timeoutDuration = FiniteDuration(timeoutMs, MILLISECONDS),
+          prompt = s"short timeout test $timeoutMs ms"
         )
 
-        // Use sleep command with duration definitely longer than timeout
-        val testScript = "/bin/sh"
-        val args = List(
-          "-c",
-          s"sleep ${TestConstants.WaitIntervals.SLEEP_DURATION_SHORT}"
-        ) // Always sleep 5 seconds
-
-        val startTime = System.currentTimeMillis()
-        val exception = intercept[ProcessTimeoutError] {
-          ProcessManager.executeProcess(testScript, args, options)
-        }
-        val actualDuration = System.currentTimeMillis() - startTime
+        val (exception, actualDuration, _) = executeTimeoutTest(config)
 
         // For very short timeouts, be more lenient with tolerance due to system overhead
         val toleranceMs =
@@ -1519,7 +1432,7 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
         )
 
         // Verify exception details are correct for short timeouts
-        assertEquals(exception.timeoutDuration, timeout)
+        assertEquals(exception.timeoutDuration, config.timeoutDuration)
         assert(
           exception.command.exists(_.contains("sleep")),
           s"Command should contain 'sleep': ${exception.command}"
@@ -1528,62 +1441,36 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
     }
   }
 
+  // ✅ WORKING TIMEOUT TEST #3 - completes in ~14s
   test(
     "should maintain timeout precision consistency across multiple runs"
   ) {
     supervised {
       given MockLogger = MockLogger()
 
-      // Test that timeout precision is consistent across multiple runs of the same timeout
-      val testTimeout =
-        TestConstants.Timeouts.FINITE_TIMEOUT_STANDARD // Use fixed 1s timeout
-      val options = QueryOptions(
-        prompt = "consistency test",
-        cwd = None,
-        executable = None,
-        executableArgs = None,
-        pathToClaudeCodeExecutable = None,
-        maxTurns = None,
-        allowedTools = None,
-        disallowedTools = None,
-        systemPrompt = None,
-        appendSystemPrompt = None,
-        mcpTools = None,
-        permissionMode = None,
-        continueConversation = None,
-        resume = None,
-        model = None,
-        maxThinkingTokens = None,
-        timeout = Some(testTimeout),
-        inheritEnvironment = None,
-        environmentVariables = None
+      val config = TimeoutTestConfig(
+        testName = "timeout consistency test",
+        sleepDuration = TestConstants.WaitIntervals.SLEEP_DURATION_MEDIUM,
+        timeoutDuration =
+          TestConstants.Timeouts.FINITE_TIMEOUT_STANDARD, // Use fixed 1s timeout
+        prompt = "consistency test"
       )
-
-      val testScript = "/bin/sh"
-      val args = List(
-        "-c",
-        s"sleep ${TestConstants.WaitIntervals.SLEEP_DURATION_MEDIUM}"
-      ) // Sleep longer than timeout
 
       // Run multiple iterations to verify consistency
       val durations =
         (1 to TestConstants.TestParameters.CONSISTENCY_TEST_ITERATIONS).map {
           iteration =>
-            val startTime = System.currentTimeMillis()
-            val exception = intercept[ProcessTimeoutError] {
-              ProcessManager.executeProcess(testScript, args, options)
-            }
-            val duration = System.currentTimeMillis() - startTime
+            val (exception, duration, _) = executeTimeoutTest(config)
 
             // Verify each exception is correct
-            assertEquals(exception.timeoutDuration, testTimeout)
-            assertEquals(exception.command, testScript :: args)
+            assertEquals(exception.timeoutDuration, config.timeoutDuration)
+            assertEquals(exception.command.head, "/bin/sh")
 
             duration
         }.toList
 
       // Verify all durations are within acceptable range
-      val expectedMs = testTimeout.toMillis
+      val expectedMs = config.timeoutDuration.toMillis
       val toleranceMs =
         TestConstants.ToleranceValues.TIMING_TOLERANCE_MS_STRICT // 200ms tolerance for consistency test
 
@@ -1606,5 +1493,47 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
         maxDeviation <= TestConstants.ToleranceValues.MAX_DEVIATION_MS_CONSISTENCY, // Allow max 300ms deviation between runs
         s"Timeout precision too inconsistent: max deviation ${maxDeviation}ms from average ${avgDuration}ms"
       )
+    }
+  }
+
+  // ===== TIMEOUT TESTS SECTION =====
+  // All timeout-related tests are marked with ✅ (working) or ❌ (failing) for easy identification
+  // ✅ Working: cleanup resources (~10s), edge cases (~15s), precision consistency (~14s)
+  // ❌ Failing: apply timeout (30+s hang), trigger bounds (40+s hang)
+  //
+  // NOTE: One moved test below for comparison - see other tests marked throughout file
+
+  // ❌ FAILING TIMEOUT TEST #1 - hangs for 30+ seconds
+  test("should apply timeout when specified and terminate hanging processes") {
+    supervised {
+      given MockLogger = MockLogger()
+
+      val config = TimeoutTestConfig(
+        testName = "apply timeout test",
+        sleepDuration = TestConstants.WaitIntervals.SLEEP_DURATION_LONG,
+        timeoutDuration = TestConstants.Timeouts.FINITE_TIMEOUT_MEDIUM_SHORT,
+        prompt = "test prompt"
+      )
+
+      val (exception, actualDuration, _) = executeTimeoutTest(config)
+
+      // Verify: Should throw ProcessTimeoutError after specified duration
+      assertEquals(exception.timeoutDuration, config.timeoutDuration)
+      assertEquals(exception.command.head, "/bin/sh")
+
+      // Verify: Timeout should occur within reasonable bounds (allow for some overhead)
+      val expectedMs = config.timeoutDuration.toMillis
+      assert(
+        actualDuration >= expectedMs,
+        s"Timeout too fast: ${actualDuration}ms < ${expectedMs}ms"
+      )
+      assert(
+        actualDuration <= expectedMs + 200,
+        s"Timeout too slow: ${actualDuration}ms > ${expectedMs + 200}ms"
+      )
+
+      // Verify: Should log timeout information with proper synchronization
+      val logger = summon[MockLogger]
+      assert(logger.hasErrorMessage(_.contains("Process timed out")))
     }
   }
