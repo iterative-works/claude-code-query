@@ -14,8 +14,8 @@ import scala.jdk.CollectionConverters.*
 object ProcessManager:
 
   /** Executes a process and returns a real-time streaming Flow of messages.
-    * Messages are emitted as soon as they are produced by the CLI process,
-    * not after the process completes.
+    * Messages are emitted as soon as they are produced by the CLI process, not
+    * after the process completes.
     */
   def executeProcessStreaming(
       executablePath: String,
@@ -38,56 +38,110 @@ object ProcessManager:
         case _: Exception => // Ignore if already closed
       }
 
-      // Use structured concurrency to manage process streams and lifecycle
-      par(
-        // Stream stdout lines and emit messages in real-time
-        {
-          val reader = new BufferedReader(
-            new InputStreamReader(process.getInputStream)
-          )
-          try {
-            var lineNumber = 0
-            var line: String = null
-            while ({ line = reader.readLine(); line != null }) {
-              lineNumber += 1
-              parseJsonLineToMessage(line, lineNumber) match {
-                case Some(message) => 
-                  logger.debug(s"Emitting message: ${message.getClass.getSimpleName}")
-                  emit(message)
-                case None => // Skip empty or invalid lines
-              }
+      // Fork process cleanup to run in background but capture error state
+      val processErrorFork = fork {
+        try {
+          val exitCode = process.waitFor()
+          logger.info(s"Streaming process completed with exit code: $exitCode")
+
+          if (exitCode != 0) {
+            // Exit code 141 is SIGPIPE, which happens when the process tries to write
+            // to stdout after we've closed it (e.g., due to early termination with .take())
+            // This is expected behavior for streaming and should not be treated as an error
+            if (exitCode == 141) {
+              logger.debug(
+                s"Process terminated with SIGPIPE (exit code 141) - expected during early stream termination"
+              )
+              None
+            } else {
+              logger.error(s"Process failed with exit code: $exitCode")
+              Some(
+                ProcessExecutionError(
+                  exitCode,
+                  "Process failed during streaming",
+                  command
+                )
+              )
             }
-          } finally {
-            reader.close()
+          } else {
+            None
           }
-        },
-        // Capture stderr concurrently
-        {
-          val stderrReader = new BufferedReader(
-            new InputStreamReader(process.getErrorStream)
-          )
-          val stderrContent = scala.collection.mutable.ListBuffer[String]()
-          try {
-            var stderrLine: String = null
-            while ({ stderrLine = stderrReader.readLine(); stderrLine != null }) {
-              stderrContent += stderrLine
-              logger.debug(s"stderr: $stderrLine")
-            }
-          } finally {
-            stderrReader.close()
-          }
-          stderrContent.toList
+        } catch {
+          case _: InterruptedException =>
+            // Process was interrupted (likely due to early Flow termination)
+            logger.debug("Process cleanup interrupted - terminating process")
+            process.destroyForcibly()
+            None
         }
+      }
+
+      // Fork stderr capture to run in background
+      fork {
+        val stderrReader = new BufferedReader(
+          new InputStreamReader(process.getErrorStream)
+        )
+        try {
+          var stderrLine: String = null
+          while ({
+            stderrLine = stderrReader.readLine(); stderrLine != null
+          }) {
+            logger.debug(s"stderr: $stderrLine")
+          }
+        } catch {
+          case _: Exception => // Stream closed or process terminated
+        } finally {
+          try {
+            stderrReader.close()
+          } catch {
+            case _: Exception => // Ignore close errors
+          }
+        }
+      }
+
+      // Main streaming task - read stdout and emit messages
+      val reader = new BufferedReader(
+        new InputStreamReader(process.getInputStream)
       )
+      var stdoutEndedNaturally = false
+      try {
+        var lineNumber = 0
+        var line: String = null
+        while ({ line = reader.readLine(); line != null }) {
+          lineNumber += 1
+          parseJsonLineToMessage(line, lineNumber) match {
+            case Some(message) =>
+              logger.debug(
+                s"Emitting message: ${message.getClass.getSimpleName}"
+              )
+              emit(message)
+            case None => // Skip empty or invalid lines
+          }
+        }
+        stdoutEndedNaturally = true
+        logger.debug("Stdout stream ended naturally")
+      } catch {
+        case _: Exception =>
+          // Stream was closed (likely due to process termination or Flow cancellation)
+          logger.debug("Stdout stream reading interrupted or closed")
+      } finally {
+        try {
+          reader.close()
+        } catch {
+          case _: Exception => // Ignore close errors
+        }
+      }
 
-      // Wait for process completion and handle errors
-      val exitCode = process.waitFor()
-      logger.info(s"Streaming process completed with exit code: $exitCode")
-
-      if (exitCode != 0) {
-        // Note: In real implementation, we'd need to collect stderr from the parallel task
-        // For now, we'll use a simplified error message
-        throw ProcessExecutionError(exitCode, "Process failed during streaming", command)
+      // Only check for process errors if stdout ended naturally (not due to early termination)
+      if (stdoutEndedNaturally) {
+        processErrorFork.join() match {
+          case Some(error) => throw error
+          case None        => // Process completed successfully
+        }
+      } else {
+        // Early termination - don't wait for process to complete
+        logger.debug(
+          "Flow terminated early - not waiting for process completion"
+        )
       }
     }
 

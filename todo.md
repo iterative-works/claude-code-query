@@ -17,11 +17,11 @@
 - [x] **Commit Implementation** - "Implement real streaming for direct ClaudeCode query method"
 
 ### Test 2: Early Message Access Test  
-- [ ] **Write Failing Test** - Test messages arrive before process completion
-- [ ] **Commit Failing Test** - "Add failing test for early message access during streaming"
-- [ ] **Implement Feature** - Ensure messages emit as soon as available
-- [ ] **Make Test Pass** - Verify streaming doesn't wait for process completion
-- [ ] **Commit Implementation** - "Implement early message access in streaming"
+- [x] **Write Failing Test** - Test messages arrive before process completion
+- [x] **Commit Failing Test** - "Add failing test for early message access during streaming"
+- [x] **Implement Feature** - Ensure messages emit as soon as available
+- [x] **Make Test Pass** - Verify streaming doesn't wait for process completion
+- [x] **Commit Implementation** - "Implement early message access in streaming"
 
 ### Test 3: Process Lifecycle Management
 - [ ] **Write Failing Test** - Test proper process startup and cleanup
