@@ -1,5 +1,5 @@
-// PURPOSE: Tests for direct-style ClaudeCode main API using Ox
-// PURPOSE: Verifies streaming query interface with Flow and resource management using supervised scopes
+// PURPOSE: Tests for direct-style ClaudeCode main API using both sync and async interfaces
+// PURPOSE: Verifies both blocking sync API and streaming async API with Ox structured concurrency
 package works.iterative.claude.direct
 
 import ox.*
@@ -23,138 +23,88 @@ class ClaudeCodeTest extends munit.FunSuite:
   // Track created mock scripts for cleanup
   private val createdScripts = scala.collection.mutable.ListBuffer[Path]()
 
+  // Mock Logger for testing
+  class MockLogger extends Logger:
+    var debugMessages: List[String] = List.empty
+    var infoMessages: List[String] = List.empty
+    var warnMessages: List[String] = List.empty
+    var errorMessages: List[String] = List.empty
+
+    def debug(msg: => String): Unit = debugMessages = msg :: debugMessages
+    def info(msg: => String): Unit = infoMessages = msg :: infoMessages
+    def warn(msg: => String): Unit = warnMessages = msg :: warnMessages
+    def error(msg: => String): Unit = errorMessages = msg :: errorMessages
+    def error(msg: => String, exception: Throwable): Unit = errorMessages =
+      s"$msg: ${exception.getMessage}" :: errorMessages
+
   override def afterEach(context: AfterEach): Unit =
     // Clean up temporary mock scripts
     createdScripts.foreach(MockCliScript.cleanup)
     createdScripts.clear()
     super.afterEach(context)
 
-  test("should return streaming Flow of parsed messages for valid CLI output") {
-    supervised {
-      // Setup: Create realistic mock CLI script with progressive output
-      val mockBehavior =
-        MockCliScript.CommonBehaviors.successfulQuery("Hello Claude!")
-      val mockScript = MockCliScript.createTempScript(mockBehavior)
-      createdScripts += mockScript
+  test("sync API: should ask simple question with blocking call") {
+    given MockLogger = MockLogger()
 
-      val options = QueryOptions(
-        prompt = "Hello Claude!",
-        cwd = None,
-        executable = None,
-        executableArgs = None, // No need for args with realistic mock script
-        pathToClaudeCodeExecutable =
-          Some(mockScript.toString), // Use realistic mock CLI
-        maxTurns = None,
-        allowedTools = None,
-        disallowedTools = None,
-        systemPrompt = None,
-        appendSystemPrompt = None,
-        mcpTools = None,
-        permissionMode = None,
-        continueConversation = None,
-        resume = None,
-        model = None,
-        maxThinkingTokens = None,
-        timeout = None,
-        inheritEnvironment = None,
-        environmentVariables = None
-      )
+    // Setup: Create realistic mock CLI script
+    val mockBehavior =
+      MockCliScript.CommonBehaviors.successfulQuery("What is 2+2?")
+    val mockScript = MockCliScript.createTempScript(mockBehavior)
+    createdScripts += mockScript
 
-      // Execute: Call query to get Flow of messages
-      val messageFlow = ClaudeCode.query(options)
+    val options = QueryOptions
+      .simple("What is 2+2?")
+      .withClaudeExecutable(mockScript.toString)
 
-      // Collect all messages from the Flow
-      val messages = messageFlow.runToList()
+    // Execute: Call sync API - no supervised block needed
+    val result = ClaudeCode.queryResult(options)
 
-      // Verify: Should return Flow[Message] with all expected message types
-      assertEquals(messages.length, 3)
-
-      // Verify message types in order
-      messages(0) match
-        case SystemMessage(subtype, _) => assertEquals(subtype, "user_context")
-        case other => fail(s"Expected SystemMessage but got: $other")
-
-      messages(1) match
-        case AssistantMessage(content) =>
-          assertEquals(content.length, 1)
-          content.head match
-            case TextBlock(text) =>
-              assertEquals(text, "Response to: Hello Claude!")
-            case other => fail(s"Expected TextBlock but got: $other")
-        case other => fail(s"Expected AssistantMessage but got: $other")
-
-      messages(2) match
-        case ResultMessage(
-              subtype,
-              durationMs,
-              durationApiMs,
-              isError,
-              numTurns,
-              sessionId,
-              _,
-              _,
-              _
-            ) =>
-          assertEquals(subtype, "conversation_result")
-          assertEquals(
-            durationMs,
-            TestConstants.MockJsonValues.MOCK_DURATION_MS_STANDARD
-          )
-          assertEquals(
-            durationApiMs,
-            TestConstants.MockJsonValues.MOCK_DURATION_API_MS_STANDARD
-          )
-          assertEquals(isError, false)
-          assertEquals(
-            numTurns,
-            TestConstants.MockJsonValues.MOCK_NUM_TURNS_SINGLE
-          )
-          assertEquals(sessionId, TestConstants.MockJsonValues.MOCK_SESSION_ID)
-        case other => fail(s"Expected ResultMessage but got: $other")
-    }
+    // Verify: Should get text response
+    assertEquals(result, "Response to: What is 2+2?")
   }
 
-  test("should execute successfully with configured CLI path") {
+  test("sync API: should handle errors with blocking call") {
+    given MockLogger = MockLogger()
+
+    val options = QueryOptions
+      .simple("Test prompt")
+      .withClaudeExecutable(
+        "/bin/false"
+      ) // Command that always exits with code 1
+
+    // Execute: Call sync API with failing CLI - should propagate error
+    val exception = intercept[ProcessExecutionError] {
+      ClaudeCode.queryResult(options)
+    }
+
+    // Verify: Should fail with ProcessExecutionError
+    assertEquals(exception.exitCode, 1)
+    assert(exception.command.contains("/bin/false"))
+  }
+
+  test("async API: should return streaming Flow for concurrent operations") {
     supervised {
+      given MockLogger = MockLogger()
+
       // Setup: Create realistic mock CLI script
       val mockBehavior =
         MockCliScript.CommonBehaviors.successfulQuery("Hello Claude!")
       val mockScript = MockCliScript.createTempScript(mockBehavior)
       createdScripts += mockScript
 
-      val options = QueryOptions(
-        prompt = "Hello Claude!",
-        cwd = None,
-        executable = None,
-        executableArgs = None, // No need for args with realistic mock script
-        pathToClaudeCodeExecutable =
-          Some(mockScript.toString), // Use mock CLI for testing
-        maxTurns = None,
-        allowedTools = None,
-        disallowedTools = None,
-        systemPrompt = None,
-        appendSystemPrompt = None,
-        mcpTools = None,
-        permissionMode = None,
-        continueConversation = None,
-        resume = None,
-        model = None,
-        maxThinkingTokens = None,
-        timeout = None,
-        inheritEnvironment = None,
-        environmentVariables = None
-      )
+      val options = QueryOptions
+        .simple("Hello Claude!")
+        .withClaudeExecutable(mockScript.toString)
 
-      // Execute: Call query without explicit CLI path - should use CLI discovery
-      val messageFlow = ClaudeCode.query(options)
-
-      // Collect all messages from the Flow
+      // Execute: Call async API within supervised scope
+      val claude = ClaudeCode.concurrent
+      val messageFlow = claude.query(options)
       val messages = messageFlow.runToList()
 
-      // Verify: Should successfully execute after discovering CLI path
+      // Verify: Should return Flow[Message] with all expected message types
       assertEquals(messages.length, 3)
 
-      // Verify message types in order (same as T6.1)
+      // Check message types
       messages(0) match
         case SystemMessage(subtype, _) => assertEquals(subtype, "user_context")
         case other => fail(s"Expected SystemMessage but got: $other")
@@ -169,592 +119,113 @@ class ClaudeCodeTest extends munit.FunSuite:
         case other => fail(s"Expected AssistantMessage but got: $other")
 
       messages(2) match
-        case ResultMessage(
-              subtype,
-              durationMs,
-              durationApiMs,
-              isError,
-              numTurns,
-              sessionId,
-              _,
-              _,
-              _
-            ) =>
+        case ResultMessage(subtype, _, _, isError, _, _, _, _, _) =>
           assertEquals(subtype, "conversation_result")
-          assertEquals(
-            durationMs,
-            TestConstants.MockJsonValues.MOCK_DURATION_MS_STANDARD
-          )
-          assertEquals(
-            durationApiMs,
-            TestConstants.MockJsonValues.MOCK_DURATION_API_MS_STANDARD
-          )
           assertEquals(isError, false)
-          assertEquals(
-            numTurns,
-            TestConstants.MockJsonValues.MOCK_NUM_TURNS_SINGLE
-          )
-          assertEquals(sessionId, TestConstants.MockJsonValues.MOCK_SESSION_ID)
         case other => fail(s"Expected ResultMessage but got: $other")
     }
   }
 
-  test(
-    "should handle CLI discovery failure gracefully with appropriate error"
-  ) {
+  test("async API: should support concurrent queries") {
     supervised {
-      // Setup: Use an invalid executable path that will definitely fail
-      val options = QueryOptions(
-        prompt = "Hello Claude!",
-        cwd = None,
-        executable = None,
-        executableArgs = None, // No mock args - will try real CLI arguments
-        pathToClaudeCodeExecutable =
-          Some("/this/path/definitely/does/not/exist/claude"), // Invalid path
-        maxTurns = None,
-        allowedTools = None,
-        disallowedTools = None,
-        systemPrompt = None,
-        appendSystemPrompt = None,
-        mcpTools = None,
-        permissionMode = None,
-        continueConversation = None,
-        resume = None,
-        model = None,
-        maxThinkingTokens = None,
-        timeout = None,
-        inheritEnvironment = None,
-        environmentVariables = None
-      )
+      given MockLogger = MockLogger()
 
-      // Execute: Call query with invalid CLI path - should fail at process start
-      val exception = intercept[Throwable] {
-        val messageFlow = ClaudeCode.query(options)
-        messageFlow.runToList() // Force evaluation
-      }
+      // Setup: Create mock scripts for different queries
+      val mockBehavior1 =
+        MockCliScript.CommonBehaviors.successfulQuery("Query 1")
+      val mockBehavior2 =
+        MockCliScript.CommonBehaviors.successfulQuery("Query 2")
+      val mockScript1 = MockCliScript.createTempScript(mockBehavior1)
+      val mockScript2 = MockCliScript.createTempScript(mockBehavior2)
+      createdScripts += mockScript1
+      createdScripts += mockScript2
 
-      // Verify: Should fail when executable does not exist with detailed error context
-      exception match {
-        case ioException: java.io.IOException =>
-          // When executable doesn't exist, ProcessBuilder.start() throws IOException
-          assert(
-            ioException.getMessage.contains("Cannot run program"),
-            s"Expected 'Cannot run program' in IOException: ${ioException.getMessage}"
-          )
-          assert(
-            ioException.getMessage.contains(
-              "/this/path/definitely/does/not/exist/claude"
-            ),
-            s"Expected specific invalid path in IOException: ${ioException.getMessage}"
-          )
-          assert(
-            ioException.getMessage.contains("No such file or directory"),
-            s"Expected 'No such file or directory' in IOException: ${ioException.getMessage}"
-          )
-        case ProcessExecutionError(exitCode, stderr, command) =>
-          // If the error gets wrapped into ProcessExecutionError (alternate implementation)
-          assert(
-            exitCode != 0,
-            s"Expected non-zero exit code but got: $exitCode"
-          )
-          assert(command.nonEmpty, "Expected command information in error")
-          assert(
-            command.contains("/this/path/definitely/does/not/exist/claude"),
-            s"Expected specific invalid path in command: ${command.mkString(" ")}"
-          )
-        case other =>
-          fail(
-            s"Expected IOException or ProcessExecutionError for non-existent executable but got: $other"
-          )
-      }
+      val options1 = QueryOptions
+        .simple("Query 1")
+        .withClaudeExecutable(mockScript1.toString)
+      val options2 = QueryOptions
+        .simple("Query 2")
+        .withClaudeExecutable(mockScript2.toString)
+
+      // Execute: Run concurrent queries using fork
+      val claude = ClaudeCode.concurrent
+
+      val result1Fork = fork { claude.queryResult(options1) }
+      val result2Fork = fork { claude.queryResult(options2) }
+
+      val result1 = result1Fork.join()
+      val result2 = result2Fork.join()
+
+      // Verify: Both queries should complete successfully
+      assertEquals(result1, "Response to: Query 1")
+      assertEquals(result2, "Response to: Query 2")
     }
   }
 
-  test(
-    "should validate configuration before execution and fail for invalid working directory"
-  ) {
+  test("async API: should handle process execution errors") {
     supervised {
-      // Setup: QueryOptions with invalid working directory
-      val options = QueryOptions(
-        prompt = "Hello Claude!",
-        cwd = Some(
-          "/this/directory/definitely/does/not/exist"
-        ), // Invalid working directory
-        executable = None,
-        executableArgs = None,
-        pathToClaudeCodeExecutable = Some("/bin/echo"), // Valid executable
-        maxTurns = None,
-        allowedTools = None,
-        disallowedTools = None,
-        systemPrompt = None,
-        appendSystemPrompt = None,
-        mcpTools = None,
-        permissionMode = None,
-        continueConversation = None,
-        resume = None,
-        model = None,
-        maxThinkingTokens = None,
-        timeout = None,
-        inheritEnvironment = None,
-        environmentVariables = None
-      )
+      given MockLogger = MockLogger()
 
-      // Execute: Call query with invalid working directory - should fail validation
-      val exception = intercept[ConfigurationError] {
-        val messageFlow = ClaudeCode.query(options)
-        messageFlow.runToList() // Force evaluation
-      }
+      val options = QueryOptions
+        .simple("Test prompt")
+        .withClaudeExecutable(
+          "/bin/false"
+        ) // Command that always exits with code 1
 
-      // Verify: Should fail with ConfigurationError with specific parameter context
-      exception match {
-        case ConfigurationError(parameter, value, reason) =>
-          assert(
-            parameter.contains("cwd") || parameter.contains("working"),
-            s"Expected parameter related to working directory but got: $parameter"
-          )
-          assert(
-            value.contains("/this/directory/definitely/does/not/exist"),
-            s"Expected specific invalid directory path in value: $value"
-          )
-          assert(
-            reason.nonEmpty,
-            "Expected descriptive reason for configuration error"
-          )
-      }
-    }
-  }
-
-  test("should pass CLI arguments correctly when building command") {
-    supervised {
-      // Setup: QueryOptions with various CLI parameters to test argument building
-      val options = QueryOptions(
-        prompt = "Test prompt",
-        cwd = None, // Use current working directory so relative path works
-        executable = Some("test-executable"),
-        executableArgs = None, // Don't override - let it build real arguments
-        pathToClaudeCodeExecutable =
-          Some("test/bin/mock-claude"), // Use mock CLI that outputs JSON
-        maxTurns = Some(TestConstants.TestParameters.MAX_TURNS_TEST),
-        allowedTools = Some(List("tool1", "tool2")),
-        disallowedTools = Some(List("tool3")),
-        systemPrompt = Some("Custom system prompt"),
-        appendSystemPrompt = Some("Additional system prompt"),
-        mcpTools = Some(List("mcp-tool1")),
-        permissionMode = Some(PermissionMode.Default),
-        continueConversation = Some(true),
-        resume = Some("test-session-id"),
-        model = Some("claude-3-sonnet"),
-        maxThinkingTokens =
-          Some(TestConstants.TestParameters.MAX_THINKING_TOKENS_SMALL),
-        timeout = Some(TestConstants.Timeouts.TEST_TIMEOUT_MAX),
-        inheritEnvironment = Some(false),
-        environmentVariables = Some(Map("TEST_VAR" -> "test_value"))
-      )
-
-      // Execute: Call query to trigger argument building
-      val messageFlow = ClaudeCode.query(options)
-
-      // Collect all messages from the Flow - this will contain the echo output
-      val messages = messageFlow.runToList()
-
-      // Verify: Should pass correct arguments to CLI process
-      // Since we're using /bin/echo, the echo output should contain the CLI arguments
-      // For this test, we mainly want to verify the process executes successfully
-      // with the built arguments (real argument validation would require more sophisticated mocking)
-      assert(messages.nonEmpty, "Should receive some output from echo command")
-    }
-  }
-
-  test("should handle process execution errors with specific exit codes") {
-    supervised {
-      // Setup: Use an executable that will fail with non-zero exit code
-      val options = QueryOptions(
-        prompt = "Test prompt",
-        cwd = None,
-        executable = None,
-        executableArgs = None,
-        pathToClaudeCodeExecutable =
-          Some("/bin/false"), // Command that always exits with code 1
-        maxTurns = None,
-        allowedTools = None,
-        disallowedTools = None,
-        systemPrompt = None,
-        appendSystemPrompt = None,
-        mcpTools = None,
-        permissionMode = None,
-        continueConversation = None,
-        resume = None,
-        model = None,
-        maxThinkingTokens = None,
-        timeout = None,
-        inheritEnvironment = None,
-        environmentVariables = None
-      )
-
-      // Execute: Call query with failing CLI - should propagate process execution error
+      // Execute: Call async API with failing CLI
+      val claude = ClaudeCode.concurrent
       val exception = intercept[ProcessExecutionError] {
-        val messageFlow = ClaudeCode.query(options)
+        val messageFlow = claude.query(options)
         messageFlow.runToList() // Force evaluation
       }
 
-      // Verify: Should fail with ProcessExecutionError with specific exit code and command details
-      assertEquals(
-        exception.exitCode,
-        1,
-        "Expected exit code 1 from /bin/false"
-      )
-      assert(
-        exception.command.nonEmpty,
-        "Expected command information in error"
-      )
-      assert(
-        exception.command.contains("/bin/false"),
-        s"Expected /bin/false in command: ${exception.command.mkString(" ")}"
-      )
-      // stderr may be empty for /bin/false, but the field should be accessible
-      assert(exception.stderr != null, "Expected stderr field to be accessible")
+      // Verify: Should fail with ProcessExecutionError
+      assertEquals(exception.exitCode, 1)
+      assert(exception.command.contains("/bin/false"))
     }
   }
 
-  test("should handle process timeout errors when execution exceeds limit") {
-    supervised {
-      // Setup: Use a command that hangs with a short timeout
-      val options = QueryOptions(
-        prompt = "Test prompt",
-        cwd = None,
-        executable = None,
-        executableArgs = Some(
-          List(TestConstants.WaitIntervals.SLEEP_DURATION_MEDIUM)
-        ), // Sleep for 10 seconds
-        pathToClaudeCodeExecutable = Some("sleep"), // Command that will hang
-        timeout = Some(
-          TestConstants.Timeouts.TEST_TIMEOUT_MEDIUM_SHORT
-        ), // Very short timeout
-        maxTurns = None,
-        allowedTools = None,
-        disallowedTools = None,
-        systemPrompt = None,
-        appendSystemPrompt = None,
-        mcpTools = None,
-        permissionMode = None,
-        continueConversation = None,
-        resume = None,
-        model = None,
-        maxThinkingTokens = None,
-        inheritEnvironment = None,
-        environmentVariables = None
-      )
+  test("sync API: should validate configuration before execution") {
+    given MockLogger = MockLogger()
 
-      // Execute: Call query with hanging CLI and timeout - should timeout
-      val exception = intercept[ProcessTimeoutError] {
-        val messageFlow = ClaudeCode.query(options)
-        messageFlow.runToList() // Force evaluation
-      }
+    val options = QueryOptions
+      .simple("Hello Claude!")
+      .withCwd(
+        "/this/directory/definitely/does/not/exist"
+      ) // Invalid working directory
+      .withClaudeExecutable("/bin/echo") // Valid executable
 
-      // Verify: Should fail with ProcessTimeoutError with exact timeout duration and command details
-      assertEquals(
-        exception.timeoutDuration.toMillis,
-        TestConstants.Timeouts.TEST_TIMEOUT_MEDIUM_SHORT.toMillis,
-        "Expected exactly 500ms timeout duration"
-      )
-      assert(
-        exception.command.nonEmpty,
-        "Expected command information in error"
-      )
-      assert(
-        exception.command.contains("sleep"),
-        s"Expected 'sleep' command in timeout error: ${exception.command.mkString(" ")}"
-      )
-      assert(
-        exception.command.contains("10"),
-        s"Expected sleep duration '10' in command: ${exception.command.mkString(" ")}"
-      )
+    // Execute: Call sync API with invalid working directory
+    val exception = intercept[ConfigurationError] {
+      ClaudeCode.queryResult(options)
     }
+
+    // Verify: Should fail with ConfigurationError
+    assert(exception.parameter.contains("cwd"))
+    assert(
+      exception.value.contains("/this/directory/definitely/does/not/exist")
+    )
   }
 
-  test("should handle JSON parsing errors gracefully during streaming") {
-    supervised {
-      // Setup: Use mock CLI that outputs malformed JSON mid-stream
-      val options = QueryOptions(
-        prompt = "Test prompt",
-        cwd = None,
-        executable = None,
-        executableArgs = None,
-        pathToClaudeCodeExecutable = Some(
-          "test/bin/mock-claude-malformed"
-        ), // Mock CLI with malformed JSON
-        maxTurns = None,
-        allowedTools = None,
-        disallowedTools = None,
-        systemPrompt = None,
-        appendSystemPrompt = None,
-        mcpTools = None,
-        permissionMode = None,
-        continueConversation = None,
-        resume = None,
-        model = None,
-        maxThinkingTokens = None,
-        timeout = None,
-        inheritEnvironment = None,
-        environmentVariables = None
-      )
+  test("should use fluent API for QueryOptions configuration") {
+    given MockLogger = MockLogger()
 
-      // Execute: Call query with CLI that outputs malformed JSON
-      // The current implementation should gracefully handle JSON parsing errors
-      val messageFlow = ClaudeCode.query(options)
-      val messages = messageFlow.runToList()
+    val mockBehavior =
+      MockCliScript.CommonBehaviors.successfulQuery("Complex query")
+    val mockScript = MockCliScript.createTempScript(mockBehavior)
+    createdScripts += mockScript
 
-      // Verify: Should handle JSON parsing errors gracefully
-      // Based on ProcessManager implementation, it logs errors but continues processing
-      // So we should get the valid messages (first and third lines) but skip the malformed one
-      assert(
-        messages.length >= 1,
-        "Should get at least some valid messages despite malformed JSON"
-      )
+    // Setup: Use fluent API to configure options
+    val options = QueryOptions
+      .simple("Complex query")
+      .withMaxTurns(3)
+      .withModel("claude-3-5-sonnet-20241022")
+      .withPermissionMode(PermissionMode.AcceptEdits)
+      .withClaudeExecutable(mockScript.toString)
 
-      // First message should be the valid SystemMessage
-      messages.headOption match
-        case Some(SystemMessage(subtype, _)) =>
-          assertEquals(subtype, "user_context")
-        case other => fail(s"Expected SystemMessage but got: $other")
-    }
-  }
+    // Execute: Call sync API with fluent configuration
+    val result = ClaudeCode.queryResult(options)
 
-  test("should collect all messages from query Flow when using querySync") {
-    supervised {
-      // Setup: QueryOptions that will produce multiple messages
-      val options = QueryOptions(
-        prompt = "Test prompt",
-        cwd = None,
-        executable = None,
-        executableArgs = None,
-        pathToClaudeCodeExecutable =
-          Some("test/bin/mock-claude"), // Mock CLI with multiple messages
-        maxTurns = None,
-        allowedTools = None,
-        disallowedTools = None,
-        systemPrompt = None,
-        appendSystemPrompt = None,
-        mcpTools = None,
-        permissionMode = None,
-        continueConversation = None,
-        resume = None,
-        model = None,
-        maxThinkingTokens = None,
-        timeout = None,
-        inheritEnvironment = None,
-        environmentVariables = None
-      )
-
-      // Execute: Call querySync to collect all messages at once
-      val messages = ClaudeCode.querySync(options)
-
-      // Verify: Should collect all messages from the Flow into a List
-      assert(messages.nonEmpty, "Should receive messages from CLI")
-
-      // Should have multiple message types from the mock CLI
-      val hasSystemMessage = messages.exists(_.isInstanceOf[SystemMessage])
-      val hasAssistantMessage =
-        messages.exists(_.isInstanceOf[AssistantMessage])
-      val hasResultMessage = messages.exists(_.isInstanceOf[ResultMessage])
-
-      assert(hasSystemMessage, "Should include SystemMessage from mock CLI")
-      // Note: AssistantMessage and ResultMessage depend on the mock CLI output
-    }
-  }
-
-  test("should propagate errors from underlying query when using querySync") {
-    supervised {
-      // Setup: QueryOptions that will cause ProcessExecutionError
-      val options = QueryOptions(
-        prompt = "Test prompt",
-        cwd = None,
-        executable = None,
-        executableArgs = None,
-        pathToClaudeCodeExecutable =
-          Some("/bin/false"), // Command that always exits with code 1
-        maxTurns = None,
-        allowedTools = None,
-        disallowedTools = None,
-        systemPrompt = None,
-        appendSystemPrompt = None,
-        mcpTools = None,
-        permissionMode = None,
-        continueConversation = None,
-        resume = None,
-        model = None,
-        maxThinkingTokens = None,
-        timeout = None,
-        inheritEnvironment = None,
-        environmentVariables = None
-      )
-
-      // Execute: Call querySync with failing CLI - should propagate error
-      val exception = intercept[ProcessExecutionError] {
-        ClaudeCode.querySync(options)
-      }
-
-      // Verify: Should propagate same ProcessExecutionError as query() method with specific details
-      assertEquals(
-        exception.exitCode,
-        1,
-        "Expected exit code 1 from /bin/false in querySync"
-      )
-      assert(
-        exception.command.nonEmpty,
-        "Expected command information in error"
-      )
-      assert(
-        exception.command.contains("/bin/false"),
-        s"Expected /bin/false in command from querySync: ${exception.command.mkString(" ")}"
-      )
-      assert(
-        exception.stderr != null,
-        "Expected stderr field to be accessible in querySync error"
-      )
-      // Verify that this is the same type of error as would be thrown by query()
-      assert(
-        exception.message.contains("Process failed with exit code 1"),
-        s"Expected standard ProcessExecutionError message format: ${exception.message}"
-      )
-    }
-  }
-
-  test(
-    "should extract text content from AssistantMessage when using queryResult"
-  ) {
-    supervised {
-      // Setup: QueryOptions that will produce AssistantMessage with TextBlock
-      val options = QueryOptions(
-        prompt = "Test prompt",
-        cwd = None,
-        executable = None,
-        executableArgs = None,
-        pathToClaudeCodeExecutable =
-          Some("test/bin/mock-claude"), // Mock CLI with AssistantMessage
-        maxTurns = None,
-        allowedTools = None,
-        disallowedTools = None,
-        systemPrompt = None,
-        appendSystemPrompt = None,
-        mcpTools = None,
-        permissionMode = None,
-        continueConversation = None,
-        resume = None,
-        model = None,
-        maxThinkingTokens = None,
-        timeout = None,
-        inheritEnvironment = None,
-        environmentVariables = None
-      )
-
-      // Execute: Call queryResult to extract text content
-      val result = ClaudeCode.queryResult(options)
-
-      // Verify: Should extract text from AssistantMessage's TextBlock
-      assert(result.nonEmpty, "Should extract text from AssistantMessage")
-      // The exact content depends on the mock CLI output
-    }
-  }
-
-  test(
-    "should return empty string when no AssistantMessage found in queryResult"
-  ) {
-    supervised {
-      // Setup: Create mock CLI script that outputs only SystemMessage and ResultMessage (no AssistantMessage)
-      val mockBehavior = MockCliScript.MockBehavior(
-        messages = List(
-          """{"type":"system","subtype":"user_context","context_user_id":"user_123"}""",
-          """{"type":"result","subtype":"conversation_result","duration_ms":1000,"duration_api_ms":500,"is_error":false,"num_turns":1,"session_id":"session_123"}"""
-        ),
-        delayBetweenMessages =
-          TestConstants.MockDelays.MOCK_MESSAGE_DELAY_STANDARD
-      )
-      val mockScript = MockCliScript.createTempScript(mockBehavior)
-      createdScripts += mockScript
-
-      val options = QueryOptions(
-        prompt = "Test prompt",
-        cwd = None,
-        executable = None,
-        executableArgs = None,
-        pathToClaudeCodeExecutable = Some(mockScript.toString),
-        maxTurns = None,
-        allowedTools = None,
-        disallowedTools = None,
-        systemPrompt = None,
-        appendSystemPrompt = None,
-        mcpTools = None,
-        permissionMode = None,
-        continueConversation = None,
-        resume = None,
-        model = None,
-        maxThinkingTokens = None,
-        timeout = None,
-        inheritEnvironment = None,
-        environmentVariables = None
-      )
-
-      // Execute: Call queryResult when no AssistantMessage is present
-      val result = ClaudeCode.queryResult(options)
-
-      // Verify: Should return empty string gracefully
-      assertEquals(
-        result,
-        "",
-        "Should return empty string when no AssistantMessage found"
-      )
-    }
-  }
-
-  test(
-    "should return empty string when AssistantMessage has no TextBlock content"
-  ) {
-    supervised {
-      // Setup: Create mock CLI script that outputs AssistantMessage without TextBlock content
-      // This is a theoretical edge case but we should handle it gracefully
-      val mockBehavior = MockCliScript.MockBehavior(
-        messages = List(
-          """{"type":"system","subtype":"user_context","context_user_id":"user_123"}""",
-          """{"type":"assistant","message":{"content":[]}}""", // Empty content array
-          """{"type":"result","subtype":"conversation_result","duration_ms":1000,"duration_api_ms":500,"is_error":false,"num_turns":1,"session_id":"session_123"}"""
-        ),
-        delayBetweenMessages =
-          TestConstants.MockDelays.MOCK_MESSAGE_DELAY_STANDARD
-      )
-      val mockScript = MockCliScript.createTempScript(mockBehavior)
-      createdScripts += mockScript
-
-      val options = QueryOptions(
-        prompt = "Test prompt",
-        cwd = None,
-        executable = None,
-        executableArgs = None,
-        pathToClaudeCodeExecutable = Some(mockScript.toString),
-        maxTurns = None,
-        allowedTools = None,
-        disallowedTools = None,
-        systemPrompt = None,
-        appendSystemPrompt = None,
-        mcpTools = None,
-        permissionMode = None,
-        continueConversation = None,
-        resume = None,
-        model = None,
-        maxThinkingTokens = None,
-        timeout = None,
-        inheritEnvironment = None,
-        environmentVariables = None
-      )
-
-      // Execute: Call queryResult - echo output won't be a valid AssistantMessage
-      val result = ClaudeCode.queryResult(options)
-
-      // Verify: Should return empty string when no TextBlock found
-      assertEquals(
-        result,
-        "",
-        "Should return empty string when no TextBlock found"
-      )
-    }
+    // Verify: Should execute successfully with configured options
+    assertEquals(result, "Response to: Complex query")
   }

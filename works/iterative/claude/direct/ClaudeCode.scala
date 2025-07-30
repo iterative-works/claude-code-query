@@ -13,34 +13,76 @@ import works.iterative.claude.direct.internal.cli.{
 }
 import works.iterative.claude.direct.Logger
 
-object ClaudeCode:
-
-  // ==== HIGH-LEVEL PUBLIC API ====
+/** ClaudeCode instance for async/concurrent operations using Ox structured
+  * concurrency. Create instances within supervised scopes for concurrent query
+  * execution.
+  */
+class ClaudeCode(using logger: Logger, ox: Ox):
 
   /** Simple convenience method to ask Claude a question with sane defaults.
     * Returns just the assistant's text response.
     */
-  def ask(prompt: String)(using Logger, Ox): String =
+  def ask(prompt: String): String =
     queryResult(QueryOptions.simple(prompt))
 
   /** Executes a query and returns a Flow of messages from the Claude CLI. Uses
     * Ox direct-style programming for structured concurrency.
     */
-  def query(options: QueryOptions)(using Logger, Ox): Flow[Message] =
+  def query(options: QueryOptions): Flow[Message] =
     Flow.fromIterable(executeQuery(options))
 
   /** Executes a query and returns all messages as a List. This is a convenience
     * method that collects all messages from the query Flow synchronously.
     */
-  def querySync(options: QueryOptions)(using Logger, Ox): List[Message] =
+  def querySync(options: QueryOptions): List[Message] =
     executeQuery(options)
 
   /** Executes a query and extracts the text content from AssistantMessage. This
     * is a convenience method for getting just the assistant's response text.
     */
-  def queryResult(options: QueryOptions)(using Logger, Ox): String =
+  def queryResult(options: QueryOptions): String =
     val messages = executeQuery(options)
-    extractAssistantTextContent(messages)
+    ClaudeCode.extractAssistantTextContent(messages)
+
+  private def executeQuery(options: QueryOptions): List[Message] =
+    ClaudeCode.executeQuery(options)
+
+object ClaudeCode:
+
+  // ==== BLOCKING/SYNC API (hides structured concurrency) ====
+
+  /** Simple convenience method to ask Claude a question with sane defaults.
+    * This method blocks until the response is received.
+    */
+  def ask(prompt: String)(using Logger): String =
+    supervised { ox ?=>
+      val instance = new ClaudeCode()
+      instance.ask(prompt)
+    }
+
+  /** Executes a query and returns all messages as a List. This method blocks
+    * until all messages are received.
+    */
+  def querySync(options: QueryOptions)(using Logger): List[Message] =
+    supervised { ox ?=>
+      val instance = new ClaudeCode()
+      instance.querySync(options)
+    }
+
+  /** Executes a query and extracts the text content from AssistantMessage. This
+    * method blocks until the response is received.
+    */
+  def queryResult(options: QueryOptions)(using Logger): String =
+    supervised { ox ?=>
+      val instance = new ClaudeCode()
+      instance.queryResult(options)
+    }
+
+  /** Creates a ClaudeCode instance for concurrent operations within a
+    * supervised scope. Use this when you need to perform multiple concurrent
+    * queries.
+    */
+  def concurrent(using Logger, Ox): ClaudeCode = new ClaudeCode()
 
   // ==== MAIN EXECUTION LOGIC ====
 

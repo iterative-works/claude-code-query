@@ -69,8 +69,9 @@ class ClaudeCodeIntegrationTest extends munit.FunSuite:
         )
       )
 
-      // Execute: Run complete workflow through ClaudeCode.query
-      val messageFlow = ClaudeCode.query(options)
+      // Execute: Run complete workflow through ClaudeCode.concurrent.query
+      val claude = ClaudeCode.concurrent
+      val messageFlow = claude.query(options)
       val messages = messageFlow.runToList()
 
       // Verify: Complete message flow with all expected types
@@ -94,8 +95,8 @@ class ClaudeCodeIntegrationTest extends munit.FunSuite:
 
       // Verify assistant response content
       assistantMessage match {
-        case Some(AssistantMessage(messageContent)) =>
-          val textBlocks = messageContent.collect { case TextBlock(text) =>
+        case Some(AssistantMessage(content)) =>
+          val textBlocks = content.collect { case TextBlock(text) =>
             text
           }
           assert(
@@ -147,8 +148,9 @@ class ClaudeCodeIntegrationTest extends munit.FunSuite:
         )
       )
 
-      // Execute: Run complete workflow through ClaudeCode.query with environment variables
-      val messageFlow = ClaudeCode.query(options)
+      // Execute: Run complete workflow through ClaudeCode.concurrent.query with environment variables
+      val claude = ClaudeCode.concurrent
+      val messageFlow = claude.query(options)
       val messages = messageFlow.runToList()
 
       // Verify: Environment variable was passed through the entire stack
@@ -204,8 +206,9 @@ class ClaudeCodeIntegrationTest extends munit.FunSuite:
         environmentVariables = None
       )
 
-      // Execute: Run complete workflow through ClaudeCode.query with custom working directory
-      val messageFlow = ClaudeCode.query(options)
+      // Execute: Run complete workflow through ClaudeCode.concurrent.query with custom working directory
+      val claude = ClaudeCode.concurrent
+      val messageFlow = claude.query(options)
       val messages = messageFlow.runToList()
 
       // Verify: Working directory was set correctly through the entire stack
@@ -264,7 +267,8 @@ class ClaudeCodeIntegrationTest extends munit.FunSuite:
       )
 
       // Now test authentically - if we reach here, environment should support the test
-      val messageFlow = ClaudeCode.query(options)
+      val claude = ClaudeCode.concurrent
+      val messageFlow = claude.query(options)
       val messages = messageFlow.runToList()
 
       // Verify CLI discovery and execution worked
