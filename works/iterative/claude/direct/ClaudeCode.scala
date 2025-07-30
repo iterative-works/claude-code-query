@@ -4,7 +4,6 @@ package works.iterative.claude.direct
 
 import ox.*
 import ox.flow.Flow
-import works.iterative.claude.core.model.*
 import works.iterative.claude.core.cli.CLIArgumentBuilder
 import works.iterative.claude.core.ConfigurationError
 import works.iterative.claude.direct.internal.cli.{
@@ -14,12 +13,15 @@ import works.iterative.claude.direct.internal.cli.{
 }
 import works.iterative.claude.direct.Logger
 
-// Type alias for convenient single-import usage
-type QueryOptions = works.iterative.claude.core.model.QueryOptions
-
 object ClaudeCode:
 
   // ==== HIGH-LEVEL PUBLIC API ====
+
+  /** Simple convenience method to ask Claude a question with sane defaults.
+    * Returns just the assistant's text response.
+    */
+  def ask(prompt: String)(using Logger, Ox): String =
+    queryResult(QueryOptions.simple(prompt))
 
   /** Executes a query and returns a Flow of messages from the Claude CLI. Uses
     * Ox direct-style programming for structured concurrency.
