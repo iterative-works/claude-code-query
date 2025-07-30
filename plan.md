@@ -1,177 +1,198 @@
-# Migration Plan: cats-effect → Ox Direct-Style Implementation
+# Implementation Plan: Fix Fake Streaming in Direct ClaudeCode API
 
-## Overview
+## Problem Analysis
 
-This document outlines the migration from the current cats-effect based implementation to Ox direct-style programming. We'll create a new `works.iterative.claude.direct` package that mirrors the effectful package structure but uses Ox for concurrency and streaming.
-
-## Key Architectural Changes
-
-**Current cats-effect patterns → Ox direct-style equivalents:**
-
-1. **IO[A] → A (blocking)** - Ox embraces blocking operations with Virtual Threads
-2. **Stream[IO, A] → Flow[A]** - Ox flows for streaming data processing  
-3. **Resource management** - `supervised` scopes with `useInScope`
-4. **Concurrency** - `fork`/`supervised` instead of `IO.start`/`Fiber`
-5. **Error handling** - Direct exceptions or `Either` with `.ok()` combinators
-
-## Package Structure
-```
-works/iterative/claude/direct/
-├── ClaudeCode.scala                    // Main API
-├── internal/
-│   ├── cli/
-│   │   ├── ProcessManager.scala        // Direct-style process execution
-│   │   ├── CLIDiscovery.scala         // Path discovery
-│   │   └── FileSystemOps.scala        // File operations
-│   └── parsing/
-│       └── JsonParser.scala           // Stream parsing
-```
-
-## Dependencies
-
-Update `project.scala` with Ox 1.0.0-RC2:
+The issue exists specifically in the **direct implementation** (`works.iterative.claude.direct.ClaudeCode`) which uses Ox for structured concurrency. The current implementation has fake streaming:
 
 ```scala
-"com.softwaremill.ox" %% "core" % "1.0.0-RC2",
-"com.softwaremill.ox" %% "flow" % "1.0.0-RC2"
+// CURRENT BROKEN IMPLEMENTATION in direct/ClaudeCode.scala:32
+def query(options: QueryOptions): Flow[Message] =
+  Flow.fromIterable(executeQuery(options))  // ❌ FAKE STREAMING
+
+private def executeQuery(options: QueryOptions): List[Message] =
+  ClaudeCode.executeQuery(options)  // This blocks until completion
 ```
 
-## Detailed Migration Steps
+**Key Finding**: The **effectful implementation** (cats-effect/fs2) at `works.iterative.claude.effectful.ClaudeCode` **already has correct real streaming** and doesn't need to be fixed.
 
-### 1. Core API Transformation (`ClaudeCode.scala`)
+## Root Cause
 
-**Before (cats-effect):**
-```scala
-def query(options: QueryOptions)(using logger: Logger[IO]): Stream[IO, Message]
-def querySync(options: QueryOptions)(using logger: Logger[IO]): IO[List[Message]]
+The direct implementation's `ProcessManager.executeProcess()` method:
+1. Starts the process
+2. **Blocks** until the entire process completes using `process.waitFor()`
+3. Reads **all stdout lines** at once after completion
+4. Parses all JSON lines in batch
+5. Returns complete `List[Message]`
+6. The `query()` method then wraps this complete list in `Flow.fromIterable()`
+
+This defeats the purpose of streaming entirely.
+
+## Solution Strategy
+
+Following the TDD methodology, we will implement **real streaming** for the direct implementation by:
+
+### Phase 1: Top-Down Integration Tests
+Write failing integration tests that verify:
+1. Messages are emitted **as they arrive** from the CLI process
+2. Early messages can be processed **before** the CLI completes
+3. The Flow can be **terminated early** without waiting for process completion
+4. **Backpressure** works correctly with slow consumers
+
+### Phase 2: Real Streaming Implementation
+Implement true streaming that:
+1. **Starts process immediately** without waiting for completion
+2. **Reads stdout line-by-line** as data becomes available
+3. **Parses and emits messages** in real-time to the Flow
+4. **Handles process lifecycle** properly (cleanup, error handling)
+5. **Supports cancellation** and early termination
+
+### Phase 3: Architecture Changes Required
+
+#### Current Architecture (Blocking):
+```
+query() -> executeQuery() -> ProcessManager.executeProcess() 
+         -> [BLOCKS until process complete] 
+         -> List[Message] 
+         -> Flow.fromIterable()
 ```
 
-**After (Ox direct-style):**
-```scala
-def query(options: QueryOptions)(using logger: Logger, Ox): Flow[Message] 
-def querySync(options: QueryOptions)(using logger: Logger, Ox): List[Message]
+#### Target Architecture (Streaming):
+```
+query() -> Flow.source() 
+        -> [Start process immediately] 
+        -> [Read stdout lines as available] 
+        -> [Parse & emit messages in real-time] 
+        -> Flow[Message]
 ```
 
-**Key changes:**
-- Remove `IO` wrapper - operations are directly blocking
-- Use `Flow[Message]` instead of `Stream[IO, Message]`
-- `Ox` capability for structured concurrency
-- Regular `Logger` instead of `Logger[IO]`
+## Implementation Approach
 
-### 2. Process Management (`ProcessManager.scala`)
+### 1. Test-Driven Development Process
 
-**Process execution transformation:**
+Following the TDD loop described in the methodology:
+
+**RED Phase**: Write failing tests with `???` stubs
+- Create streaming interface with stub implementation  
+- Mock CLI process that emits data over time
+- Test calls real interface, fails with `NotImplementedError`
+
+**GREEN Phase**: Implement minimum code to pass
+- Replace `???` with real streaming implementation
+- Focus solely on making tests pass
+- Use simplest approach that works
+
+**COMMIT Process**: 
+- Commit after each failing test: "Add failing test for [feature]"
+- Commit after implementation: "Implement [feature]"
+
+### 2. Key Technical Challenges
+
+#### Challenge 1: Non-blocking Process Startup
+- Current: `process.waitFor()` blocks until completion
+- Target: Start process and return immediately, read from streams asynchronously
+
+#### Challenge 2: Line-by-Line Stream Processing  
+- Current: Read all stdout after process completes
+- Target: Process stdout lines as they arrive using Ox concurrency
+
+#### Challenge 3: Resource Management
+- Ensure proper cleanup of process and streams
+- Handle early Flow termination correctly
+- Manage process lifecycle within Ox structured concurrency
+
+#### Challenge 4: Error Handling During Streaming
+- Handle process failures mid-stream
+- Propagate stderr content for debugging
+- Manage timeout scenarios during streaming
+
+### 3. Ox-Specific Implementation Details
+
+The implementation will use Ox's structured concurrency features:
+
 ```scala
-// Current cats-effect
-def executeProcess(
-  processBuilder: ProcessBuilder,
-  options: QueryOptions,
-  executablePath: String, 
-  args: List[String]
-)(using logger: Logger[IO]): Stream[IO, Message]
-
-// Ox direct-style  
-def executeProcess(
-  executablePath: String,
-  args: List[String], 
-  options: QueryOptions
-)(using logger: Logger, Ox): Flow[Message]
-```
-
-**Implementation approach:**
-- Use `supervised` scope for process lifecycle management
-- `fork` for async stderr capture
-- Ox `Flow.usingEmit` for streaming stdout parsing
-- Native Java `ProcessBuilder` with blocking operations
-
-### 3. Streaming and Parsing
-
-**JSON parsing pipeline:**
-```scala
-// Current: fs2.Stream with IO effects
-process.stdout
-  .through(fs2.text.utf8.decode)
-  .through(fs2.text.lines)
-  .zipWithIndex
-  .evalMap(parseJsonLine)
-
-// Ox: Flow-based pipeline
-Flow.usingEmit { emit =>
-  val reader = process.stdout.bufferedReader()
-  var lineNumber = 0
-  reader.lines().forEach { line =>
-    lineNumber += 1
-    parseJsonLine(line, lineNumber) match
-      case Some(message) => emit(message)
-      case None => // skip empty lines
+def query(options: QueryOptions): Flow[Message] = 
+  Flow.usingEmit[Message] { emit =>
+    // Start process within supervised scope
+    val process = startProcess(options)
+    
+    // Fork concurrent tasks for stdout/stderr
+    par(
+      // Stdout processing - emit messages as they arrive
+      processStdoutLines(process, emit),
+      // Stderr capture for error reporting  
+      captureStderr(process)
+    )
+    
+    // Handle process completion and cleanup
+    handleProcessCompletion(process)
   }
-}
 ```
 
-### 4. Error Handling Strategy
+### 4. Comparison with Working Effectful Implementation
 
-**Structured error management:**
-- **Application errors**: Use `Either[CLIError, A]` with `.ok()` combinators
-- **System errors**: Direct exceptions for unexpected failures
-- **Timeout handling**: Ox's built-in `timeout()` function
-- **Resource cleanup**: `supervised` scopes ensure proper cleanup
+The effectful implementation already has real streaming in `ProcessManager.executeProcess()`:
 
-### 5. Concurrency Patterns
-
-**Replace fs2 concurrency with Ox:**
 ```scala
-// Current: fs2.Stream.concurrently  
-stdout.concurrently(Stream.eval(closeStdin))
-
-// Ox: parallel execution in supervised scope
-supervised {
-  val stderrFork = fork {
-    // capture stderr
-    process.stderr.readAllBytes()
-  }
-  
-  val messages = parseStdoutFlow(process.stdout)
-  process.stdin.close()
-  
-  (messages, stderrFork.join())
-}
+// From effectful/internal/cli/ProcessManager.scala:177-191
+private def parseStdoutMessagesStream(process: fs2.io.process.Process[IO]): Stream[IO, Message] =
+  process.stdout
+    .through(fs2.text.utf8.decode)      // Real streaming: decode bytes as available
+    .through(fs2.text.lines)            // Real streaming: emit lines as they arrive  
+    .zipWithIndex
+    .evalMap(parseJsonLine)             // Real streaming: parse each line immediately
+    .evalMap(handleParseResult)
+    .unNone
 ```
 
-## Implementation Priorities
+We need to implement equivalent functionality using Ox instead of fs2.
 
-### Phase 1: Core Infrastructure
-1. **Dependencies**: Add Ox dependency to `project.scala`
-2. **Basic API**: Implement direct-style `querySync` method
-3. **Process execution**: Basic `ProcessManager` with Ox `supervised`
-4. **Error handling**: Migrate error types to work with direct-style
+## Testing Strategy
 
-### Phase 2: Streaming Support  
-1. **Flow integration**: Implement `query` method returning `Flow[Message]`
-2. **JSON parsing**: Stream-based parsing with `Flow.usingEmit`
-3. **Timeout handling**: Integrate Ox timeout mechanisms
-4. **Resource management**: Proper cleanup with `supervised` scopes
+### Top-Down Test Progression:
 
-### Phase 3: Advanced Features
-1. **Parallel execution**: File system discovery with `par()`
-2. **Integration testing**: Verify compatibility with existing core models
-3. **Performance optimization**: Leverage Virtual Threads efficiently
-4. **Documentation**: Usage examples and migration guide
+1. **Integration Test**: Complete user scenario with mock CLI that emits messages over time
+2. **Streaming Behavior Test**: Verify messages arrive before process completion
+3. **Early Termination Test**: Verify Flow can be cancelled mid-stream
+4. **Error Handling Test**: Verify proper error propagation during streaming
+5. **Resource Cleanup Test**: Verify proper cleanup when Flow terminates early
 
-## Key Benefits of Ox Migration
+### Mock Strategy:
+- Mock CLI executable that outputs JSON messages with delays
+- Use real Ox Flow interface, not mocks
+- Test actual streaming behavior, not mock interactions
 
-1. **Simpler mental model**: Direct-style code without effect wrapping
-2. **Better stack traces**: No effect library indirection  
-3. **Virtual Thread optimization**: Efficient blocking operations
-4. **Structured concurrency**: Predictable resource management
-5. **Interop friendly**: Easier integration with existing Java libraries
+## Success Criteria
 
-## TDD Approach
+✅ **Real Streaming**: Messages emitted as CLI process produces them  
+✅ **Non-blocking**: Process starts immediately, doesn't wait for completion  
+✅ **Early Access**: First messages available before CLI finishes  
+✅ **Cancellation**: Flow can be terminated without waiting for process  
+✅ **Resource Management**: Proper cleanup of processes and streams  
+✅ **Error Handling**: Appropriate error propagation during streaming  
+✅ **API Compatibility**: Existing `query()` method signature unchanged  
+✅ **Performance**: No memory buildup from holding complete message lists  
 
-We will follow a strict test-driven development approach:
+## Implementation Order
 
-1. **Start with integration tests** - Test complete user scenarios from the top level
-2. **Mock external dependencies** - CLI executables, file system, network calls
-3. **Work top-down** - Replace mocks incrementally with real implementations
-4. **Red-Green-Commit cycle** - Failing test → implementation → commit
+Following TDD and top-down approach:
 
-This ensures we build only what's needed and maintain high confidence in our implementation.
+1. **Write Integration Test** - Test complete streaming scenario with mock CLI
+2. **Implement Real Streaming** - Replace fake streaming with real implementation  
+3. **Add Error Handling** - Proper stderr capture and error propagation
+4. **Add Resource Management** - Ensure cleanup on early termination
+5. **Add Timeout Support** - Handle timeout during streaming operations
+6. **Verify Performance** - Ensure no memory leaks or resource issues
+
+## Files to Modify
+
+**Primary Changes:**
+- `works/iterative/claude/direct/ClaudeCode.scala` - Replace fake streaming `query()` method
+- `works/iterative/claude/direct/internal/cli/ProcessManager.scala` - Add streaming execution method
+
+**Test Files:**
+- Create new integration tests for streaming behavior
+- Modify existing tests that assume blocking behavior
+
+**No Changes Needed:**
+- `works/iterative/claude/effectful/ClaudeCode.scala` - Already has real streaming
+- Public API contracts remain unchanged

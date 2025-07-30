@@ -26,10 +26,13 @@ class ClaudeCode(using logger: Logger, ox: Ox):
     queryResult(QueryOptions.simple(prompt))
 
   /** Executes a query and returns a Flow of messages from the Claude CLI. Uses
-    * Ox direct-style programming for structured concurrency.
+    * Ox direct-style programming for structured concurrency with real streaming.
     */
   def query(options: QueryOptions): Flow[Message] =
-    Flow.fromIterable(executeQuery(options))
+    ClaudeCode.validateQueryConfiguration(options)
+    val executablePath = ClaudeCode.resolveClaudeExecutablePath(options)
+    val args = ClaudeCode.buildCliArguments(options)
+    ProcessManager.executeProcessStreaming(executablePath, args, options)
 
   /** Executes a query and returns all messages as a List. This is a convenience
     * method that collects all messages from the query Flow synchronously.

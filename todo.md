@@ -1,343 +1,109 @@
-# TDD Implementation Todo: Ox Direct-Style Migration
-
-This document outlines the test-driven development plan for migrating from cats-effect to Ox direct-style programming. We'll follow the "Red-Green-Commit" cycle, implementing tests in correct dependency order from bottom-up infrastructure to top-level API.
-
-## Test Implementation Order
-
-### Phase 1: Foundation Infrastructure
-
-#### 1. File System Operations
-**File**: `test/works/iterative/claude/direct/internal/cli/FileSystemOpsTest.scala`
-**Dependencies**: None - direct system calls
-**Priority**: Foundation - required by CLI discovery
-
-- [x] **T1.1**: `which finds existing commands in PATH`
-  - Test with 'sh' command (exists on Unix systems)
-  - Tests: Real system PATH lookup without IO wrapper
-  - Expected: `Option[String]` with path to sh executable
-
-- [x] **T1.2**: `which returns None for non-existent commands`
-  - Test with impossible command name
-  - Tests: Graceful handling of missing commands
-  - Expected: `None`
-
-- [x] **T1.3**: `exists correctly identifies existing files`
-  - Test with known existing file
-  - Tests: File existence checking without IO effects
-  - Expected: `Boolean` result
-
-- [x] **T1.4**: `isExecutable correctly identifies executable files`
-  - Test with sh executable
-  - Tests: File permission checking
-  - Expected: `Boolean` result for executable status
-
-#### 2. CLI Discovery
-**File**: `test/works/iterative/claude/direct/internal/cli/CLIDiscoveryTest.scala`
-**Dependencies**: FileSystemOps (mocked)
-**Priority**: Foundation - required by main API
-
-- [x] **T2.1**: `findClaude succeeds when claude is found in PATH`
-  - Mock FileSystemOps returning claude path from `which`
-  - Tests: PATH lookup success case with direct-style
-  - Expected: `Either[CLIError, String]` with `Right(path)`
-
-- [x] **T2.2**: `findClaude falls back to common paths when PATH lookup fails`
-  - Mock FileSystemOps with PATH failure, common path success
-  - Tests: Fallback logic without IO effects
-  - Expected: `Right(path)` from common installation paths
-
-- [x] **T2.3**: `findClaude returns NodeJSNotFoundError when Node.js is missing`
-  - Mock FileSystemOps returning no claude and no node
-  - Tests: Prerequisite checking with direct-style error handling
-  - Expected: `Left(NodeJSNotFoundError)` with installation guide
-
-- [x] **T2.4**: `findClaude returns CLINotFoundError when claude not found anywhere`
-  - Mock FileSystemOps returning no claude, but node available
-  - Tests: Error case with actionable message
-  - Expected: `Left(CLINotFoundError)` with installation instructions
-
-- [x] **T2.5**: `findClaude logs PATH search attempt and results`
-  - Mock logger capturing log messages
-  - Tests: Logging behavior during discovery
-  - Expected: Debug and info messages logged appropriately
-
-### Phase 2: JSON Processing
-
-#### 3. JSON Parser Direct-Style
-**File**: `test/works/iterative/claude/direct/internal/parsing/JsonParserTest.scala`
-**Dependencies**: Core JSON parsing logic (reused from core package)
-**Priority**: Core - required by ProcessManager
-
-- [x] **T3.1**: `parseJsonLineWithContext handles valid JSON messages`
-  - Valid JSON message strings from CLI output
-  - Tests: Direct-style parsing without IO wrapper
-  - Expected: `Either[JsonParsingError, Option[Message]]` with parsed messages
-
-- [x] **T3.2**: `parseJsonLineWithContext handles empty lines gracefully`
-  - Empty and whitespace-only strings
-  - Tests: Graceful handling of empty input
-  - Expected: `Right(None)` for empty lines
-
-- [x] **T3.3**: `parseJsonLineWithContext handles malformed JSON gracefully`
-  - Invalid JSON strings with context
-  - Tests: Error handling with line numbers
-  - Expected: `Left(JsonParsingError)` with line context
-
-- [x] **T3.4**: `parseJsonLineWithContext logs parsing attempts`
-  - Mock logger capturing debug messages
-  - Tests: Logging integration in direct-style
-  - Expected: Appropriate debug and error log messages
-
-### Phase 3: Process Management
-
-#### 4. ProcessManager Core Functionality
-**File**: `test/works/iterative/claude/direct/internal/cli/ProcessManagerTest.scala`
-**Dependencies**: JsonParser, Java ProcessBuilder
-**Priority**: Core - heart of the system
-
-- [x] **T4.1**: `executeProcess returns Flow of messages from stdout`
-  - Mock CLI executable outputting valid JSON messages
-  - Tests: Basic process execution with Ox `supervised` and `Flow.usingEmit`
-  - Expected: `Flow[Message]` with parsed messages from stdout
-
-- [x] **T4.2**: `executeProcess captures stderr concurrently`
-  - Mock CLI that writes to both stdout and stderr
-  - Tests: Concurrent stderr capture using Ox `fork`
-  - Expected: Error information available when process fails
-
-- [x] **T4.3**: `executeProcess handles process failure with exit codes`
-  - Mock CLI that exits with non-zero code and stderr
-  - Tests: Error propagation with process context
-  - Expected: `ProcessExecutionError` with exit code and stderr content
-
-- [x] **T4.4**: `executeProcess applies timeout when specified`
-  - Mock hanging process with short timeout
-  - Tests: Ox `timeout()` integration with processes
-  - Expected: `ProcessTimeoutError` after specified duration
-
-- [x] **T4.5**: `executeProcess handles JSON parsing errors gracefully`
-  - Mock CLI outputting malformed JSON
-  - Tests: Error propagation from JSON parser through Flow
-  - Expected: `JsonParsingError` with line context
-
-- [x] **T4.6**: `executeProcess logs process lifecycle events`
-  - Any simple command with logging
-  - Tests: Logging integration throughout process execution
-  - Expected: Log entries for start, completion, and errors
-
-#### 5. Process Configuration
-**File**: `test/works/iterative/claude/direct/internal/cli/ProcessManagerTest.scala`
-**Dependencies**: Java ProcessBuilder
-**Priority**: Core - process setup
-
-- [x] **T5.1**: `configureProcess sets working directory when provided`
-  - QueryOptions with cwd specified
-  - Tests: Working directory configuration
-  - Expected: Process configured with correct working directory
-
-- [x] **T5.2**: `configureProcess handles missing working directory gracefully`
-  - QueryOptions with None for cwd
-  - Tests: Default working directory behavior
-  - Expected: Process uses current working directory
-
-- [x] **T5.3**: `configureProcess sets environment variables when specified`
-  - QueryOptions with custom environment variables
-  - Tests: Environment variable configuration
-  - Expected: Process configured with specified environment
-
-- [x] **T5.4**: `configureProcess inherits environment when inheritEnvironment is true`
-  - QueryOptions with inheritEnvironment=true
-  - Tests: Environment inheritance behavior
-  - Expected: Parent environment variables preserved
-
-- [x] **T5.5**: `configureProcess isolates environment when inheritEnvironment is false`
-  - QueryOptions with inheritEnvironment=false
-  - Tests: Clean environment setup
-  - Expected: Only specified variables present, no inheritance
-
-### Phase 4: Main API Streaming Interface
-
-#### 6. ClaudeCode Core Streaming API
-**File**: `test/works/iterative/claude/direct/ClaudeCodeTest.scala`
-**Dependencies**: ProcessManager, CLIDiscovery
-**Priority**: High - main user interface
-
-- [x] **T6.1**: `query with simple prompt returns Flow of messages`
-  - Mock CLI executable outputting SystemMessage + AssistantMessage + ResultMessage
-  - Tests: Complete flow from discovery → execution → parsing
-  - Expected: `Flow[Message]` with all expected message types
-
-- [x] **T6.2**: `query handles CLI discovery when no explicit path provided`
-  - QueryOptions without pathToClaudeCodeExecutable
-  - Tests: Integration with CLIDiscovery
-  - Expected: Successful execution after discovering CLI path
-
-- [x] **T6.3**: `query handles CLI discovery failure gracefully`
-  - Mock CLIDiscovery returning CLINotFoundError
-  - Tests: Error propagation from discovery phase
-  - Expected: `CLINotFoundError` or `NodeJSNotFoundError`
-
-- [x] **T6.4**: `query validates configuration before execution`
-  - QueryOptions with invalid working directory
-  - Tests: Pre-execution validation
-  - Expected: `ConfigurationError` before attempting process execution
-
-- [x] **T6.5**: `query passes CLI arguments correctly`
-  - QueryOptions with various CLI parameters
-  - Tests: Argument building and passing to subprocess
-  - Expected: Correct arguments passed to CLI process
-
-- [x] **T6.6**: `query handles process execution errors`
-  - Mock CLI that fails with non-zero exit code
-  - Tests: Error propagation from ProcessManager
-  - Expected: `ProcessExecutionError` with context
-
-- [x] **T6.7**: `query handles process timeout errors`
-  - Mock CLI that hangs with timeout specified
-  - Tests: Timeout handling through entire stack
-  - Expected: `ProcessTimeoutError` after timeout duration
-
-- [x] **T6.8**: `query handles JSON parsing errors in stream`
-  - Mock CLI outputting malformed JSON mid-stream
-  - Tests: Error handling in streaming context
-  - Expected: `JsonParsingError` with proper context
-
-### Phase 5: Convenience API Methods
-
-#### 7. ClaudeCode Convenience Methods
-**File**: `test/works/iterative/claude/direct/ClaudeCodeTest.scala`
-**Dependencies**: ClaudeCode.query()
-**Priority**: High - user convenience
-
-- [x] **T7.1**: `querySync collects all messages from query Flow`
-  - Mock CLI with multiple messages
-  - Tests: Flow collection using Ox direct-style
-  - Expected: `List[Message]` with all messages from Flow
-
-- [x] **T7.2**: `querySync propagates errors from underlying query`
-  - Mock CLI that causes various error types
-  - Tests: Error propagation through sync wrapper
-  - Expected: Same errors as `query()` method
-
-- [x] **T7.3**: `queryResult extracts text from AssistantMessage`
-  - Mock CLI outputting AssistantMessage with TextBlock
-  - Tests: Message processing and text extraction
-  - Expected: `String` with text content from AssistantMessage
-
-- [x] **T7.4**: `queryResult handles missing AssistantMessage gracefully`
-  - Mock CLI outputting only SystemMessage and ResultMessage
-  - Tests: Graceful handling of missing expected content
-  - Expected: Empty string when no AssistantMessage found
-
-- [x] **T7.5**: `queryResult handles AssistantMessage without TextBlock`
-  - Mock CLI outputting AssistantMessage with non-text content
-  - Tests: Graceful handling of unexpected content types
-  - Expected: Empty string when no TextBlock found
-
-### Phase 6: Integration and Environment Tests
-
-#### 8. Environment Configuration Edge Cases
-**File**: `test/works/iterative/claude/direct/internal/cli/EnvironmentTest.scala`
-**Dependencies**: ProcessManager
-**Priority**: Medium - edge case handling
-
-- [ ] **T8.1**: `handles environment variable names with special characters`
-  - Environment variables with underscores, numbers, dots
-  - Tests: Edge case handling in environment setup
-  - Expected: All variables configured correctly
-
-- [ ] **T8.2**: `handles environment variable values with special characters`
-  - Values with spaces, quotes, newlines, unicode
-  - Tests: Value preservation in process environment
-  - Expected: Exact values preserved in subprocess
-
-- [ ] **T8.3**: `handles empty environment variable names and values`
-  - Edge cases with empty strings
-  - Tests: Graceful handling of edge cases
-  - Expected: Appropriate behavior (may reject or accept)
-
-- [ ] **T8.4**: `process does not leak environment variable values in errors`
-  - Process failure with secret environment variables
-  - Tests: Error message security
-  - Expected: Error messages don't contain sensitive values
-
-#### 9. Full Integration Tests
-**File**: `test/works/iterative/claude/direct/ClaudeCodeIntegrationTest.scala`
-**Dependencies**: All components working together
-**Priority**: High - complete system verification
-
-- [ ] **T9.1**: `complete workflow with real mock CLI executable`
-  - Full QueryOptions with all parameters
-  - Tests: End-to-end integration with realistic mock
-  - Expected: Complete message flow with proper types
-
-- [ ] **T9.2**: `environment variable integration works end-to-end`
-  - QueryOptions with custom environment variables
-  - Tests: Environment variable passing through entire stack
-  - Expected: Mock CLI receives and uses environment variables
-
-- [ ] **T9.3**: `working directory integration works end-to-end`
-  - QueryOptions with custom working directory
-  - Tests: Working directory setting through entire stack
-  - Expected: Mock CLI executes in specified directory
-
-- [ ] **T9.4**: `real CLI discovery and execution (when available)`
-  - QueryOptions without explicit CLI path
-  - Tests: Real system integration (conditional on CLI availability)
-  - Expected: Successful execution if Claude CLI is installed
-
-## TDD Execution Strategy
-
-### Red-Green-Commit Cycle
-
-For each test above:
-
-1. **RED Phase**:
-   ```scala
-   // Create stub implementation with ???
-   object FileSystemOps:
-     def which(command: String): Option[String] = ???
-   ```
-   - Write failing test that calls real interface
-   - Verify test fails with `NotImplementedError`
-   - **COMMIT**: "Add failing test for [T1.1] which finds existing commands"
-
-2. **GREEN Phase**:
-   ```scala
-   // Replace ??? with minimal working implementation
-   def which(command: String): Option[String] =
-     // Minimal implementation to make test pass
-   ```
-   - Implement just enough to make test pass
-   - Use real system calls or mocks as appropriate
-   - **COMMIT**: "Implement [T1.1] which finds existing commands"
-
-3. **REFACTOR Phase** (optional):
-   - Improve code quality without changing behavior
-   - **COMMIT**: "Refactor [T1.1] which implementation" (if changes made)
-
-### Mock Strategy
-
-- **Mock CLI executables**: Create test scripts in `test/bin/` that output expected JSON
-- **Mock FileSystemOps**: Inject test doubles for CLI discovery tests
-- **Mock Logger**: Capture log messages for verification  
-- **Real system calls**: Use actual file system for FileSystemOps tests
-- **Real ProcessBuilder**: Use actual Java ProcessBuilder for process tests
-
-### Dependencies
-
-Update `project.scala` before starting:
-```scala
-"com.softwaremill.ox" %% "core" % "1.0.0-RC2",
-"com.softwaremill.ox" %% "flow" % "1.0.0-RC2"
-```
-
-## Success Criteria
-
-- [ ] All tests pass with Ox direct-style implementation
-- [ ] No cats-effect dependencies in `works.iterative.claude.direct` package
-- [ ] Equivalent functionality to cats-effect version
-- [ ] Proper resource cleanup using `supervised` scopes
-- [ ] Error handling through exceptions or direct return values
-- [ ] Integration tests work with real CLI executables
-- [ ] Each component builds on tested foundation components
+# TODO: Fix Fake Streaming in Direct ClaudeCode API
+
+## Phase 1: Investigation and Setup
+
+- [x] **Analyze Issue** - Understand the fake streaming problem in direct implementation
+- [x] **Create Implementation Plan** - Document approach and architecture changes
+- [x] **Research Ox Flow APIs** - Get documentation on Flow.usingEmit and streaming patterns
+- [ ] **Study Existing Tests** - Understand current test patterns for streaming behavior
+
+## Phase 2: TDD Implementation - Core Streaming
+
+### Test 1: Basic Streaming Integration Test
+- [x] **Write Failing Test** - Test that messages arrive from CLI process as stream
+- [x] **Commit Failing Test** - "Add failing test for real streaming in direct ClaudeCode"
+- [x] **Implement Streaming** - Replace Flow.fromIterable with Flow.usingEmit
+- [x] **Make Test Pass** - Implement minimum streaming functionality
+- [x] **Commit Implementation** - "Implement real streaming for direct ClaudeCode query method"
+
+### Test 2: Early Message Access Test  
+- [ ] **Write Failing Test** - Test messages arrive before process completion
+- [ ] **Commit Failing Test** - "Add failing test for early message access during streaming"
+- [ ] **Implement Feature** - Ensure messages emit as soon as available
+- [ ] **Make Test Pass** - Verify streaming doesn't wait for process completion
+- [ ] **Commit Implementation** - "Implement early message access in streaming"
+
+### Test 3: Process Lifecycle Management
+- [ ] **Write Failing Test** - Test proper process startup and cleanup
+- [ ] **Commit Failing Test** - "Add failing test for process lifecycle during streaming"
+- [ ] **Implement Feature** - Add proper process management in streaming
+- [ ] **Make Test Pass** - Ensure processes start/cleanup correctly
+- [ ] **Commit Implementation** - "Implement process lifecycle management for streaming"
+
+## Phase 3: TDD Implementation - Error Handling
+
+### Test 4: Process Error Handling
+- [ ] **Write Failing Test** - Test process failures propagate correctly during streaming
+- [ ] **Commit Failing Test** - "Add failing test for process error handling in streaming"
+- [ ] **Implement Feature** - Add error propagation during streaming
+- [ ] **Make Test Pass** - Ensure process errors break stream correctly
+- [ ] **Commit Implementation** - "Implement process error handling during streaming"
+
+### Test 5: Stderr Capture During Streaming
+- [ ] **Write Failing Test** - Test stderr is captured and reported during streaming
+- [ ] **Commit Failing Test** - "Add failing test for stderr capture during streaming"
+- [ ] **Implement Feature** - Add concurrent stderr capture
+- [ ] **Make Test Pass** - Ensure stderr is available for error reporting
+- [ ] **Commit Implementation** - "Implement stderr capture for streaming processes"
+
+## Phase 4: TDD Implementation - Advanced Features
+
+### Test 6: Flow Early Termination
+- [ ] **Write Failing Test** - Test Flow can be cancelled before process completion
+- [ ] **Commit Failing Test** - "Add failing test for Flow early termination"
+- [ ] **Implement Feature** - Add cancellation support to streaming
+- [ ] **Make Test Pass** - Ensure processes cleanup when Flow terminates early
+- [ ] **Commit Implementation** - "Implement Flow cancellation and cleanup"
+
+### Test 7: Timeout Handling During Streaming
+- [ ] **Write Failing Test** - Test timeout works correctly during streaming
+- [ ] **Commit Failing Test** - "Add failing test for streaming timeout handling"
+- [ ] **Implement Feature** - Add timeout support to streaming operations
+- [ ] **Make Test Pass** - Ensure timeouts work during streaming
+- [ ] **Commit Implementation** - "Implement timeout handling for streaming operations"
+
+### Test 8: Backpressure and Slow Consumers
+- [ ] **Write Failing Test** - Test streaming handles slow message consumers
+- [ ] **Commit Failing Test** - "Add failing test for backpressure in streaming"
+- [ ] **Implement Feature** - Add backpressure handling to streaming
+- [ ] **Make Test Pass** - Ensure streaming doesn't overwhelm slow consumers
+- [ ] **Commit Implementation** - "Implement backpressure handling in streaming"
+
+## Phase 5: Integration and Verification
+
+### Existing Test Compatibility
+- [ ] **Run Existing Tests** - Verify existing direct implementation tests still pass
+- [ ] **Fix Broken Tests** - Update any tests that assume blocking behavior
+- [ ] **Commit Test Fixes** - "Update existing tests for new streaming implementation"
+
+### Performance and Resource Testing
+- [ ] **Write Resource Test** - Test memory usage doesn't grow with long streams
+- [ ] **Write Performance Test** - Test streaming performs better than fake streaming
+- [ ] **Verify Memory Management** - Ensure no memory leaks in streaming
+- [ ] **Commit Performance Tests** - "Add performance and resource tests for streaming"
+
+### Final Integration
+- [ ] **Test Full User Scenarios** - End-to-end testing with real Claude CLI
+- [ ] **Update Documentation** - Document new streaming behavior
+- [ ] **Final Testing** - Comprehensive testing of all streaming features
+- [ ] **Final Commit** - "Complete real streaming implementation for direct ClaudeCode"
+
+## Success Verification
+
+- [ ] **Verify Real Streaming** - Messages emit as CLI produces them
+- [ ] **Verify Non-blocking** - Process starts immediately, doesn't wait for completion
+- [ ] **Verify Early Access** - First messages available before CLI finishes
+- [ ] **Verify Cancellation** - Flow terminates without waiting for process
+- [ ] **Verify Resource Management** - Proper cleanup of processes and streams
+- [ ] **Verify Error Handling** - Appropriate error propagation during streaming
+- [ ] **Verify API Compatibility** - Existing query() method signature unchanged
+- [ ] **Verify Performance** - No memory buildup from holding complete message lists
+
+## Notes
+
+- Follow TDD Red-Green-Commit cycle strictly
+- Each test should call real interfaces with `???` stubs, not mocks
+- Focus on top-down approach - test complete user scenarios first
+- Mock only external dependencies (CLI executables, file system)
+- Ensure each commit has a single clear purpose
+- Keep existing effectful implementation unchanged (it already works correctly)
