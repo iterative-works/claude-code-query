@@ -100,6 +100,7 @@ object TestConstants:
     val WAIT_TIMEOUT_SHORT = 5.seconds
 
     // Sleep durations for system command testing
+    val SLEEP_DURATION_VERY_SHORT = "5" // 5 seconds - for timeout testing
     val SLEEP_DURATION_SHORT = "5" // 5 seconds
     val SLEEP_DURATION_MEDIUM = "10" // 10 seconds
     val SLEEP_DURATION_LONG = "30" // 30 seconds

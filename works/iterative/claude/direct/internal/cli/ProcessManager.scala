@@ -28,152 +28,121 @@ object ProcessManager:
         s"Starting streaming process: $executablePath with args: ${args.mkString(" ")}"
       )
 
-      val process = startStreamingProcess(executablePath, args, options)
-      val processErrorFork = monitorProcessCompletion(process, command)
+      val processBuilder = configureProcess(executablePath, args, options)
+      val process = processBuilder.start()
 
-      startStderrCapture(process)
-      val stdoutEndedNaturally = processStdoutStream(process, emit)
-
-      handleProcessCleanup(processErrorFork, stdoutEndedNaturally)
-    }
-
-  private def startStreamingProcess(
-      executablePath: String,
-      args: List[String],
-      options: QueryOptions
-  )(using logger: Logger): Process =
-    val processBuilder = configureProcess(executablePath, args, options)
-    val process = processBuilder.start()
-    closeProcessStdin(process)
-    process
-
-  private def closeProcessStdin(process: Process): Unit =
-    try {
-      process.getOutputStream().close()
-    } catch {
-      case _: Exception => // Ignore if already closed
-    }
-
-  private def monitorProcessCompletion(
-      process: Process,
-      command: List[String]
-  )(using logger: Logger, ox: Ox): Fork[Option[ProcessExecutionError]] =
-    fork {
+      // Close stdin immediately since prompt is passed as command-line argument
       try {
-        val exitCode = process.waitFor()
-        logger.info(s"Streaming process completed with exit code: $exitCode")
-        validateProcessExitCode(exitCode, command)
+        process.getOutputStream().close()
       } catch {
-        case _: InterruptedException =>
-          logger.debug("Process cleanup interrupted - terminating process")
-          process.destroyForcibly()
-          None
+        case _: Exception => // Ignore if already closed
       }
-    }
 
-  private def validateProcessExitCode(
-      exitCode: Int,
-      command: List[String]
-  )(using logger: Logger): Option[ProcessExecutionError] =
-    if (exitCode != 0) {
-      // Exit code 141 is SIGPIPE, which happens when the process tries to write
-      // to stdout after we've closed it (e.g., due to early termination with .take())
-      // This is expected behavior for streaming and should not be treated as an error
-      if (exitCode == 141) {
-        logger.debug(
-          s"Process terminated with SIGPIPE (exit code 141) - expected during early stream termination"
-        )
-        None
-      } else {
-        logger.error(s"Process failed with exit code: $exitCode")
-        Some(
-          ProcessExecutionError(
-            exitCode,
-            "Process failed during streaming",
-            command
-          )
-        )
-      }
-    } else {
-      None
-    }
+      // Fork process cleanup to run in background but capture error state
+      val processErrorFork = fork {
+        try {
+          val exitCode = process.waitFor()
+          logger.info(s"Streaming process completed with exit code: $exitCode")
 
-  private def startStderrCapture(
-      process: Process
-  )(using logger: Logger, ox: Ox): Fork[Unit] =
-    fork {
-      val stderrReader = new BufferedReader(
-        new InputStreamReader(process.getErrorStream)
-      )
-      try {
-        var stderrLine: String = null
-        while ({
-          stderrLine = stderrReader.readLine(); stderrLine != null
-        }) {
-          logger.debug(s"stderr: $stderrLine")
+          if (exitCode != 0) {
+            // Exit code 141 is SIGPIPE, which happens when the process tries to write
+            // to stdout after we've closed it (e.g., due to early termination with .take())
+            // This is expected behavior for streaming and should not be treated as an error
+            if (exitCode == 141) {
+              logger.debug(
+                s"Process terminated with SIGPIPE (exit code 141) - expected during early stream termination"
+              )
+              None
+            } else {
+              logger.error(s"Process failed with exit code: $exitCode")
+              Some(
+                ProcessExecutionError(
+                  exitCode,
+                  "Process failed during streaming",
+                  command
+                )
+              )
+            }
+          } else {
+            None
+          }
+        } catch {
+          case _: InterruptedException =>
+            // Process was interrupted (likely due to early Flow termination)
+            logger.debug("Process cleanup interrupted - terminating process")
+            process.destroyForcibly()
+            None
         }
+      }
+
+      // Fork stderr capture to run in background
+      fork {
+        val stderrReader = new BufferedReader(
+          new InputStreamReader(process.getErrorStream)
+        )
+        try {
+          var stderrLine: String = null
+          while ({
+            stderrLine = stderrReader.readLine(); stderrLine != null
+          }) {
+            logger.debug(s"stderr: $stderrLine")
+          }
+        } catch {
+          case _: Exception => // Stream closed or process terminated
+        } finally {
+          try {
+            stderrReader.close()
+          } catch {
+            case _: Exception => // Ignore close errors
+          }
+        }
+      }
+
+      // Main streaming task - read stdout and emit messages
+      val reader = new BufferedReader(
+        new InputStreamReader(process.getInputStream)
+      )
+      var stdoutEndedNaturally = false
+      try {
+        var lineNumber = 0
+        var line: String = null
+        while ({ line = reader.readLine(); line != null }) {
+          lineNumber += 1
+          parseJsonLineToMessage(line, lineNumber) match {
+            case Some(message) =>
+              logger.debug(
+                s"Emitting message: ${message.getClass.getSimpleName}"
+              )
+              emit(message)
+            case None => // Skip empty or invalid lines
+          }
+        }
+        stdoutEndedNaturally = true
+        logger.debug("Stdout stream ended naturally")
       } catch {
-        case _: Exception => // Stream closed or process terminated
+        case _: Exception =>
+          // Stream was closed (likely due to process termination or Flow cancellation)
+          logger.debug("Stdout stream reading interrupted or closed")
       } finally {
         try {
-          stderrReader.close()
+          reader.close()
         } catch {
           case _: Exception => // Ignore close errors
         }
       }
-    }
 
-  private def processStdoutStream(
-      process: Process,
-      emit: ox.flow.FlowEmit[Message]
-  )(using logger: Logger): Boolean =
-    val reader = new BufferedReader(
-      new InputStreamReader(process.getInputStream)
-    )
-    var stdoutEndedNaturally = false
-    try {
-      var lineNumber = 0
-      var line: String = null
-      while ({ line = reader.readLine(); line != null }) {
-        lineNumber += 1
-        parseJsonLineToMessage(line, lineNumber) match {
-          case Some(message) =>
-            logger.debug(
-              s"Emitting message: ${message.getClass.getSimpleName}"
-            )
-            emit(message)
-          case None => // Skip empty or invalid lines
+      // Only check for process errors if stdout ended naturally (not due to early termination)
+      if (stdoutEndedNaturally) {
+        processErrorFork.join() match {
+          case Some(error) => throw error
+          case None        => // Process completed successfully
         }
+      } else {
+        // Early termination - don't wait for process to complete
+        logger.debug(
+          "Flow terminated early - not waiting for process completion"
+        )
       }
-      stdoutEndedNaturally = true
-      logger.debug("Stdout stream ended naturally")
-    } catch {
-      case _: Exception =>
-        // Stream was closed (likely due to process termination or Flow cancellation)
-        logger.debug("Stdout stream reading interrupted or closed")
-    } finally {
-      try {
-        reader.close()
-      } catch {
-        case _: Exception => // Ignore close errors
-      }
-    }
-    stdoutEndedNaturally
-
-  private def handleProcessCleanup(
-      processErrorFork: Fork[Option[ProcessExecutionError]],
-      stdoutEndedNaturally: Boolean
-  )(using logger: Logger): Unit =
-    if (stdoutEndedNaturally) {
-      processErrorFork.join() match {
-        case Some(error) => throw error
-        case None        => // Process completed successfully
-      }
-    } else {
-      // Early termination - don't wait for process to complete
-      logger.debug(
-        "Flow terminated early - not waiting for process completion"
-      )
     }
 
   def executeProcess(

@@ -853,8 +853,8 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
       if (config.trackZombies) Some(countZombieProcesses()) else None
 
     // Standard command setup - identical across all tests
-    val testScript = "/bin/sh"
-    val args = List("-c", s"sleep ${config.sleepDuration}")
+    val testScript = "/bin/sleep"
+    val args = List(config.sleepDuration)
     val options = QueryOptions(
       prompt = config.prompt,
       cwd = None,
@@ -906,7 +906,7 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
 
       // Verify timeout exception details
       assertEquals(exception.timeoutDuration, config.timeoutDuration)
-      assertEquals(exception.command.head, "/bin/sh")
+      assertEquals(exception.command.head, "/bin/sleep")
 
       // Verify timeout was logged
       val logger = summon[MockLogger]
@@ -1340,7 +1340,7 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
 
         val config = TimeoutTestConfig(
           testName = s"timeout precision test $timeoutMs ms",
-          sleepDuration = TestConstants.WaitIntervals.SLEEP_DURATION_MEDIUM,
+          sleepDuration = TestConstants.WaitIntervals.SLEEP_DURATION_VERY_SHORT,
           timeoutDuration = timeout,
           prompt = s"timeout precision test $timeoutMs ms"
         )
@@ -1355,7 +1355,7 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
         )
         assertEquals(
           exception.command.head,
-          "/bin/sh",
+          "/bin/sleep",
           "ProcessTimeoutError should contain correct command information"
         )
 
@@ -1469,7 +1469,7 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
 
             // Verify each exception is correct
             assertEquals(exception.timeoutDuration, config.timeoutDuration)
-            assertEquals(exception.command.head, "/bin/sh")
+            assertEquals(exception.command.head, "/bin/sleep")
 
             duration
         }.toList
@@ -1524,7 +1524,7 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
 
       // Verify: Should throw ProcessTimeoutError after specified duration
       assertEquals(exception.timeoutDuration, config.timeoutDuration)
-      assertEquals(exception.command.head, "/bin/sh")
+      assertEquals(exception.command.head, "/bin/sleep")
 
       // Verify: Timeout should occur within reasonable bounds (allow for some overhead)
       val expectedMs = config.timeoutDuration.toMillis
