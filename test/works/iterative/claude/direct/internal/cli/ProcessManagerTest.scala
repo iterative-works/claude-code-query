@@ -1063,7 +1063,7 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
         echo '{"type":"user","content":"partial output"}'
         echo 'error line 1' >&2
         sleep 0.1
-        echo 'error line 2' >&2  
+        echo 'error line 2' >&2
         echo 'some more stdout'
         exit 3
       """
@@ -1324,7 +1324,6 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
 
   // === Property-Based Testing for Timeout Precision ===
 
-  // ❌ FAILING TIMEOUT TEST #2 - hangs for 40+ seconds
   test(
     "should trigger timeouts within reasonable bounds of specified duration"
   ) {
@@ -1395,7 +1394,6 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
     }
   }
 
-  // ✅ WORKING TIMEOUT TEST #2 - completes in ~15s
   test(
     "should handle timeout precision edge cases with short timeouts"
   ) {
@@ -1446,7 +1444,6 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
     }
   }
 
-  // ✅ WORKING TIMEOUT TEST #3 - completes in ~14s
   test(
     "should maintain timeout precision consistency across multiple runs"
   ) {
@@ -1502,13 +1499,7 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
   }
 
   // ===== TIMEOUT TESTS SECTION =====
-  // All timeout-related tests are marked with ✅ (working) or ❌ (failing) for easy identification
-  // ✅ Working: cleanup resources (~10s), edge cases (~15s), precision consistency (~14s)
-  // ❌ Failing: apply timeout (30+s hang), trigger bounds (40+s hang)
-  //
-  // NOTE: One moved test below for comparison - see other tests marked throughout file
 
-  // ❌ FAILING TIMEOUT TEST #1 - hangs for 30+ seconds
   test("should apply timeout when specified and terminate hanging processes") {
     supervised {
       given MockLogger = MockLogger()
