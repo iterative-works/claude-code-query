@@ -276,11 +276,6 @@ class ClaudeCodeIntegrationTest extends munit.FunSuite:
         messages.nonEmpty,
         "Should receive messages from CLI execution"
       )
-
-      // Log success for debugging
-      println(
-        s"T9.4: Successfully discovered and executed Claude CLI with ${messages.length} messages"
-      )
     }
   }
 

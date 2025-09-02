@@ -163,14 +163,105 @@ given Logger = new Logger {
 val answer = ClaudeCode.ask("Hello with custom logging")
 ```
 
+## Effectful API (ZIO)
+
+For applications using ZIO, the SDK provides a full effectful API:
+
+```scala
+import works.iterative.claude.effectful.*
+import zio.*
+
+object EffectfulExample extends ZIOAppDefault:
+  def run = for {
+    // Simple query
+    answer <- ClaudeCode.ask("What is 2+2?")
+    _ <- Console.printLine(answer)
+    
+    // Query with options
+    options = QueryOptions.simple("Explain quantum computing")
+      .withMaxTurns(3)
+      .withModel("claude-3-5-sonnet-20241022")
+    
+    result <- ClaudeCode.queryResult(options)
+    _ <- Console.printLine(result)
+    
+    // Stream processing
+    stream <- ClaudeCode.query(options)
+    _ <- stream.runForeach { message =>
+      message match {
+        case AssistantMessage(content) =>
+          ZIO.foreach(content) {
+            case TextBlock(text) => Console.print(text)
+            case _ => ZIO.unit
+          }
+        case _ => ZIO.unit
+      }
+    }
+  } yield ()
+```
+
+### Error Handling with ZIO
+
+The effectful API provides rich error handling through ZIO's error channel:
+
+```scala
+import works.iterative.claude.effectful.*
+import works.iterative.claude.core.ClaudeError
+import zio.*
+
+val program = for {
+  result <- ClaudeCode.ask("Hello Claude").catchSome {
+    case ProcessExecutionError(exitCode, stderr, _) =>
+      ZIO.succeed(s"CLI failed with exit $exitCode: $stderr")
+    case ConfigurationError(param, value, reason) =>
+      ZIO.succeed(s"Invalid $param=$value: $reason")
+  }
+  _ <- Console.printLine(result)
+} yield ()
+```
+
+### Concurrent Queries with ZIO
+
+Leverage ZIO's powerful concurrency primitives:
+
+```scala
+import works.iterative.claude.effectful.*
+import zio.*
+
+val queries = List("What is 2+2?", "What is 3+3?", "What is 4+4?")
+
+val program = for {
+  fibers <- ZIO.foreach(queries)(q => ClaudeCode.ask(q).fork)
+  results <- ZIO.foreach(fibers)(_.join)
+  _ <- Console.printLine(s"Results: $results")
+} yield ()
+```
+
+### Resource Management
+
+The effectful API handles resource cleanup automatically:
+
+```scala
+import works.iterative.claude.effectful.*
+import zio.*
+
+val program = ClaudeCode.query(options).flatMap { stream =>
+  stream.take(5).runCollect.map { messages =>
+    println(s"First 5 messages: $messages")
+  }
+}
+// Resources are automatically cleaned up after stream processing
+```
+
 ## Architecture
 
 The SDK is built on:
 
-- **Ox**: Structured concurrency for safe concurrent operations
+- **Ox**: Structured concurrency for safe concurrent operations (direct API)
+- **ZIO**: Functional effects for the effectful API
 - **Scala 3**: Modern language features and type safety  
 - **SLF4J**: Standard logging framework
-- **Direct Style**: No monads or effects, just regular Scala code
+- **Dual API Design**: Choose between direct style or effectful programming
 
 ## Message Types
 
