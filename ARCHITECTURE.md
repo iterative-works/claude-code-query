@@ -19,7 +19,7 @@ The SDK follows these key principles:
 │   (ClaudeCode)  │    │  Management      │    │  Parsing        │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
          │                       │                       │
-    ┌────▼────┐         ┌────────▼────────┐    ┌─────────▼─────────┐
+    ┌────▼───┐         ┌────────▼───────┐    ┌─────────▼────────┐
     │ Model   │         │ ProcessManager  │    │   JsonParser      │
     │ Types   │         │ CLIDiscovery    │    │                   │
     └─────────┘         │ CLIArgBuilder   │    └───────────────────┘
@@ -34,7 +34,7 @@ The SDK follows these key principles:
 The primary entry point for the SDK. Provides three main methods:
 
 - `query(options: QueryOptions): Stream[IO, Message]` - Returns streaming messages
-- `querySync(options: QueryOptions): IO[List[Message]]` - Returns all messages as a list  
+- `querySync(options: QueryOptions): IO[List[Message]]` - Returns all messages as a list
 - `queryResult(options: QueryOptions): IO[String]` - Returns extracted text result
 
 **Key Responsibilities**:
@@ -70,12 +70,12 @@ Sealed trait hierarchy representing all message types from Claude Code CLI:
 ```scala
 sealed trait Message
 ├── UserMessage(content: String)
-├── AssistantMessage(content: List[ContentBlock]) 
+├── AssistantMessage(content: List[ContentBlock])
 ├── SystemMessage(subtype: String, data: Map[String, Any])
 └── ResultMessage(subtype, durationMs, cost, usage, ...)
 ```
 
-### ContentBlock Hierarchy  
+### ContentBlock Hierarchy
 **Location**: `works.iterative.claude.model.ContentBlock`
 
 Represents structured content within assistant messages:
@@ -154,7 +154,7 @@ Comprehensive error hierarchy for different failure modes:
 **Architecture**: Multi-level parsing approach:
 
 1. **High-level JSON line parsing** - Entry points with error handling
-2. **Core message parsing** - Dispatches to specific message type parsers  
+2. **Core message parsing** - Dispatches to specific message type parsers
 3. **Message type parsers** - Handle specific message formats
 4. **Content block parsing** - Handles different content types within messages
 5. **Data extraction utilities** - Low-level JSON value extraction
@@ -187,7 +187,7 @@ ClaudeCode (main API)
 ProcessManager
 ├── depends on: JsonParser, QueryOptions
 │
-JsonParser  
+JsonParser
 ├── depends on: Message types, ContentBlock types
 │
 Error handling flows through all layers with typed error contexts
