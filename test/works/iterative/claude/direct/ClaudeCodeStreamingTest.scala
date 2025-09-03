@@ -78,9 +78,6 @@ class ClaudeCodeStreamingTest extends munit.FunSuite:
         val elapsed = System.currentTimeMillis() - startTime
         messages += message
 
-        // CRITICAL TEST: Real streaming validation
-        // Real streaming: first message ~100ms, second ~5100ms, third ~10100ms
-        // Fake streaming: all messages arrive quickly after ~15 second process completion
         if (messages.size == 1) {
           val firstMessageTime = elapsed
 
@@ -168,27 +165,18 @@ class ClaudeCodeStreamingTest extends munit.FunSuite:
       var firstMessageReceived = false
       var processStillRunning = true
 
-      // ❌ THIS SHOULD FAIL with current fake streaming implementation
-      // Current implementation: waits for ENTIRE process completion (~40s) before ANY messages
-      // Real streaming: should get first message quickly (~100ms) while process continues
-
       messageFlow
         .take(1) // Only take first message to prove early access
         .runForeach { message =>
           val elapsed = System.currentTimeMillis() - startTime
           firstMessageReceived = true
 
-          // CRITICAL TEST: Early access validation
-          // Real streaming: first message arrives quickly (~100ms)
-          // Fake streaming: first message arrives after full process completion (~40000ms)
           assert(
             elapsed < 2000,
             s"First message took too long: ${elapsed}ms. Real streaming should deliver first message quickly, not wait for process completion"
           )
 
           // Additional check: process should still be running when we get first message
-          // In real streaming, the process continues running after we get early messages
-          // In fake streaming, process is already complete when we get messages
           assert(
             firstMessageReceived,
             "Should have received first message via early access"
