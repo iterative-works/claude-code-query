@@ -56,22 +56,22 @@ A synchronous, direct-style API using Ox for structured concurrency. Perfect for
 - **Simple Error Handling**: Standard try-catch with typed exceptions
 - **Single Import**: Everything available via `import works.iterative.claude.direct.*`
 
-### Effectful API (ZIO-based)
+### Effectful API (cats-effect + fs2)
 **Location**: `works.iterative.claude.effectful.ClaudeCode`
 
-A fully effectful API using ZIO for applications that embrace functional effect systems.
+A fully effectful API using cats-effect IO and fs2 streams for applications that embrace functional effect systems.
 
 **Key Methods**:
-- `ask(prompt: String): Task[String]` - Simple query returning ZIO Task
-- `query(options: QueryOptions): Stream[Throwable, Message]` - Returns ZIO stream of messages
-- `querySync(options: QueryOptions): Task[List[Message]]` - Returns all messages in ZIO
-- `queryResult(options: QueryOptions): Task[String]` - Returns extracted text in ZIO
+- `query(options: QueryOptions)(using Logger[IO]): Stream[IO, Message]` - Returns fs2 stream of messages
+- `querySync(options: QueryOptions)(using Logger[IO]): IO[List[Message]]` - Returns all messages in IO
+- `queryResult(options: QueryOptions)(using Logger[IO]): IO[String]` - Returns extracted text in IO
 
 **Architecture Features**:
-- **Effect Management**: Full ZIO integration with error channel
-- **Resource Safety**: Automatic resource cleanup via ZIO's bracket
-- **Composable Operations**: Leverage ZIO's powerful combinators
-- **Concurrent Operations**: Built-in support for parallel queries via fibers
+- **Effect Management**: Full cats-effect IO integration for referential transparency
+- **Streaming Support**: fs2 streams for memory-efficient message processing
+- **Resource Safety**: Automatic cleanup via fs2's bracket and Resource abstractions
+- **Composable Operations**: Leverage cats-effect's powerful combinators
+- **Given-based Logging**: Uses log4cats with given instances for clean dependency injection
 
 ### Shared Architecture Pattern
 
@@ -257,22 +257,35 @@ Error handling flows through all layers with typed error contexts
 
 ### Effectful API Stack
 
-**ZIO**: Full-featured effect system:
-- Composable error handling via error channel
-- Resource safety with bracket/finalizers
-- Built-in streaming with ZStream
+**cats-effect**: Industry-standard effect system:
+- Composable error handling with IO monad
+- Resource safety with bracket/Resource
+- Integration with fs2 for streaming
 - Fiber-based concurrency
+
+**fs2**: Functional streaming library:
+- Memory-efficient stream processing
+- Backpressure handling
+- Compositional stream operations
+- Integration with cats-effect IO
+
+**log4cats**: Effectful logging:
+- Type-safe logging with IO
+- Integration with SLF4J backends
+- Given-based dependency injection
 
 ### Shared Components
 
-**ujson**: JSON parsing for both APIs:
-- Simple, fast JSON parsing
+**circe**: JSON parsing for both APIs:
+- Type-safe JSON decoding with HCursor
+- Comprehensive error information
+- Functional programming patterns
 - Line-by-line streaming support
-- Minimal dependencies
 
 **SLF4J**: Logging abstraction:
-- Pluggable logging backends
+- Pluggable logging backends (logback included)
 - Consistent logging across both APIs
-- Given-based logger injection
+- Direct API uses given-based SLF4J logger injection
+- Effectful API uses log4cats with SLF4J backend
 
 This dual-API architecture provides flexibility for users to choose their preferred programming style while sharing the same robust core implementation for CLI interaction and message processing.

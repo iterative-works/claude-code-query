@@ -163,94 +163,125 @@ given Logger = new Logger {
 val answer = ClaudeCode.ask("Hello with custom logging")
 ```
 
-## Effectful API (ZIO)
+## Effectful API (cats-effect)
 
-For applications using ZIO, the SDK provides a full effectful API:
+For applications using functional effect systems, the SDK provides a full effectful API with cats-effect IO and fs2:
 
 ```scala
 import works.iterative.claude.effectful.*
-import zio.*
+import cats.effect.*
+import fs2.Stream
+import org.typelevel.log4cats.slf4j.Slf4jLogger
 
-object EffectfulExample extends ZIOAppDefault:
+object EffectfulExample extends IOApp.Simple:
   def run = for {
+    given logger <- Slf4jLogger.create[IO]
+    
     // Simple query
-    answer <- ClaudeCode.ask("What is 2+2?")
-    _ <- Console.printLine(answer)
+    result <- ClaudeCode.queryResult(
+      QueryOptions.simple("What is 2+2?")
+    )
+    _ <- IO.println(result)
     
     // Query with options
     options = QueryOptions.simple("Explain quantum computing")
       .withMaxTurns(3)
       .withModel("claude-3-5-sonnet-20241022")
     
-    result <- ClaudeCode.queryResult(options)
-    _ <- Console.printLine(result)
+    // Get all messages
+    messages <- ClaudeCode.querySync(options)
+    _ <- IO.println(s"Got ${messages.length} messages")
     
     // Stream processing
-    stream <- ClaudeCode.query(options)
-    _ <- stream.runForeach { message =>
-      message match {
-        case AssistantMessage(content) =>
-          ZIO.foreach(content) {
-            case TextBlock(text) => Console.print(text)
-            case _ => ZIO.unit
-          }
-        case _ => ZIO.unit
+    _ <- ClaudeCode.query(options)
+      .evalMap { message =>
+        message match {
+          case AssistantMessage(content) =>
+            content.foreach {
+              case TextBlock(text) => IO.print(text)
+              case _ => IO.unit
+            }
+            IO.unit
+          case _ => IO.unit
+        }
       }
-    }
+      .compile
+      .drain
   } yield ()
 ```
 
-### Error Handling with ZIO
+### Error Handling with cats-effect
 
-The effectful API provides rich error handling through ZIO's error channel:
+The effectful API provides composable error handling through IO:
 
 ```scala
 import works.iterative.claude.effectful.*
-import works.iterative.claude.core.ClaudeError
-import zio.*
+import cats.effect.*
+import cats.syntax.applicativeError.*
+import org.typelevel.log4cats.slf4j.Slf4jLogger
 
 val program = for {
-  result <- ClaudeCode.ask("Hello Claude").catchSome {
+  given logger <- Slf4jLogger.create[IO]
+  
+  result <- ClaudeCode.queryResult(
+    QueryOptions.simple("Hello Claude")
+  ).handleErrorWith {
     case ProcessExecutionError(exitCode, stderr, _) =>
-      ZIO.succeed(s"CLI failed with exit $exitCode: $stderr")
+      IO.pure(s"CLI failed with exit $exitCode: $stderr")
     case ConfigurationError(param, value, reason) =>
-      ZIO.succeed(s"Invalid $param=$value: $reason")
+      IO.pure(s"Invalid $param=$value: $reason")
+    case error =>
+      IO.pure(s"Unexpected error: $error")
   }
-  _ <- Console.printLine(result)
+  _ <- IO.println(result)
 } yield ()
 ```
 
-### Concurrent Queries with ZIO
+### Concurrent Queries with cats-effect
 
-Leverage ZIO's powerful concurrency primitives:
+Leverage IO's fiber-based concurrency:
 
 ```scala
 import works.iterative.claude.effectful.*
-import zio.*
+import cats.effect.*
+import cats.syntax.parallel.*
+import org.typelevel.log4cats.slf4j.Slf4jLogger
 
 val queries = List("What is 2+2?", "What is 3+3?", "What is 4+4?")
 
 val program = for {
-  fibers <- ZIO.foreach(queries)(q => ClaudeCode.ask(q).fork)
-  results <- ZIO.foreach(fibers)(_.join)
-  _ <- Console.printLine(s"Results: $results")
+  given logger <- Slf4jLogger.create[IO]
+  
+  // Run queries in parallel
+  results <- queries.parTraverse { q =>
+    ClaudeCode.queryResult(QueryOptions.simple(q))
+  }
+  _ <- IO.println(s"Results: $results")
 } yield ()
 ```
 
-### Resource Management
+### Streaming with fs2
 
-The effectful API handles resource cleanup automatically:
+The effectful API uses fs2 streams for efficient message processing:
 
 ```scala
 import works.iterative.claude.effectful.*
-import zio.*
+import cats.effect.*
+import fs2.Stream
+import org.typelevel.log4cats.slf4j.Slf4jLogger
 
-val program = ClaudeCode.query(options).flatMap { stream =>
-  stream.take(5).runCollect.map { messages =>
-    println(s"First 5 messages: $messages")
-  }
-}
-// Resources are automatically cleaned up after stream processing
+val program = for {
+  given logger <- Slf4jLogger.create[IO]
+  
+  // Process messages as a stream
+  _ <- ClaudeCode.query(options)
+    .take(5)  // Take only first 5 messages
+    .evalTap(msg => logger.info(s"Got message: ${msg.getClass.getSimpleName}"))
+    .compile
+    .toList
+    .flatMap(messages => IO.println(s"First 5 messages: $messages"))
+} yield ()
+// Resources are automatically cleaned up via fs2's Resource management
 ```
 
 ## Architecture
@@ -258,9 +289,9 @@ val program = ClaudeCode.query(options).flatMap { stream =>
 The SDK is built on:
 
 - **Ox**: Structured concurrency for safe concurrent operations (direct API)
-- **ZIO**: Functional effects for the effectful API
+- **cats-effect IO + fs2**: Functional effects and streaming for the effectful API
 - **Scala 3**: Modern language features and type safety  
-- **SLF4J**: Standard logging framework
+- **log4cats + SLF4J**: Flexible logging with both given-based and effectful approaches
 - **Dual API Design**: Choose between direct style or effectful programming
 
 ## Message Types
