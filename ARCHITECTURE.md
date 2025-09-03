@@ -6,7 +6,7 @@ This document describes the architectural design of the Claude Code Scala SDK, a
 
 The SDK follows these key principles:
 
-- **Dual API Design**: Offers both direct-style (Ox-based) and effectful (ZIO-based) APIs
+- **Dual API Design**: Offers both direct-style (Ox-based) and effectful (cats-effect-based) APIs
 - **Functional Core**: Uses immutable data structures and pure functions
 - **Simplified Interface**: Flattens the complex TypeScript CLI output into clean, user-friendly Scala types
 - **Separation of Concerns**: Clear boundaries between API, process management, CLI interaction, and parsing
@@ -19,7 +19,7 @@ The SDK follows these key principles:
 │           Public API Layer              │
 ├──────────────────┬──────────────────────┤
 │   Direct API     │    Effectful API     │
-│   (Ox-based)     │    (ZIO-based)       │
+│   (Ox-based)     │ (cats-effect-based)  │
 └──────────────────┴──────────────────────┘
             │                │
             └────────┬───────┘
