@@ -102,4 +102,64 @@ case class QueryOptions(
       * false).
       */
     environmentVariables: Option[Map[String, String]] = None
-)
+):
+  // ==== FLUENT API FOR FUNCTIONAL MUTATION ====
+
+  def withCwd(cwd: String): QueryOptions = copy(cwd = Some(cwd))
+  def withExecutable(executable: String): QueryOptions =
+    copy(executable = Some(executable))
+  def withExecutableArgs(args: List[String]): QueryOptions =
+    copy(executableArgs = Some(args))
+  def withClaudeExecutable(path: String): QueryOptions =
+    copy(pathToClaudeCodeExecutable = Some(path))
+  def withMaxTurns(turns: Int): QueryOptions = copy(maxTurns = Some(turns))
+  def withAllowedTools(tools: List[String]): QueryOptions =
+    copy(allowedTools = Some(tools))
+  def withDisallowedTools(tools: List[String]): QueryOptions =
+    copy(disallowedTools = Some(tools))
+  def withSystemPrompt(prompt: String): QueryOptions =
+    copy(systemPrompt = Some(prompt))
+  def withAppendSystemPrompt(prompt: String): QueryOptions =
+    copy(appendSystemPrompt = Some(prompt))
+  def withMcpTools(tools: List[String]): QueryOptions =
+    copy(mcpTools = Some(tools))
+  def withPermissionMode(mode: PermissionMode): QueryOptions =
+    copy(permissionMode = Some(mode))
+  def withContinueConversation(continue: Boolean): QueryOptions =
+    copy(continueConversation = Some(continue))
+  def withResume(sessionId: String): QueryOptions =
+    copy(resume = Some(sessionId))
+  def withModel(model: String): QueryOptions = copy(model = Some(model))
+  def withMaxThinkingTokens(tokens: Int): QueryOptions =
+    copy(maxThinkingTokens = Some(tokens))
+  def withTimeout(
+      timeout: scala.concurrent.duration.FiniteDuration
+  ): QueryOptions = copy(timeout = Some(timeout))
+  def withInheritEnvironment(inherit: Boolean): QueryOptions =
+    copy(inheritEnvironment = Some(inherit))
+  def withEnvironmentVariables(vars: Map[String, String]): QueryOptions =
+    copy(environmentVariables = Some(vars))
+
+object QueryOptions:
+  /** Create QueryOptions with just a prompt and sane defaults */
+  def simple(prompt: String): QueryOptions = QueryOptions(
+    prompt = prompt,
+    cwd = None,
+    executable = None,
+    executableArgs = None,
+    pathToClaudeCodeExecutable = None,
+    maxTurns = None,
+    allowedTools = None,
+    disallowedTools = None,
+    systemPrompt = None,
+    appendSystemPrompt = None,
+    mcpTools = None,
+    permissionMode = None,
+    continueConversation = None,
+    resume = None,
+    model = None,
+    maxThinkingTokens = None,
+    timeout = None,
+    inheritEnvironment = None,
+    environmentVariables = None
+  )

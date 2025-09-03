@@ -6,6 +6,7 @@ package works.iterative.claude.effectful.internal.cli
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import works.iterative.claude.core.model.QueryOptions
+import works.iterative.claude.core.EnvironmentValidationError
 import works.iterative.claude.effectful.internal.cli.ProcessManager
 import munit.CatsEffectSuite
 
@@ -123,16 +124,16 @@ class EnvironmentValidationTest extends CatsEffectSuite:
         options
       )
 
-    // For now, expect this to NOT fail (validation not implemented)
-    // But once validation is implemented, this should fail
-    result.attempt.map:
-      either =>
-        // Currently expecting success (no validation)
+    // Should fail during configuration validation
+    result.attempt.map: either =>
+      // Expecting validation failure for invalid environment variable names
+      assert(
+        either.isLeft,
+        "Expected configuration to fail for invalid env var names"
+      )
+      either.left.foreach { error =>
         assert(
-          either.isRight,
-          "Expected configuration to succeed without validation"
+          error.isInstanceOf[EnvironmentValidationError],
+          s"Expected EnvironmentValidationError but got: ${error.getClass.getSimpleName}"
         )
-
-        // TODO: Once validation is implemented, change this to:
-        // assert(either.isLeft, "Expected configuration to fail for invalid env var names")
-        // assert(either.left.exists(_.isInstanceOf[EnvironmentValidationError]))
+      }

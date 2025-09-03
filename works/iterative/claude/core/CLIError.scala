@@ -42,3 +42,10 @@ case class ConfigurationError(
 ) extends CLIError:
   val message =
     s"Invalid configuration for parameter '$parameter' with value '$value': $reason"
+
+case class EnvironmentValidationError(
+    invalidVariables: List[String],
+    reason: String
+) extends CLIError:
+  val message =
+    s"Invalid environment variable names: ${invalidVariables.mkString(", ")}. $reason"

@@ -14,7 +14,11 @@ import works.iterative.claude.core.model.{
   ResultMessage
 }
 import works.iterative.claude.effectful.internal.parsing.JsonParser
-import works.iterative.claude.core.{ProcessExecutionError, ProcessTimeoutError}
+import works.iterative.claude.core.{
+  ProcessExecutionError,
+  ProcessTimeoutError,
+  EnvironmentValidationError
+}
 import org.typelevel.log4cats.Logger
 
 /** Manages process configuration and execution for Claude Code CLI.
@@ -80,6 +84,8 @@ private class ProcessManagerImpl extends ProcessManager:
       args: List[String],
       options: QueryOptions
   ): ProcessBuilder =
+    // Validate environment variables before creating ProcessBuilder
+    options.environmentVariables.foreach(validateEnvironmentVariables)
     createBaseProcessBuilder(executablePath, args, options)
 
   def executeProcess(
@@ -267,3 +273,45 @@ private class ProcessManagerImpl extends ProcessManager:
             .drain
         }
       case None => processStream
+
+  /** Validates environment variable names for obviously invalid cases.
+    *
+    * This validation catches the most problematic environment variable names
+    * that are likely to cause issues across different systems:
+    *   - Names starting with numbers (like "123_VAR")
+    *   - Names containing hyphens (like "VAR-NAME")
+    *
+    * More lenient validation allows edge cases like dots and empty names to be
+    * handled gracefully by the underlying system.
+    *
+    * @param envVars
+    *   Map of environment variables to validate
+    * @throws EnvironmentValidationError
+    *   if any variable names are invalid
+    */
+  private def validateEnvironmentVariables(envVars: Map[String, String]): Unit =
+    val invalidNames =
+      envVars.keys.filter(name => !isValidEnvironmentVariableName(name)).toList
+
+    if (invalidNames.nonEmpty)
+      throw EnvironmentValidationError(
+        invalidNames,
+        "Environment variable names cannot start with numbers or contain hyphens"
+      )
+
+  /** Checks if an environment variable name is valid for most systems.
+    *
+    * This validation is intentionally lenient, only catching the most obviously
+    * problematic cases to allow system-specific handling of edge cases.
+    *
+    * @param name
+    *   The environment variable name to validate
+    * @return
+    *   true if the name is valid, false otherwise
+    */
+  private def isValidEnvironmentVariableName(name: String): Boolean =
+    // Allow empty names (system will handle gracefully)
+    if (name.isEmpty) true
+    else
+      // Reject names starting with numbers or containing hyphens
+      !name.head.isDigit && !name.contains('-')
