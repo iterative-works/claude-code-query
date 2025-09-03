@@ -304,9 +304,13 @@ class ClaudeCodeIntegrationTest extends munit.FunSuite:
     // Check for API key in environment
     val hasApiKey = sys.env.contains("ANTHROPIC_API_KEY")
 
-    // Check if mock CLI is available for testing
-    val mockCliPath = java.nio.file.Paths.get("./test/bin/mock-claude")
-    val hasMockCli = java.nio.file.Files.exists(mockCliPath)
+    // Check for Claude credentials file
+    val homeDir = sys.env.get("HOME").orElse(sys.env.get("USERPROFILE"))
+    val hasCredentialsFile = homeDir.exists { home =>
+      val credentialsPath =
+        java.nio.file.Paths.get(home, ".claude", ".credentials.json")
+      java.nio.file.Files.exists(credentialsPath)
+    }
 
-    hasApiKey || hasMockCli
+    hasApiKey || hasCredentialsFile
   }

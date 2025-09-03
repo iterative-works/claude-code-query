@@ -6,7 +6,8 @@ This document describes the architectural design of the Claude Code Scala SDK, a
 
 The SDK follows these key principles:
 
-- **Functional Core**: Uses immutable data structures, pure functions, and effect management with cats-effect IO
+- **Dual API Design**: Offers both direct-style (Ox-based) and effectful (ZIO-based) APIs
+- **Functional Core**: Uses immutable data structures and pure functions
 - **Simplified Interface**: Flattens the complex TypeScript CLI output into clean, user-friendly Scala types
 - **Separation of Concerns**: Clear boundaries between API, process management, CLI interaction, and parsing
 - **Testability**: Components are designed for easy unit testing with dependency injection
@@ -14,42 +15,73 @@ The SDK follows these key principles:
 ## High-Level Architecture
 
 ```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   Public API    │────│  Internal CLI    │────│  Internal       │
-│   (ClaudeCode)  │    │  Management      │    │  Parsing        │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-         │                       │                       │
-    ┌────▼───┐         ┌────────▼───────┐    ┌─────────▼────────┐
-    │ Model   │         │ ProcessManager  │    │   JsonParser      │
-    │ Types   │         │ CLIDiscovery    │    │                   │
-    └─────────┘         │ CLIArgBuilder   │    └───────────────────┘
-                        └─────────────────┘
+┌─────────────────────────────────────────┐
+│           Public API Layer              │
+├──────────────────┬──────────────────────┤
+│   Direct API     │    Effectful API     │
+│   (Ox-based)     │    (ZIO-based)       │
+└──────────────────┴──────────────────────┘
+            │                │
+            └────────┬───────┘
+                     │
+         ┌──────────▼────────────┐
+         │    Core Components    │
+         ├───────────────────────┤
+         │  • Model Types        │
+         │  • CLI Discovery      │
+         │  • Argument Builder   │
+         │  • Process Manager    │
+         │  • JSON Parser        │
+         └───────────────────────┘
 ```
 
 ## Public API Layer
 
-### ClaudeCode (Main API)
-**Location**: `works.iterative.claude.ClaudeCode`
+The SDK provides two distinct API styles to accommodate different programming preferences and application architectures:
 
-The primary entry point for the SDK. Provides three main methods:
+### Direct-Style API (Ox-based)
+**Location**: `works.iterative.claude.direct.ClaudeCode`
 
-- `query(options: QueryOptions): Stream[IO, Message]` - Returns streaming messages
-- `querySync(options: QueryOptions): IO[List[Message]]` - Returns all messages as a list
-- `queryResult(options: QueryOptions): IO[String]` - Returns extracted text result
+A synchronous, direct-style API using Ox for structured concurrency. Perfect for straightforward use cases and developers who prefer direct style over monadic effects.
 
-**Key Responsibilities**:
-- Orchestrates the complete query flow
-- Manages CLI discovery, argument building, and process execution
-- Provides logging and error context
-- Validates configuration before execution
+**Key Methods**:
+- `ask(prompt: String): String` - Simple blocking query returning text result
+- `query(options: QueryOptions): Flow[Message]` - Returns streaming messages via Ox Flow
+- `querySync(options: QueryOptions): List[Message]` - Returns all messages as a list
+- `queryResult(options: QueryOptions): String` - Returns extracted text result
 
-**Architecture Pattern**: The implementation follows a **stepdown rule** with three levels:
+**Architecture Features**:
+- **Structured Concurrency**: Uses Ox supervised blocks for safe concurrent operations
+- **Streaming Support**: Real-time message streaming with early access via Flow
+- **Simple Error Handling**: Standard try-catch with typed exceptions
+- **Single Import**: Everything available via `import works.iterative.claude.direct.*`
+
+### Effectful API (ZIO-based)
+**Location**: `works.iterative.claude.effectful.ClaudeCode`
+
+A fully effectful API using ZIO for applications that embrace functional effect systems.
+
+**Key Methods**:
+- `ask(prompt: String): Task[String]` - Simple query returning ZIO Task
+- `query(options: QueryOptions): Stream[Throwable, Message]` - Returns ZIO stream of messages
+- `querySync(options: QueryOptions): Task[List[Message]]` - Returns all messages in ZIO
+- `queryResult(options: QueryOptions): Task[String]` - Returns extracted text in ZIO
+
+**Architecture Features**:
+- **Effect Management**: Full ZIO integration with error channel
+- **Resource Safety**: Automatic resource cleanup via ZIO's bracket
+- **Composable Operations**: Leverage ZIO's powerful combinators
+- **Concurrent Operations**: Built-in support for parallel queries via fibers
+
+### Shared Architecture Pattern
+
+Both APIs follow a **stepdown rule** with three levels:
 1. **High-level "What" operations** - Public API methods that define what we want to accomplish
 2. **Mid-level "How" operations** - Private methods that orchestrate the steps to accomplish the goals
 3. **Low-level validation and utilities** - Specific implementation details and validations
 
 ### QueryOptions (Configuration)
-**Location**: `works.iterative.claude.QueryOptions`
+**Location**: `works.iterative.claude.core.model.QueryOptions`
 
 Comprehensive configuration case class that maps all CLI parameters to type-safe Scala options.
 
@@ -215,19 +247,32 @@ Error handling flows through all layers with typed error contexts
 
 ## Technology Stack Integration
 
-**cats-effect IO**: All side effects are managed through IO, enabling:
-- Composable error handling
-- Resource safety (automatic cleanup)
-- Structured concurrency
+### Direct API Stack
 
-**fs2 Streams**: Message processing uses streams for:
-- Memory-efficient processing of large outputs
-- Backpressure handling
-- Compositional processing pipelines
+**Ox**: Structured concurrency library for direct-style Scala:
+- Supervised blocks for safe resource management
+- Flow abstraction for streaming data
+- Direct-style error handling with exceptions
+- Fork/join concurrency without monads
 
-**circe JSON**: Parsing uses circe for:
-- Type-safe JSON decoding
-- Comprehensive error information
-- Functional programming patterns
+### Effectful API Stack
 
-This architecture provides a clean, testable, and maintainable wrapper around the Claude Code CLI while preserving all its functionality in an idiomatic Scala interface.
+**ZIO**: Full-featured effect system:
+- Composable error handling via error channel
+- Resource safety with bracket/finalizers
+- Built-in streaming with ZStream
+- Fiber-based concurrency
+
+### Shared Components
+
+**ujson**: JSON parsing for both APIs:
+- Simple, fast JSON parsing
+- Line-by-line streaming support
+- Minimal dependencies
+
+**SLF4J**: Logging abstraction:
+- Pluggable logging backends
+- Consistent logging across both APIs
+- Given-based logger injection
+
+This dual-API architecture provides flexibility for users to choose their preferred programming style while sharing the same robust core implementation for CLI interaction and message processing.

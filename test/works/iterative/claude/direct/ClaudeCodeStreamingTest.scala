@@ -59,11 +59,6 @@ class ClaudeCodeStreamingTest extends munit.FunSuite:
       val mockScript = MockCliScript.createTempScript(mockBehavior)
       createdScripts += mockScript
 
-      // Debug: Print the actual script content to understand what's being generated
-      println(s"Mock script path: ${mockScript}")
-      val scriptContent = scala.io.Source.fromFile(mockScript.toFile).mkString
-      println(s"Mock script content:\n${scriptContent}")
-
       val options = QueryOptions
         .simple("Test streaming")
         .withClaudeExecutable(mockScript.toString)
@@ -72,11 +67,8 @@ class ClaudeCodeStreamingTest extends munit.FunSuite:
       val claude = ClaudeCode.concurrent
       val messageFlow = claude.query(options)
 
-      println(s"Starting test at ${System.currentTimeMillis()}")
-
-      // ❌ THIS SHOULD FAIL with current fake streaming implementation
-      // Current implementation: waits for process completion, then Flow.fromIterable()
-      // Real streaming: should get first message before 5-second delay to second message
+      // With real streaming implementation, messages arrive as they're generated:
+      // First message arrives immediately, before the 5-second delay to second message
 
       val startTime = System.currentTimeMillis()
       val messages = scala.collection.mutable.ListBuffer[Message]()
@@ -84,9 +76,6 @@ class ClaudeCodeStreamingTest extends munit.FunSuite:
       // Stream messages and record timing
       messageFlow.runForeach { message =>
         val elapsed = System.currentTimeMillis() - startTime
-        println(
-          s"Got message at ${elapsed}ms: ${message.getClass.getSimpleName}"
-        )
         messages += message
 
         // CRITICAL TEST: Real streaming validation
@@ -94,7 +83,6 @@ class ClaudeCodeStreamingTest extends munit.FunSuite:
         // Fake streaming: all messages arrive quickly after ~15 second process completion
         if (messages.size == 1) {
           val firstMessageTime = elapsed
-          println(s"First message arrived at ${firstMessageTime}ms")
 
           // Real streaming should show first message arriving quickly
           assert(
@@ -105,7 +93,6 @@ class ClaudeCodeStreamingTest extends munit.FunSuite:
 
         if (messages.size == 2) {
           val secondMessageTime = elapsed
-          println(s"Second message arrived at ${secondMessageTime}ms")
 
           // Real streaming: second message should arrive ~5 seconds after first
           assert(
@@ -116,7 +103,6 @@ class ClaudeCodeStreamingTest extends munit.FunSuite:
 
         if (messages.size == 3) {
           val thirdMessageTime = elapsed
-          println(s"Third message arrived at ${thirdMessageTime}ms")
 
           // Real streaming: third message should arrive ~10 seconds after start
           assert(
@@ -127,7 +113,6 @@ class ClaudeCodeStreamingTest extends munit.FunSuite:
       }
 
       val totalTime = System.currentTimeMillis() - startTime
-      println(s"Total test time: ${totalTime}ms")
 
       // Verify: All messages eventually received
       assertEquals(messages.length, 3)
@@ -179,8 +164,6 @@ class ClaudeCodeStreamingTest extends munit.FunSuite:
       val claude = ClaudeCode.concurrent
       val messageFlow = claude.query(options)
 
-      println(s"Starting early access test at ${System.currentTimeMillis()}")
-
       val startTime = System.currentTimeMillis()
       var firstMessageReceived = false
       var processStillRunning = true
@@ -193,9 +176,6 @@ class ClaudeCodeStreamingTest extends munit.FunSuite:
         .take(1) // Only take first message to prove early access
         .runForeach { message =>
           val elapsed = System.currentTimeMillis() - startTime
-          println(
-            s"Got first message at ${elapsed}ms: ${message.getClass.getSimpleName}"
-          )
           firstMessageReceived = true
 
           // CRITICAL TEST: Early access validation
@@ -216,7 +196,6 @@ class ClaudeCodeStreamingTest extends munit.FunSuite:
         }
 
       val totalTime = System.currentTimeMillis() - startTime
-      println(s"Early access test completed in: ${totalTime}ms")
 
       // Verify: Early access worked - got message quickly without waiting for full process
       assert(
