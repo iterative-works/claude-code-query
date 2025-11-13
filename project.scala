@@ -1,4 +1,4 @@
-//> using scala 3.3.6
+//> using scala 3.7.4
 //> using dep org.typelevel::cats-effect:3.6.3
 //> using dep co.fs2::fs2-core:3.12.0
 //> using dep co.fs2::fs2-io:3.12.0
