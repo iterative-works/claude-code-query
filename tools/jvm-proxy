@@ -1,0 +1,242 @@
+#!/usr/bin/env python3
+"""
+JVM Proxy - A local HTTP proxy that forwards requests with authentication.
+
+This proxy solves the issue where JVM tools (sbt, coursier, scala-cli) can't
+properly authenticate with HTTP proxies that require Basic auth for HTTPS tunneling.
+
+Usage:
+    jvm-proxy start [--port PORT]  # Start the proxy (default port: 13130)
+    jvm-proxy stop                 # Stop the proxy
+    jvm-proxy status               # Check if proxy is running
+    jvm-proxy env                  # Print environment variables to set
+
+Example:
+    # Start proxy and configure environment
+    eval $(jvm-proxy env)
+    jvm-proxy start &
+
+    # Now run JVM tools
+    sbt compile
+"""
+
+import socket
+import threading
+import base64
+import os
+import sys
+import select
+import signal
+
+def get_proxy_config():
+    """Parse proxy configuration from environment."""
+    proxy_url = os.environ.get('HTTPS_PROXY', os.environ.get('HTTP_PROXY', ''))
+    if not proxy_url or '@' not in proxy_url:
+        return None
+
+    try:
+        host_port = proxy_url.split('@')[1]
+        upstream_host = host_port.split(':')[0]
+        upstream_port = int(host_port.split(':')[1])
+        creds = proxy_url.split('://')[1].split('@')[0]
+        proxy_user = creds.split(':')[0]
+        proxy_pass = creds.split(':', 1)[1]
+        return {
+            'host': upstream_host,
+            'port': upstream_port,
+            'user': proxy_user,
+            'pass': proxy_pass
+        }
+    except:
+        return None
+
+def handle_connect(client_sock, target_host, target_port, config):
+    """Handle HTTPS CONNECT tunneling."""
+    upstream = None
+    try:
+        upstream = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        upstream.settimeout(30)
+        upstream.connect((config['host'], config['port']))
+
+        auth = base64.b64encode(f"{config['user']}:{config['pass']}".encode()).decode()
+        req = f"CONNECT {target_host}:{target_port} HTTP/1.1\r\n"
+        req += f"Host: {target_host}:{target_port}\r\n"
+        req += f"Proxy-Authorization: Basic {auth}\r\n"
+        req += "Proxy-Connection: keep-alive\r\n"
+        req += "\r\n"
+
+        upstream.sendall(req.encode())
+
+        response = b""
+        while b"\r\n\r\n" not in response:
+            chunk = upstream.recv(4096)
+            if not chunk:
+                break
+            response += chunk
+
+        status_line = response.split(b"\r\n")[0].decode()
+        if "200" not in status_line:
+            client_sock.sendall(b"HTTP/1.1 502 Bad Gateway\r\n\r\n")
+            return
+
+        client_sock.sendall(b"HTTP/1.1 200 Connection established\r\n\r\n")
+
+        upstream.setblocking(False)
+        client_sock.setblocking(False)
+
+        while True:
+            readable, _, _ = select.select([client_sock, upstream], [], [], 60)
+            if not readable:
+                break
+            for sock in readable:
+                try:
+                    data = sock.recv(65536)
+                    if not data:
+                        return
+                    if sock is client_sock:
+                        upstream.sendall(data)
+                    else:
+                        client_sock.sendall(data)
+                except:
+                    return
+    except Exception as e:
+        try:
+            client_sock.sendall(b"HTTP/1.1 502 Bad Gateway\r\n\r\n")
+        except:
+            pass
+    finally:
+        if upstream:
+            try:
+                upstream.close()
+            except:
+                pass
+
+def handle_client(client_sock, addr, config):
+    """Handle incoming client connection."""
+    try:
+        request = b""
+        while b"\r\n\r\n" not in request:
+            chunk = client_sock.recv(4096)
+            if not chunk:
+                return
+            request += chunk
+
+        first_line = request.split(b"\r\n")[0].decode()
+        if first_line.startswith("CONNECT"):
+            target = first_line.split()[1]
+            host, port = target.split(":")
+            handle_connect(client_sock, host, int(port), config)
+        else:
+            client_sock.sendall(b"HTTP/1.1 400 Bad Request\r\n\r\n")
+    finally:
+        try:
+            client_sock.close()
+        except:
+            pass
+
+def run_proxy(port):
+    """Run the proxy server."""
+    config = get_proxy_config()
+    if not config:
+        print("Error: No HTTP_PROXY/HTTPS_PROXY configured in environment", file=sys.stderr)
+        sys.exit(1)
+
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+    try:
+        server.bind(("127.0.0.1", port))
+    except OSError as e:
+        print(f"Error: Cannot bind to port {port}: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    server.listen(50)
+
+    # Write PID file
+    pid_file = f"/tmp/jvm-proxy-{port}.pid"
+    with open(pid_file, 'w') as f:
+        f.write(str(os.getpid()))
+
+    print(f"JVM Proxy started on localhost:{port}", file=sys.stderr)
+    print(f"Forwarding to {config['host']}:{config['port']}", file=sys.stderr)
+
+    def cleanup(signum, frame):
+        try:
+            os.unlink(pid_file)
+        except:
+            pass
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, cleanup)
+    signal.signal(signal.SIGINT, cleanup)
+
+    while True:
+        try:
+            client_sock, addr = server.accept()
+            t = threading.Thread(target=handle_client, args=(client_sock, addr, config))
+            t.daemon = True
+            t.start()
+        except:
+            break
+
+def get_pid(port):
+    """Get PID of running proxy."""
+    pid_file = f"/tmp/jvm-proxy-{port}.pid"
+    try:
+        with open(pid_file) as f:
+            pid = int(f.read().strip())
+        # Check if process is running
+        os.kill(pid, 0)
+        return pid
+    except:
+        return None
+
+def cmd_start(port):
+    """Start the proxy."""
+    if get_pid(port):
+        print(f"Proxy already running on port {port}", file=sys.stderr)
+        sys.exit(1)
+    run_proxy(port)
+
+def cmd_stop(port):
+    """Stop the proxy."""
+    pid = get_pid(port)
+    if pid:
+        os.kill(pid, signal.SIGTERM)
+        print(f"Stopped proxy (PID {pid})")
+    else:
+        print("Proxy not running")
+
+def cmd_status(port):
+    """Check proxy status."""
+    pid = get_pid(port)
+    if pid:
+        print(f"Proxy running on port {port} (PID {pid})")
+    else:
+        print(f"Proxy not running on port {port}")
+
+def cmd_env(port):
+    """Print environment setup commands."""
+    print(f'export JAVA_TOOL_OPTIONS="-Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort={port} -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort={port}"')
+
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(description='JVM Proxy - Local proxy for JVM tools')
+    parser.add_argument('command', choices=['start', 'stop', 'status', 'env'],
+                        help='Command to run')
+    parser.add_argument('--port', '-p', type=int, default=13130,
+                        help='Port to listen on (default: 13130)')
+
+    args = parser.parse_args()
+
+    if args.command == 'start':
+        cmd_start(args.port)
+    elif args.command == 'stop':
+        cmd_stop(args.port)
+    elif args.command == 'status':
+        cmd_status(args.port)
+    elif args.command == 'env':
+        cmd_env(args.port)
+
+if __name__ == "__main__":
+    main()
