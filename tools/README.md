@@ -37,9 +37,27 @@ scala-cli compile .
 | Command | Description |
 |---------|-------------|
 | `jvm-proxy start` | Start the proxy (foreground) |
+| `jvm-proxy start --verbose` | Start with connection logging |
 | `jvm-proxy stop` | Stop the proxy |
 | `jvm-proxy status` | Check if running |
 | `jvm-proxy env` | Print JAVA_TOOL_OPTIONS export |
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--port PORT` | Port to listen on (default: 13130) |
+| `--verbose, -v` | Enable verbose logging of connections |
+
+### Known Limitations
+
+**Native Binaries (scala-cli, mill)**: Native binaries compiled with GraalVM may not
+work correctly in environments with TLS-inspecting proxies, even with this tool.
+The native binary's embedded TLS implementation may not trust the proxy's CA certificate.
+
+**Workaround**: Use JVM-based tools (sbt, maven, gradle) instead, which properly use
+`JAVA_TOOL_OPTIONS` for proxy configuration. For scala-cli, consider using the JVM
+launcher instead of the native binary if available.
 
 ### Requirements
 

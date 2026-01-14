@@ -50,13 +50,15 @@ def get_proxy_config():
     except:
         return None
 
-def handle_connect(client_sock, target_host, target_port, config):
+def handle_connect(client_sock, target_host, target_port, config, verbose=False):
     """Handle HTTPS CONNECT tunneling."""
     upstream = None
     try:
         upstream = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         upstream.settimeout(30)
         upstream.connect((config['host'], config['port']))
+        if verbose:
+            print(f"[PROXY] Connected to upstream for {target_host}:{target_port}", file=sys.stderr)
 
         auth = base64.b64encode(f"{config['user']}:{config['pass']}".encode()).decode()
         req = f"CONNECT {target_host}:{target_port} HTTP/1.1\r\n"
@@ -75,7 +77,11 @@ def handle_connect(client_sock, target_host, target_port, config):
             response += chunk
 
         status_line = response.split(b"\r\n")[0].decode()
+        if verbose:
+            print(f"[PROXY] Upstream response: {status_line}", file=sys.stderr)
         if "200" not in status_line:
+            if verbose:
+                print(f"[PROXY] CONNECT failed for {target_host}:{target_port}", file=sys.stderr)
             client_sock.sendall(b"HTTP/1.1 502 Bad Gateway\r\n\r\n")
             return
 
@@ -111,7 +117,7 @@ def handle_connect(client_sock, target_host, target_port, config):
             except:
                 pass
 
-def handle_client(client_sock, addr, config):
+def handle_client(client_sock, addr, config, verbose=False):
     """Handle incoming client connection."""
     try:
         request = b""
@@ -122,10 +128,12 @@ def handle_client(client_sock, addr, config):
             request += chunk
 
         first_line = request.split(b"\r\n")[0].decode()
+        if verbose:
+            print(f"[PROXY] {first_line}", file=sys.stderr)
         if first_line.startswith("CONNECT"):
             target = first_line.split()[1]
             host, port = target.split(":")
-            handle_connect(client_sock, host, int(port), config)
+            handle_connect(client_sock, host, int(port), config, verbose)
         else:
             client_sock.sendall(b"HTTP/1.1 400 Bad Request\r\n\r\n")
     finally:
@@ -134,7 +142,7 @@ def handle_client(client_sock, addr, config):
         except:
             pass
 
-def run_proxy(port):
+def run_proxy(port, verbose=False):
     """Run the proxy server."""
     config = get_proxy_config()
     if not config:
@@ -173,7 +181,7 @@ def run_proxy(port):
     while True:
         try:
             client_sock, addr = server.accept()
-            t = threading.Thread(target=handle_client, args=(client_sock, addr, config))
+            t = threading.Thread(target=handle_client, args=(client_sock, addr, config, verbose))
             t.daemon = True
             t.start()
         except:
@@ -191,12 +199,12 @@ def get_pid(port):
     except:
         return None
 
-def cmd_start(port):
+def cmd_start(port, verbose=False):
     """Start the proxy."""
     if get_pid(port):
         print(f"Proxy already running on port {port}", file=sys.stderr)
         sys.exit(1)
-    run_proxy(port)
+    run_proxy(port, verbose)
 
 def cmd_stop(port):
     """Stop the proxy."""
@@ -226,11 +234,13 @@ def main():
                         help='Command to run')
     parser.add_argument('--port', '-p', type=int, default=13130,
                         help='Port to listen on (default: 13130)')
+    parser.add_argument('--verbose', '-v', action='store_true',
+                        help='Enable verbose logging of connections')
 
     args = parser.parse_args()
 
     if args.command == 'start':
-        cmd_start(args.port)
+        cmd_start(args.port, args.verbose)
     elif args.command == 'stop':
         cmd_stop(args.port)
     elif args.command == 'status':
