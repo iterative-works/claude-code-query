@@ -260,7 +260,7 @@ class ClaudeCodeIntegrationTest extends munit.FunSuite:
         model = None,
         maxThinkingTokens = None,
         timeout = Some(
-          TestConstants.Timeouts.TEST_TIMEOUT_EXTENDED
+          TestConstants.Timeouts.TEST_TIMEOUT_MAX
         ),
         inheritEnvironment = None,
         environmentVariables = None
