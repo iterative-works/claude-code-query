@@ -62,13 +62,21 @@ object ProcessManager:
       case _: Exception => // Ignore if already closed
     }
 
-    // Start process monitoring (will be interrupted by Ox timeout if needed)
-    val processErrorFork = startProcessMonitoringForStreaming(process, command)
+    // Buffer for capturing stderr content (needed for error diagnosis)
+    val stderrBuffer = new StringBuilder
 
     // Fork stderr capture to run in background
-    fork {
-      captureStderrStream(process)
+    val stderrFork = fork {
+      captureStderrStream(process, stderrBuffer)
     }
+
+    // Start process monitoring (will be interrupted by Ox timeout if needed)
+    val processErrorFork = startProcessMonitoringForStreaming(
+      process,
+      command,
+      stderrBuffer,
+      stderrFork
+    )
 
     // Main streaming task - read stdout and emit messages
     val stdoutEndedNaturally = processStdoutStream(process, emit)
@@ -104,16 +112,25 @@ object ProcessManager:
       case _: Exception => // Ignore if already closed
     }
 
+    // Buffer for capturing stderr content (needed for error diagnosis)
+    val stderrBuffer = new StringBuilder
+
     // Race the streaming operations against a timeout
     val result = raceSuccess(
       {
+        // Fork stderr capture to run in background
+        val stderrFork = fork {
+          captureStderrStream(process, stderrBuffer)
+        }
+
         // Streaming branch - runs the actual process streaming
         val processErrorFork =
-          startProcessMonitoringForStreaming(process, command)
-
-        fork {
-          captureStderrStream(process)
-        }
+          startProcessMonitoringForStreaming(
+            process,
+            command,
+            stderrBuffer,
+            stderrFork
+          )
 
         // Stream stdout messages (this is the main blocking operation)
         val stdoutEndedNaturally = processStdoutStream(process, emit)
@@ -142,13 +159,22 @@ object ProcessManager:
 
   private def startProcessMonitoringForStreaming(
       process: Process,
-      command: List[String]
+      command: List[String],
+      stderrBuffer: StringBuilder,
+      stderrFork: Fork[Unit]
   )(using logger: Logger, ox: Ox): Fork[Option[CLIError]] =
     fork {
       try {
         val exitCode = process.waitFor()
         logger.info(s"Process completed with exit code: $exitCode")
-        validateStreamingProcessExitCode(exitCode, command)
+        // Wait for stderr capture to finish draining before reading the buffer
+        try stderrFork.join()
+        catch case _: Exception => ()
+        validateStreamingProcessExitCode(
+          exitCode,
+          command,
+          stderrBuffer.toString()
+        )
       } catch {
         case _: InterruptedException =>
           // Process was interrupted by timeout - clean up and don't throw here
@@ -160,7 +186,7 @@ object ProcessManager:
       }
     }
 
-  private def captureStderrStream(process: Process)(using
+  private def captureStderrStream(process: Process, buffer: StringBuilder)(using
       logger: Logger
   ): Unit =
     val stderrReader = new BufferedReader(
@@ -172,6 +198,10 @@ object ProcessManager:
         stderrLine = stderrReader.readLine(); stderrLine != null
       }) {
         logger.debug(s"stderr: $stderrLine")
+        buffer.synchronized {
+          if buffer.nonEmpty then buffer.append('\n')
+          buffer.append(stderrLine)
+        }
       }
     } catch {
       case _: InterruptedException =>
@@ -246,7 +276,8 @@ object ProcessManager:
 
   private def validateStreamingProcessExitCode(
       exitCode: Int,
-      command: List[String]
+      command: List[String],
+      stderr: String
   )(using logger: Logger): Option[CLIError] =
     if (exitCode != 0) {
       // Exit code 141 is SIGPIPE, which happens when the process tries to write
@@ -259,10 +290,12 @@ object ProcessManager:
         None
       } else {
         logger.error(s"Process failed with exit code: $exitCode")
+        val stderrContent =
+          if stderr.nonEmpty then stderr else "Process failed during streaming"
         Some(
           ProcessExecutionError(
             exitCode,
-            "Process failed during streaming",
+            stderrContent,
             command
           )
         )
