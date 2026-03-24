@@ -108,7 +108,7 @@ class CLIArgumentBuilderTest extends CatsEffectSuite:
     val args = CLIArgumentBuilder.buildArgs(options)
 
     assert(args.contains("--permission-mode"))
-    assert(args.contains("accept-edits"))
+    assert(args.contains("acceptEdits"))
 
   test(
     "maxThinkingTokens parameter maps to --max-thinking-tokens CLI argument"
@@ -148,7 +148,7 @@ class CLIArgumentBuilderTest extends CatsEffectSuite:
     assert(args.contains("You are helpful."))
     assert(args.contains("--continue"))
     assert(args.contains("--permission-mode"))
-    assert(args.contains("accept-edits"))
+    assert(args.contains("acceptEdits"))
     assert(args.contains("--max-thinking-tokens"))
     assert(args.contains("1000"))
 

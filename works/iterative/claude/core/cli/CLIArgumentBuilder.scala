@@ -45,9 +45,9 @@ object CLIArgumentBuilder:
     val permissionModeArgs = options.permissionMode match
       case Some(PermissionMode.Default) => List("--permission-mode", "default")
       case Some(PermissionMode.AcceptEdits) =>
-        List("--permission-mode", "accept-edits")
+        List("--permission-mode", "acceptEdits")
       case Some(PermissionMode.BypassPermissions) =>
-        List("--permission-mode", "bypass-permissions")
+        List("--permission-mode", "bypassPermissions")
       case None => List.empty
 
     val maxThinkingTokensArgs = options.maxThinkingTokens match
