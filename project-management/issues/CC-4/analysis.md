@@ -143,106 +143,57 @@ Both `direct.package` and `effectful.package` (or equivalent re-export objects) 
 
 ## Technical Risks & Uncertainties
 
-### CLARIFY: Log entry type exhaustiveness
+### RESOLVED: Log entry type exhaustiveness
 
-The issue lists 7 entry types. Real log files show at least these, but the format is undocumented and may contain additional types in newer Claude Code versions.
+**Decision:** Option B — Capture unknown types as `RawLogEntry(entryType: String, json: Json)`.
 
-**Questions to answer:**
-1. Should unknown entry types be silently skipped, or captured as a generic/raw entry?
-2. Do we need to handle forward compatibility (new fields on known types)?
-
-**Options:**
-- **Option A**: Skip unknown types silently (simplest, matches existing JsonParser behavior for unknown message types)
-- **Option B**: Capture unknown types as a generic `RawLogEntry(type: String, json: Json)` (preserves data, allows downstream handling)
-- **Option C**: Fail on unknown types (strictest, least resilient)
-
-**Impact:** Determines whether tools built on this SDK will break or degrade gracefully when Claude Code adds new entry types.
+The format is undocumented and will evolve. Silently dropping data means consumers can't detect they're missing something. A `RawLogEntry` is cheap to implement and gives downstream code a way to handle new types without SDK updates.
 
 ---
 
-### CLARIFY: User message content representation
+### RESOLVED: User message content representation
 
-In the stream-json format, user messages have `content: String`. In log files, user messages have `message.content` which can be either a string OR an array of content blocks (e.g., `tool_result` blocks). The existing `UserMessage(content: String)` cannot represent this.
+**Decision:** Option A — `UserLogEntry` uses `List[ContentBlock]` for content, separate from `UserMessage(String)`.
 
-**Questions to answer:**
-1. Should `UserLogEntry` use a separate content type, or should we modify `UserMessage`?
-2. If separate, how much structure do we expose for user message content blocks?
-
-**Options:**
-- **Option A**: `UserLogEntry` uses `List[ContentBlock]` for content — different from `UserMessage(String)` but accurately represents the log format
-- **Option B**: `UserLogEntry` wraps `UserMessage` and adds metadata — forces string-only content, losing tool_result structure
-- **Option C**: Modify `UserMessage` to support both string and block content — backward incompatible
-
-**Impact:** Affects how accurately we represent user messages and whether tool result content in user messages is accessible.
+Log types are a separate hierarchy (see next decision). User messages in logs genuinely contain content block arrays (including `tool_result` blocks), so `UserLogEntry` should faithfully represent the log format.
 
 ---
 
-### CLARIFY: Relationship between log types and existing Message types
+### RESOLVED: Relationship between log types and existing Message types
 
-Log entries carry much richer data than stream-json messages. The question is whether log-specific message types should extend `Message` or be entirely separate.
+**Decision:** Option A — Entirely separate type hierarchies.
 
-**Questions to answer:**
-1. Should `AssistantLogEntry` extend `AssistantMessage`, or be independent?
-2. Do consumers need to treat log entries and stream messages polymorphically?
+Investigation of the TypeScript Claude Agent SDK (`@anthropic-ai/claude-agent-sdk`) confirms this approach. The TS SDK defines `SDKMessage` (a 23+ variant union) for stream output and a separate `SessionMessage` type for JSONL log reading. `SessionMessage` has `message: unknown` — they don't even try to share types between stream and log formats. `getSessionMessages()` returns `SessionMessage[]`, while `query()` yields `SDKMessage`. The two concerns are fully decoupled.
 
-**Options:**
-- **Option A**: Entirely separate type hierarchies — cleanest separation, no coupling, but no polymorphism
-- **Option B**: Log entry payloads extend existing Message types — enables polymorphism, but adds metadata fields to Message trait
-- **Option C**: Log entry payloads contain existing Message types (composition) — `AssistantLogEntry` has-a `AssistantMessage` plus additional metadata
-
-**Impact:** Affects API ergonomics and whether code written for stream messages can work with log data.
+Our Scala SDK can be richer than the TS SDK by actually typing the log message payloads (they leave it as `unknown`), but the type hierarchy separation is the same. Shared parts are at the `ContentBlock` level (reused by both hierarchies), not at the `Message` level.
 
 ---
 
-### CLARIFY: Log file discovery heuristics
+### RESOLVED: Log file discovery heuristics
 
-The `~/.claude/projects/` directory structure uses path-encoded directory names (e.g., `-home-mph-Devel` for `/home/mph/Devel`). Session IDs appear to match JSONL filenames.
+**Decision:** Option B — Full discovery with path decoding.
 
-**Questions to answer:**
-1. Should the index only list files from a given project directory, or support discovering all projects?
-2. Should we decode the directory name back to a filesystem path?
-3. What metadata should we extract without parsing file contents (filename-based sessionId, file size, modification time)?
+The primary use cases require being able to: (1) list all sessions across all projects, (2) list sessions for a specific project directory, (3) get a specific session by ID searching across projects. This matches the TS SDK's `listSessions({ dir? })` and `getSessionInfo(sessionId, { dir? })` API surface.
 
-**Options:**
-- **Option A**: Simple file listing of a given directory — caller provides the project path
-- **Option B**: Full discovery with path decoding — SDK finds all projects and their logs
-- **Option C**: Start with Option A, add Option B later if needed (YAGNI)
-
-**Impact:** Scope of the index service; Option B is significantly more work.
+The `~/.claude/projects/` directory structure uses path-encoded directory names (e.g., `-home-mph-Devel` for `/home/mph/Devel`). The `ConversationLogIndex` needs to decode these back to filesystem paths, enumerate JSONL files within them, and extract metadata (sessionId from filename, file size, modification time). The TS SDK's `SDKSessionInfo` includes: `sessionId`, `summary`, `lastModified`, `fileSize`, `customTitle`, `firstPrompt`, `gitBranch`, `cwd`, `tag`, `createdAt` — we should aim for comparable metadata in `LogFileMetadata`.
 
 ---
 
-### CLARIFY: ThinkingBlock signature optionality
+### RESOLVED: ThinkingBlock signature optionality
 
-Thinking blocks in log files contain a `signature` field. It is unclear whether this field is always present and non-empty. During streaming or in certain model configurations, thinking blocks may appear without signatures.
+**Decision:** Option A — `ThinkingBlock(thinking: String, signature: String)` with both fields required.
 
-**Questions to answer:**
-1. Should `signature` be `String` (required) or `Option[String]` (optional)?
-2. Should we reject thinking blocks without signatures?
+The official Anthropic API SDK (`@anthropic-ai/sdk`) defines `ThinkingBlock` with both `signature: string` and `thinking: string` as required (non-optional) fields. This is the canonical type for completed thinking blocks.
 
-**Options:**
-- **Option A**: `ThinkingBlock(thinking: String, signature: String)` — strict, assumes signature is always present
-- **Option B**: `ThinkingBlock(thinking: String, signature: Option[String])` — permissive, handles missing signatures
-- **Option C**: Examine real log files to determine whether signatures are always present, then decide
-
-**Impact:** Determines parser strictness and whether some thinking blocks could be silently dropped.
+Additionally, the API defines `RedactedThinkingBlock { data: string, type: 'redacted_thinking' }` for cases where thinking content is hidden for safety reasons. We should add this as a separate `ContentBlock` variant as well.
 
 ---
 
-### CLARIFY: Timestamp handling for log entries
+### RESOLVED: Timestamp handling for log entries
 
-The envelope contains ISO-8601 timestamps. The format is undocumented, so timestamps could be missing, malformed, or in unexpected formats.
+**Decision:** Option B — `timestamp: Option[Instant]`, entries always included.
 
-**Questions to answer:**
-1. Should `timestamp` be `Instant` (required) or `Option[Instant]` (optional)?
-2. Should entries with unparseable timestamps be dropped or included with raw string timestamp?
-
-**Options:**
-- **Option A**: `timestamp: Instant` — required, entries without valid timestamps are skipped
-- **Option B**: `timestamp: Option[Instant]` — optional, entries always included
-- **Option C**: `timestamp: String` — keep raw string, let consumers parse (least information loss)
-
-**Impact:** Determines whether entries could be silently dropped due to timestamp parsing issues.
+The TS SDK marks `timestamp` as optional on `SDKUserMessage` (`timestamp?: string`), confirming it can be absent. Parsing to `Instant` gives consumers typed access, and `Option` ensures entries are never silently dropped due to timestamp issues.
 
 ---
 
