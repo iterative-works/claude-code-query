@@ -132,3 +132,46 @@ A  test/works/iterative/claude/core/log/ServiceTraitTest.scala
 ```
 
 ---
+
+## Phase 5: Service implementations (2026-03-25)
+
+**Layer:** Service (direct + effectful)
+
+**What was built:**
+- `works/iterative/claude/core/log/ProjectPathDecoder.scala` — pure utility to decode Claude project directory names (dash-encoded) to filesystem path strings
+- `works/iterative/claude/core/log/LogFileMetadataBuilder.scala` — shared pure logic for building LogFileMetadata from filesystem stat, used by both direct and effectful implementations
+- `works/iterative/claude/direct/log/DirectConversationLogIndex.scala` — synchronous ConversationLogIndex using os-lib for file discovery
+- `works/iterative/claude/direct/log/DirectConversationLogReader.scala` — synchronous ConversationLogReader using os-lib for readAll, lazy scala.io.Source for streaming via Ox Flow
+- `works/iterative/claude/effectful/log/EffectfulConversationLogIndex.scala` — IO-based ConversationLogIndex using fs2.io.file for directory listing
+- `works/iterative/claude/effectful/log/EffectfulConversationLogReader.scala` — IO-based ConversationLogReader using fs2.Stream text pipeline
+
+**Dependencies on other layers:**
+- Domain (Phase 1): `ConversationLogEntry`, `LogFileMetadata`, all payload types
+- Parsing (Phase 3): `ConversationLogParser.parseLogLine` for pure JSONL parsing
+- Service (Phase 4): `ConversationLogIndex[F[_]]`, `ConversationLogReader[F[_]]` trait contracts
+
+**Testing:**
+- Unit tests: 7 tests added (ProjectPathDecoder)
+- Integration tests: 40 tests added (10 DirectIndex, 10 DirectReader, 9 EffectfulIndex, 9 EffectfulReader — all using real temp directories and files)
+
+**Code review:**
+- Iterations: 1
+- Review file: review-phase-05-20260325-125229.md
+- No critical issues; warnings addressed: PURPOSE comments cleaned, metadataFor extracted to shared builder, stream made lazy, effectful index non-existent directory guard added
+
+**Files changed:**
+```
+A  works/iterative/claude/core/log/ProjectPathDecoder.scala
+A  works/iterative/claude/core/log/LogFileMetadataBuilder.scala
+A  works/iterative/claude/direct/log/DirectConversationLogIndex.scala
+A  works/iterative/claude/direct/log/DirectConversationLogReader.scala
+A  works/iterative/claude/effectful/log/EffectfulConversationLogIndex.scala
+A  works/iterative/claude/effectful/log/EffectfulConversationLogReader.scala
+A  test/works/iterative/claude/core/log/ProjectPathDecoderTest.scala
+A  test/works/iterative/claude/direct/log/DirectConversationLogIndexTest.scala
+A  test/works/iterative/claude/direct/log/DirectConversationLogReaderTest.scala
+A  test/works/iterative/claude/effectful/log/EffectfulConversationLogIndexTest.scala
+A  test/works/iterative/claude/effectful/log/EffectfulConversationLogReaderTest.scala
+```
+
+---
