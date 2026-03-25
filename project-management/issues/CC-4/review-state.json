@@ -1,0 +1,45 @@
+{
+  "version": 2,
+  "issue_id": "CC-4",
+  "artifacts": [
+    {
+      "label": "Analysis",
+      "path": "project-management/issues/CC-4/analysis.md",
+      "category": "input"
+    },
+    {
+      "label": "Tasks",
+      "path": "project-management/issues/CC-4/tasks.md",
+      "category": "output"
+    }
+  ],
+  "last_updated": "2026-03-25T09:52:04.624066751Z",
+  "status": "tasks_ready",
+  "display": {
+    "text": "Tasks Ready",
+    "type": "success",
+    "subtext": "6 phases identified"
+  },
+  "message": "Task breakdown complete. Ready to begin implementation.",
+  "activity": "waiting",
+  "workflow_type": "waterfall",
+  "available_actions": [
+    {
+      "id": "create-tasks",
+      "label": "Generate Tasks",
+      "skill": "wf-create-tasks"
+    },
+    {
+      "id": "implement",
+      "label": "Start Implementation",
+      "skill": "wf-implement"
+    },
+    {
+      "id": "implement",
+      "label": "Start Implementation",
+      "skill": "wf-implement"
+    }
+  ],
+  "git_sha": "ed00850",
+  "needs_attention": true
+}
