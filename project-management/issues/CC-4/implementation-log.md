@@ -103,3 +103,32 @@ A  test/works/iterative/claude/core/log/parsing/ConversationLogParserTest.scala
 ```
 
 ---
+
+## Phase 4: Service traits (2026-03-25)
+
+**Layer:** Service
+
+**What was built:**
+- `works/iterative/claude/core/log/ConversationLogIndex.scala` — abstract trait parameterised by `F[_]` for session discovery (`listSessions`, `forSession`)
+- `works/iterative/claude/core/log/ConversationLogReader.scala` — abstract trait parameterised by `F[_]` with `EntryStream` type member for log reading (`readAll`, `stream`)
+
+**Dependencies on other layers:**
+- Domain (Phase 1): Uses `ConversationLogEntry`, `LogFileMetadata`
+
+**Testing:**
+- Unit tests: 4 compilation tests (identity F and IO for both traits)
+- Integration tests: 0 (abstract traits with no implementation logic)
+
+**Code review:**
+- Iterations: 1
+- Review file: review-phase-04-20260325-120953.md
+- No critical issues; warnings about unconstrained `EntryStream` type member (design decision — no common stream supertype between ox.flow.Flow and fs2.Stream), redundant comments and vacuous asserts (fixed)
+
+**Files changed:**
+```
+A  works/iterative/claude/core/log/ConversationLogIndex.scala
+A  works/iterative/claude/core/log/ConversationLogReader.scala
+A  test/works/iterative/claude/core/log/ServiceTraitTest.scala
+```
+
+---
