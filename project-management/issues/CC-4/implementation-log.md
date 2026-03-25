@@ -72,3 +72,34 @@ M  works/iterative/claude/core/parsing/JsonParser.scala
 ```
 
 ---
+
+## Phase 3: Log entry parser (2026-03-25)
+
+**Layer:** Parsing
+
+**What was built:**
+- `works/iterative/claude/core/log/parsing/ConversationLogParser.scala` — pure JSONL log line parser with envelope extraction, type-based payload dispatch, and TokenUsage parsing
+- Handles all 8 payload types: human (string + array content), assistant (with model/usage/requestId), system, progress, queue_operation, file_history_snapshot, last_prompt, and unknown types via RawLogEntry
+- Reuses `ContentBlockParser` for content block parsing within log entries
+
+**Dependencies on other layers:**
+- Domain (Phase 1): Uses `ConversationLogEntry`, `LogEntryPayload` variants, `TokenUsage`, `ContentBlock` variants
+- Parsing (Phase 2): Uses `ContentBlockParser.parseContentBlock` for content blocks within log entries
+
+**Testing:**
+- Unit tests: 28 tests added (6 entry point/error path, 4 envelope metadata, 10 payload types, 2 TokenUsage, 6 error path tests from review)
+- Integration tests: 0 (pure parsing, no I/O)
+
+**Code review:**
+- Iterations: 1
+- Review file: review-phase-03-20260325-104938.md
+- No critical issues in Phase 3 code; design-level suggestions about Phase 1 model types (enum, Map[String, Json]) noted for future work
+- Fixed: extracted EnvelopeKeys constant, narrowed exception handling, removed unused parameter, extracted parseContentBlocks helper, inlined extractEnvelope, added 6 error path tests, strengthened data assertions
+
+**Files changed:**
+```
+A  works/iterative/claude/core/log/parsing/ConversationLogParser.scala
+A  test/works/iterative/claude/core/log/parsing/ConversationLogParserTest.scala
+```
+
+---
