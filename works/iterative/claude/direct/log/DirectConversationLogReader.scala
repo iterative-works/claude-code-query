@@ -1,5 +1,5 @@
-// PURPOSE: Direct-style implementation of ConversationLogReader using os-lib and Ox Flow
-// PURPOSE: Reads and streams ConversationLogEntry values from .jsonl files without effect wrappers
+// PURPOSE: Synchronous ConversationLogReader that reads and streams .jsonl session log entries
+// PURPOSE: Returns plain values and lazy Flow; no effect type required by callers
 
 package works.iterative.claude.direct.log
 
@@ -19,9 +19,14 @@ class DirectConversationLogReader extends ConversationLogReader[[A] =>> A]:
 
   def stream(path: os.Path): Flow[ConversationLogEntry] =
     Flow
-      .fromIterable(os.read.lines(path))
-      .map(ConversationLogParser.parseLogLine)
-      .collect { case Some(entry) => entry }
+      .usingEmit: emit =>
+        val source = scala.io.Source.fromFile(path.toIO)
+        try
+          source
+            .getLines()
+            .foreach: line =>
+              ConversationLogParser.parseLogLine(line).foreach(emit.apply)
+        finally source.close()
 
 object DirectConversationLogReader:
   def apply(): DirectConversationLogReader = new DirectConversationLogReader()

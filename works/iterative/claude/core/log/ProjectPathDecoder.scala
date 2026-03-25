@@ -1,5 +1,5 @@
 // PURPOSE: Pure utility for decoding Claude project directory names to filesystem path strings
-// PURPOSE: Claude stores project logs under ~/.claude/projects/ with paths encoded by replacing / with -
+// PURPOSE: Converts the dash-encoded directory names back to absolute path strings
 
 package works.iterative.claude.core.log
 

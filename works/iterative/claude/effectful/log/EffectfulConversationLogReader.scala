@@ -1,5 +1,5 @@
-// PURPOSE: Effectful implementation of ConversationLogReader using cats-effect IO and fs2.Stream
-// PURPOSE: Reads and streams ConversationLogEntry values from .jsonl files via fs2 text pipeline
+// PURPOSE: IO-based ConversationLogReader that reads and streams .jsonl session log entries
+// PURPOSE: All operations are deferred and composable within IO programs
 
 package works.iterative.claude.effectful.log
 
