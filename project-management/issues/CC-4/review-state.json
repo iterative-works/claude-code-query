@@ -65,11 +65,11 @@
       "path": "project-management/issues/CC-4/phase-06-tasks.md"
     }
   ],
-  "last_updated": "2026-03-25T11:59:15.800306565Z",
-  "status": "implementing",
+  "last_updated": "2026-03-25T12:23:52.333425558Z",
+  "status": "phase_merged",
   "display": {
-    "text": "Phase 06: Implementing",
-    "type": "progress",
+    "text": "Phase 06: Merged",
+    "type": "success",
     "subtext": "Re-exports and documentation"
   },
   "message": "Phase 06 implementation started",
@@ -173,6 +173,10 @@
     {
       "label": "In Progress",
       "type": "info"
+    },
+    {
+      "label": "Complete",
+      "type": "success"
     }
   ],
   "pr_url": "https://github.com/iterative-works/claude-code-query/pull/8"
