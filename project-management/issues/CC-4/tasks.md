@@ -11,7 +11,7 @@
 - [x] Phase 3: Log entry parser (Est: 2-3h) → `phase-03-context.md`
 - [x] Phase 4: Service traits (Est: 1h) → `phase-04-context.md`
 - [x] Phase 5: Service implementations (Est: 2-3h) → `phase-05-context.md`
-- [ ] Phase 6: Re-exports and documentation (Est: 1h) → `phase-06-context.md`
+- [x] Phase 6: Re-exports and documentation (Est: 1h) → `phase-06-context.md`
 
 ## Phase Details
 
