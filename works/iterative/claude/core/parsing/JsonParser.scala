@@ -40,31 +40,8 @@ object JsonParser:
       contentArray <- messageJson.hcursor
         .get[List[Json]]("content")
         .toOption
-      content = contentArray.flatMap(parseContentBlock)
+      content = contentArray.flatMap(ContentBlockParser.parseContentBlock)
     yield AssistantMessage(content)
-
-  // Content block parsing - handles different content types within messages
-  private def parseContentBlock(json: Json): Option[ContentBlock] =
-    val cursor = json.hcursor
-    cursor
-      .get[String]("type")
-      .toOption
-      .flatMap:
-        case "text" =>
-          cursor.get[String]("text").toOption.map(TextBlock.apply)
-        case "tool_use" =>
-          for
-            id <- cursor.get[String]("id").toOption
-            name <- cursor.get[String]("name").toOption
-            input = Map.empty[String, Any] // Simplified for now
-          yield ToolUseBlock(id, name, input)
-        case "tool_result" =>
-          for
-            toolUseId <- cursor.get[String]("tool_use_id").toOption
-            content = cursor.get[String]("content").toOption
-            isError = cursor.get[Boolean]("is_error").toOption
-          yield ToolResultBlock(toolUseId, content, isError)
-        case _ => None
 
   private def parseSystemMessage(
       json: Json,
