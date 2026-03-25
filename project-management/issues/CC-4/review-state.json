@@ -43,9 +43,13 @@
     {
       "label": "Phase 4 Tasks",
       "path": "project-management/issues/CC-4/phase-04-tasks.md"
+    },
+    {
+      "label": "Implementation Log",
+      "path": "project-management/issues/CC-4/implementation-log.md"
     }
   ],
-  "last_updated": "2026-03-25T11:13:08.123274638Z",
+  "last_updated": "2026-03-25T11:13:33.420958932Z",
   "status": "phase_merged",
   "display": {
     "text": "Phase 04: Merged",
@@ -132,5 +136,6 @@
       "label": "Complete",
       "type": "success"
     }
-  ]
+  ],
+  "pr_url": "https://github.com/iterative-works/claude-code-query/pull/8"
 }
