@@ -7,7 +7,7 @@
 ## Phase Index
 
 - [x] Phase 1: Domain types (Est: 1-3h) → `phase-01-context.md`
-- [ ] Phase 2: Content block parsing extraction (Est: 1-2h) → `phase-02-context.md`
+- [x] Phase 2: Content block parsing extraction (Est: 1-2h) → `phase-02-context.md`
 - [ ] Phase 3: Log entry parser (Est: 2-3h) → `phase-03-context.md`
 - [ ] Phase 4: Service traits (Est: 1h) → `phase-04-context.md`
 - [ ] Phase 5: Service implementations (Est: 2-3h) → `phase-05-context.md`
