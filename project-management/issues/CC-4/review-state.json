@@ -11,16 +11,24 @@
       "label": "Tasks",
       "path": "project-management/issues/CC-4/tasks.md",
       "category": "output"
+    },
+    {
+      "label": "Phase 1 Context",
+      "path": "project-management/issues/CC-4/phase-01-context.md"
+    },
+    {
+      "label": "Phase 1 Tasks",
+      "path": "project-management/issues/CC-4/phase-01-tasks.md"
     }
   ],
-  "last_updated": "2026-03-25T09:52:04.624066751Z",
-  "status": "tasks_ready",
+  "last_updated": "2026-03-25T10:03:54.807177256Z",
+  "status": "implementing",
   "display": {
-    "text": "Tasks Ready",
-    "type": "success",
-    "subtext": "6 phases identified"
+    "text": "Phase 01: Implementing",
+    "type": "progress",
+    "subtext": "Domain types"
   },
-  "message": "Task breakdown complete. Ready to begin implementation.",
+  "message": "Phase 01 implementation started",
   "activity": "waiting",
   "workflow_type": "waterfall",
   "available_actions": [
@@ -38,8 +46,24 @@
       "id": "implement",
       "label": "Start Implementation",
       "skill": "wf-implement"
+    },
+    {
+      "id": "implement",
+      "label": "Continue",
+      "skill": "wf-implement"
     }
   ],
   "git_sha": "ed00850",
-  "needs_attention": true
+  "needs_attention": true,
+  "phase_checkpoints": {
+    "1": {
+      "context_sha": "context_sha=17ea46a986b0755f9d1e1722292462c75ee3a6c7"
+    }
+  },
+  "badges": [
+    {
+      "label": "In Progress",
+      "type": "info"
+    }
+  ]
 }
