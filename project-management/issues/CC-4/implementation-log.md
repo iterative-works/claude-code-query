@@ -175,3 +175,39 @@ A  test/works/iterative/claude/effectful/log/EffectfulConversationLogReaderTest.
 ```
 
 ---
+
+## Phase 6: Re-exports and documentation (2026-03-25)
+
+**Layer:** Public API surface + Documentation
+
+**What was built:**
+- `works/iterative/claude/direct/package.scala` — added re-exports for ThinkingBlock, RedactedThinkingBlock, all log model types, service traits, direct implementations, and ProjectPathDecoder
+- `works/iterative/claude/effectful/package.scala` — created new package object mirroring direct pattern with all core and log types, plus effectful implementations
+- `ARCHITECTURE.md` — added Conversation Log Parsing section covering domain model, parsing layer, service layer, dual implementations, and ProjectPathDecoder
+- `README.md` — added Conversation Log Parsing section with usage examples for both direct and effectful APIs
+
+**Dependencies on other layers:**
+- Domain (Phase 1): All content block and log model types
+- Service (Phase 4): ConversationLogIndex, ConversationLogReader traits
+- Implementations (Phase 5): All direct and effectful implementations
+
+**Testing:**
+- Unit tests: 2 test suites added (DirectPackageReexportTest, EffectfulPackageReexportTest) — compilation verification tests
+- Integration tests: 0 (re-exports only, no new logic)
+
+**Code review:**
+- Iterations: 1
+- Review file: review-phase-06-20260325-132224.md
+- No critical issues; warnings addressed: ordering consistency, ProjectPathDecoder type alias, test improvements (temp dirs, effectful reader exercise)
+
+**Files changed:**
+```
+M  works/iterative/claude/direct/package.scala
+A  works/iterative/claude/effectful/package.scala
+A  test/works/iterative/claude/direct/DirectPackageReexportTest.scala
+A  test/works/iterative/claude/effectful/EffectfulPackageReexportTest.scala
+M  ARCHITECTURE.md
+M  README.md
+```
+
+---

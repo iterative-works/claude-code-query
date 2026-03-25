@@ -286,6 +286,120 @@ val program = for {
 // Resources are automatically cleaned up via fs2's Resource management
 ```
 
+## Conversation Log Parsing
+
+The SDK can read and parse the JSONL conversation logs that Claude Code writes to disk. Log files are stored under `~/.claude/projects/` in directories named after the project path.
+
+### Listing Sessions (Direct API)
+
+```scala
+import works.iterative.claude.direct.*
+
+val logDir = os.Path("/home/user/.claude/projects") / ProjectPathDecoder.decode("-home-user-myproject")
+
+val index = DirectConversationLogIndex()
+val sessions: Seq[LogFileMetadata] = index.listSessions(logDir)
+
+sessions.foreach { meta =>
+  println(s"Session ${meta.sessionId}, last modified ${meta.lastModified}")
+  meta.summary.foreach(s => println(s"  Summary: $s"))
+}
+```
+
+### Reading Log Entries (Direct API)
+
+```scala
+import works.iterative.claude.direct.*
+
+val reader = DirectConversationLogReader()
+val meta = DirectConversationLogIndex().listSessions(logDir).head
+
+// Load all entries at once
+val entries: List[ConversationLogEntry] = reader.readAll(meta.path)
+
+entries.foreach { entry =>
+  entry.payload match
+    case UserLogEntry(content) =>
+      content.collect { case TextBlock(text) => println(s"User: $text") }
+    case AssistantLogEntry(content, model, usage, _) =>
+      content.collect { case TextBlock(text) => println(s"Assistant: $text") }
+      usage.foreach(u => println(s"  Tokens: ${u.inputTokens} in / ${u.outputTokens} out"))
+    case _ =>
+}
+```
+
+### Accessing Thinking Blocks
+
+```scala
+import works.iterative.claude.direct.*
+
+val entries = DirectConversationLogReader().readAll(path)
+entries.foreach { entry =>
+  entry.payload match
+    case AssistantLogEntry(content, _, _, _) =>
+      content.foreach {
+        case ThinkingBlock(thoughts, _) => println(s"Thinking: $thoughts")
+        case RedactedThinkingBlock(_)   => println("(redacted thinking)")
+        case TextBlock(text)            => println(s"Response: $text")
+        case _                          =>
+      }
+    case _ =>
+}
+```
+
+### Streaming Log Entries (Direct API)
+
+```scala
+import works.iterative.claude.direct.*
+import ox.*
+
+supervised {
+  val reader = DirectConversationLogReader()
+  reader.stream(path).runForeach { entry =>
+    println(s"[${entry.timestamp}] ${entry.payload.getClass.getSimpleName}")
+  }
+}
+```
+
+### Listing and Reading Sessions (Effectful API)
+
+```scala
+import works.iterative.claude.effectful.*
+import cats.effect.*
+
+object LogExample extends IOApp.Simple:
+  def run =
+    val logDir = os.Path("/home/user/.claude/projects") /
+      ProjectPathDecoder.decode("-home-user-myproject")
+
+    val index  = EffectfulConversationLogIndex()
+    val reader = EffectfulConversationLogReader()
+
+    for
+      sessions <- index.listSessions(logDir)
+      _        <- IO.println(s"Found ${sessions.size} sessions")
+      entries  <- reader.readAll(sessions.head.path)
+      _        <- IO.println(s"Loaded ${entries.size} entries")
+    yield ()
+```
+
+### Streaming Log Entries (Effectful API)
+
+```scala
+import works.iterative.claude.effectful.*
+import cats.effect.*
+import fs2.Stream
+
+val reader = EffectfulConversationLogReader()
+
+val program: IO[Unit] =
+  reader.stream(path)
+    .collect { case entry if entry.payload.isInstanceOf[AssistantLogEntry] => entry }
+    .evalMap(entry => IO.println(s"Assistant turn: ${entry.uuid}"))
+    .compile
+    .drain
+```
+
 ## Architecture
 
 The SDK is built on:
