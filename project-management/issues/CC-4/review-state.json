@@ -19,16 +19,24 @@
     {
       "label": "Phase 1 Tasks",
       "path": "project-management/issues/CC-4/phase-01-tasks.md"
+    },
+    {
+      "label": "Phase 2 Context",
+      "path": "project-management/issues/CC-4/phase-02-context.md"
+    },
+    {
+      "label": "Phase 2 Tasks",
+      "path": "project-management/issues/CC-4/phase-02-tasks.md"
     }
   ],
-  "last_updated": "2026-03-25T10:18:47.176883520Z",
-  "status": "phase_merged",
+  "last_updated": "2026-03-25T10:23:02.612236381Z",
+  "status": "implementing",
   "display": {
-    "text": "Phase 01: Merged",
-    "type": "success",
-    "subtext": "Domain types"
+    "text": "Phase 02: Implementing",
+    "type": "progress",
+    "subtext": "Content block parsing extraction"
   },
-  "message": "Phase 01 implementation started",
+  "message": "Phase 02 implementation started",
   "activity": "waiting",
   "workflow_type": "waterfall",
   "available_actions": [
@@ -51,13 +59,18 @@
       "id": "implement",
       "label": "Continue",
       "skill": "wf-implement"
+    },
+    {
+      "id": "implement",
+      "label": "Continue",
+      "skill": "wf-implement"
     }
   ],
   "git_sha": "ed00850",
   "needs_attention": true,
   "phase_checkpoints": {
-    "1": {
-      "context_sha": "context_sha=17ea46a986b0755f9d1e1722292462c75ee3a6c7"
+    "2": {
+      "context_sha": "context_sha=f8894164af939c07a608f7e2bb20febd1465fe89"
     }
   },
   "badges": [
@@ -68,6 +81,10 @@
     {
       "label": "Complete",
       "type": "success"
+    },
+    {
+      "label": "In Progress",
+      "type": "info"
     }
   ]
 }
