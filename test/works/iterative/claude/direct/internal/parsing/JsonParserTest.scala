@@ -96,6 +96,14 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
         ).filter(_.nonEmpty)
         s"""{"type":"tool_result",${fields.mkString(",")}}"""
 
+      case ThinkingBlock(thinking, signature) =>
+        s"""{"type":"thinking","thinking":${escapeJsonString(
+            thinking
+          )},"signature":${escapeJsonString(signature)}}"""
+
+      case RedactedThinkingBlock(data) =>
+        s"""{"type":"redacted_thinking","data":${escapeJsonString(data)}}"""
+
     private def escapeJsonString(str: String): String =
       "\"" + str
         .replace("\\", "\\\\")
