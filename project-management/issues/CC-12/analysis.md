@@ -138,88 +138,40 @@ Note: This issue is a build/packaging concern, not a feature. The "layers" here 
 - `IWPublishModule` URIs overridden to point to Sonatype instead of e-BS Nexus
 - Test modules may share mock CLI scripts (need to determine if these go in a shared test resource or are duplicated)
 
-## Technical Risks & Uncertainties
+## Resolved Decisions
 
-### CLARIFY: Scala Version Mismatch
+### Scala Version: 3.3.7 LTS
 
-`IWScalaVersions` defaults to Scala 3.8.1, but `project.scala` currently pins 3.7.4.
+Both Ox 1.0.4 and cats-effect 3.7.0 are built against Scala 3.3.7 (LTS). For a published library, targeting LTS maximizes downstream compatibility. Override `scalaVersion` in the build to `3.3.7` (do not use `IWScalaVersions` default of 3.8.1).
 
-**Questions to answer:**
-1. Should we upgrade to 3.8.1 to match `mill-iw-support` defaults?
-2. Or override `scalaVersion` in each module to stay on 3.7.4?
-3. Are there any compatibility concerns with Ox 1.0.4 on 3.8.1?
+### Top-Level model.scala and ClaudeCode.scala: Delete Both
 
-**Options:**
-- **Option A**: Upgrade to 3.8.1 (align with mill-iw-support defaults, may require testing for compat)
-- **Option B**: Override to 3.7.4 per module (safe, but diverges from standard)
+- `model.scala` duplicates types already in `core/model/`. Nothing imports from it.
+- `ClaudeCode.scala` is a facade delegating to `effectful.ClaudeCode`. Nothing imports from it.
+- Pre-1.0 library, no published consumers. Clean deletion, no backward compat needed.
 
-**Impact:** Affects compilation and binary compatibility of published artifacts.
+### Publishing: PublishModule + SonatypeCentralPublishModule
 
----
+Do not use `IWPublishModule` (it defaults to e-BS Nexus with signing disabled). Instead:
+- Each module extends Mill's built-in `PublishModule` directly (following `scalatags-web-awesome` pattern).
+- Publish via `mill mill.javalib.SonatypeCentralPublishModule/publishAll` which handles GPG signing, staging, and release.
+- Credentials via `MILL_SONATYPE_USERNAME`/`MILL_SONATYPE_PASSWORD` and `MILL_PGP_SECRET_BASE64`/`MILL_PGP_PASSPHRASE` env vars.
 
-### CLARIFY: Top-Level model.scala and ClaudeCode.scala Disposition
+### Logging Dependencies: Per-Module, No Logging in Core
 
-The top-level `works.iterative.claude.model.scala` duplicates types already in `works.iterative.claude.core.model`. The top-level `ClaudeCode.scala` is a cats-effect facade delegating to the effectful implementation.
+- Core module has zero logging imports — no logging deps needed.
+- Direct module brings its own SLF4J-based `Logger.scala`.
+- Effectful module uses `log4cats-slf4j`.
+- `logback-classic` is test-scoped only (runtime backend, not API).
 
-**Questions to answer:**
-1. Is `model.scala` used by any external consumers that import `works.iterative.claude.{ContentBlock, Message, ...}` directly?
-2. Should we preserve backward compatibility with the old package paths?
-3. Can we simply delete `model.scala` and move `ClaudeCode.scala` into the effectful module?
+### Test Mock Scripts: No Sharing Needed
 
-**Options:**
-- **Option A**: Delete `model.scala`, move `ClaudeCode.scala` to effectful module. Clean break, no backward compat. (This is a pre-1.0 library, so breaking changes are acceptable.)
-- **Option B**: Keep `model.scala` as re-exports in the effectful module for backward compatibility. (Adds complexity, questionable value for 0.1.0.)
-- **Option C**: Move both into a fourth "compat" module. (Over-engineered.)
+- `MockCliScript.scala` (in `direct/internal/testing/`) — used only by direct module tests. Stays with direct.
+- `test/bin/mock-claude*` shell scripts — used only by top-level integration tests that import `effectful.ClaudeCode`. These tests and scripts move to the effectful module's test scope.
+- Effectful unit tests create inline mocks, no script dependency.
+- No shared test module needed.
 
-**Impact:** Affects which module these files land in and whether any package paths change.
-
----
-
-### CLARIFY: Sonatype Publishing Mechanism
-
-`IWPublishModule` defaults to e-BS Nexus with signing disabled. Maven Central requires signed artifacts and uses a staging workflow.
-
-**Questions to answer:**
-1. Will we override `publishReleaseUri`/`publishSnapshotUri` in `build.mill` or use environment variables?
-2. Does the current `IWPublishModule.publish` method's `signed = false` default need to be overridden at the project level?
-3. Do we need to modify `mill-iw-support` itself, or can we override everything at the project level?
-
-**Options:**
-- **Option A**: Override at project level -- define a local `SonatypePublishModule` trait that extends `IWPublishModule` and sets `signed = true`, staging URIs, etc.
-- **Option B**: Use environment variables for URIs and pass `--signed` to the publish command.
-- **Option C**: Modify `mill-iw-support` to add a Sonatype-aware publish trait.
-
-**Impact:** Determines whether `mill-iw-support` needs changes or if everything is project-local.
-
----
-
-### CLARIFY: Logging Dependency Placement
-
-The `core` module currently has `CLIArgumentBuilder` and `JsonParser` which may use SLF4J logging. The `direct` module has its own `Logger` abstraction. The `effectful` module uses `log4cats-slf4j`.
-
-**Questions to answer:**
-1. Does the core module's `JsonParser` use any logging? If so, which logging dependency does it need?
-2. Should `logback-classic` be a test-only dependency or a runtime dependency?
-3. Where does the SLF4J API dependency go?
-
-**Impact:** Affects which dependencies are declared in the core module POM.
-
----
-
-### CLARIFY: Test Mock Scripts Sharing
-
-The `test/bin/` directory contains mock CLI scripts used by integration tests. Both `direct` and `effectful` test suites likely need access to these.
-
-**Questions to answer:**
-1. Which test suites use which mock scripts?
-2. Should mock scripts be duplicated per module or shared via a test-only common module?
-
-**Options:**
-- **Option A**: Copy mock scripts into each test module's resources. Simple but duplicated.
-- **Option B**: Create a shared test utilities module. Clean but adds a fourth module.
-- **Option C**: Keep scripts in a project-root location and reference by absolute path in tests.
-
-**Impact:** Affects test module structure and maintenance burden.
+## Technical Risks
 
 ---
 
