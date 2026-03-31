@@ -61,3 +61,4 @@
 ---
 
 **Note:** Compilation (`mill core.compile` etc.) is expected to fail at this phase because sources have not been moved into Mill's layout yet. That happens in Phase 02.
+**Phase Status:** Complete
