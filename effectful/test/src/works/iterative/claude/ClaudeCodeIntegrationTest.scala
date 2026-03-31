@@ -8,7 +8,6 @@ import fs2.Stream
 import munit.CatsEffectSuite
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.testing.TestingLogger
-import works.iterative.claude.effectful.internal.cli.CLIDiscovery
 import works.iterative.claude.core.{
   CLIError,
   ProcessExecutionError,
@@ -18,6 +17,7 @@ import works.iterative.claude.core.{
 }
 import scala.concurrent.duration.*
 import works.iterative.claude.core.model.*
+import works.iterative.claude.effectful.ClaudeCode
 import works.iterative.claude.effectful.internal.testing.MockScriptResource
 
 class ClaudeCodeIntegrationTest extends CatsEffectSuite:
@@ -514,8 +514,14 @@ class ClaudeCodeIntegrationTest extends CatsEffectSuite:
 
   // Test real CLI integration (if available)
   test("query with real CLI discovery finds claude and executes successfully"):
-    // This test verifies the complete integration: discovery → execution
-    // Assumes Claude CLI is installed (as stated in requirements)
+    assume(
+      sys.env
+        .getOrElse("PATH", "")
+        .split(java.io.File.pathSeparator)
+        .map(java.nio.file.Paths.get(_).resolve("claude"))
+        .exists(java.nio.file.Files.isExecutable(_)),
+      "Claude CLI not installed — skipping real-CLI integration test"
+    )
     val options = QueryOptions(prompt = "What is 1+1?")
 
     ClaudeCode

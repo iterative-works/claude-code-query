@@ -3,8 +3,7 @@
 
 package works.iterative.claude.effectful.internal.testing
 
-import java.io.InputStream
-import java.nio.file.{Files, Path}
+import java.nio.file.{Files, Path, StandardCopyOption}
 import java.nio.file.attribute.PosixFilePermissions
 import scala.util.Using
 
@@ -37,12 +36,17 @@ object MockScriptResource:
     )
 
     val dest = tempDir.resolve(resourceName)
-    if !dest.toFile.exists() then
-      Using(resourceStream): stream =>
-        Files.copy(stream, dest)
-      Files.setPosixFilePermissions(
-        dest,
-        PosixFilePermissions.fromString("rwxr-xr-x")
-      )
+    Using(resourceStream): stream =>
+      Files.copy(stream, dest, StandardCopyOption.REPLACE_EXISTING) match
+        case scala.util.Failure(e) =>
+          throw new RuntimeException(
+            s"Failed to extract mock script $resourceName",
+            e
+          )
+        case _ =>
+    Files.setPosixFilePermissions(
+      dest,
+      PosixFilePermissions.fromString("rwxr-xr-x")
+    )
 
     dest.toAbsolutePath.toString

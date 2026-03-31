@@ -9,6 +9,7 @@ import works.iterative.claude.core.{
   JsonParsingError
 }
 import works.iterative.claude.core.model.QueryOptions
+import works.iterative.claude.effectful.ClaudeCode
 
 class ErrorContextLoggingTest extends CatsEffectSuite:
 
