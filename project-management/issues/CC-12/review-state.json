@@ -19,17 +19,21 @@
     {
       "label": "Phase 1 Tasks",
       "path": "project-management/issues/CC-12/phase-01-tasks.md"
+    },
+    {
+      "label": "Phase 2 Context",
+      "path": "project-management/issues/CC-12/phase-02-context.md"
     }
   ],
-  "last_updated": "2026-03-31T08:43:03.426978334Z",
-  "status": "awaiting_review",
+  "last_updated": "2026-03-31T09:48:00.183613091Z",
+  "status": "context_ready",
   "display": {
-    "text": "Phase 01: Awaiting Review",
-    "type": "warning",
-    "subtext": "Build Infrastructure"
+    "text": "Phase 2: Context Ready",
+    "type": "info",
+    "subtext": "Source Reorganization"
   },
-  "message": "Phase 01 implementation started",
-  "activity": "waiting",
+  "message": "Phase 2 context ready for review",
+  "activity": "working",
   "workflow_type": "waterfall",
   "available_actions": [
     {
@@ -61,8 +65,8 @@
   "git_sha": "6e91243",
   "needs_attention": true,
   "phase_checkpoints": {
-    "1": {
-      "context_sha": "context_sha=4c1f9e96fe29a803b0c6cc4dfc4bea8b5f8d784c"
+    "2": {
+      "context_sha": "context_sha=f2625c0a4a9054127fe7abac3c7cec4410c2372d"
     }
   },
   "badges": [
