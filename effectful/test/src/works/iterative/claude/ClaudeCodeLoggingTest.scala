@@ -1,3 +1,6 @@
+// PURPOSE: Test logging behaviour of ClaudeCode API methods
+// PURPOSE: Verify that queries emit structured log messages for initiation and completion
+
 package works.iterative.claude
 
 import cats.effect.IO
@@ -5,11 +8,13 @@ import munit.CatsEffectSuite
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.testing.TestingLogger
 import works.iterative.claude.core.model.*
+import works.iterative.claude.effectful.ClaudeCode
+import works.iterative.claude.effectful.internal.testing.MockScriptResource
 
 class ClaudeCodeLoggingTest extends CatsEffectSuite:
 
   test("query logs initiation, configuration validation, and completion"):
-    val mockClaudePath = "./test/bin/mock-claude"
+    val mockClaudePath = MockScriptResource.path("mock-claude")
     val options = QueryOptions(
       prompt = "Test logging",
       pathToClaudeCodeExecutable = Some(mockClaudePath)

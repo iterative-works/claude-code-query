@@ -31,10 +31,8 @@ class FileSystemOpsTest extends munit.FunSuite:
   test("should correctly identify existing files using exists"):
     assumeUnixSystem()
 
-    // Test with a known existing file (this test file itself)
-    val testFilePath = System.getProperty(
-      "user.dir"
-    ) + "/test/works/iterative/claude/direct/internal/cli/FileSystemOpsTest.scala"
+    // Test with a known existing file on Unix systems
+    val testFilePath = "/etc/hosts"
     assumeFileExists(testFilePath)
 
     val result = FileSystemOps.exists(testFilePath)

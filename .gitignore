@@ -3,3 +3,4 @@
 .metals/
 .mcp.json
 out/
+*.semanticdb
