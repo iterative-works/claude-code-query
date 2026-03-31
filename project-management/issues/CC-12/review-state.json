@@ -23,17 +23,21 @@
     {
       "label": "Phase 2 Context",
       "path": "project-management/issues/CC-12/phase-02-context.md"
+    },
+    {
+      "label": "Phase 2 Tasks",
+      "path": "project-management/issues/CC-12/phase-02-tasks.md"
     }
   ],
-  "last_updated": "2026-03-31T09:48:00.183613091Z",
-  "status": "context_ready",
+  "last_updated": "2026-03-31T10:09:26.949478613Z",
+  "status": "tasks_ready",
   "display": {
-    "text": "Phase 2: Context Ready",
-    "type": "info",
+    "text": "Phase 2: Tasks Ready",
+    "type": "success",
     "subtext": "Source Reorganization"
   },
-  "message": "Phase 2 context ready for review",
-  "activity": "working",
+  "message": "Phase 2 tasks ready",
+  "activity": "waiting",
   "workflow_type": "waterfall",
   "available_actions": [
     {
@@ -60,6 +64,11 @@
       "id": "view-pr",
       "label": "View Pull Request",
       "skill": "external-link"
+    },
+    {
+      "id": "implement",
+      "label": "Continue",
+      "skill": "wf-implement"
     }
   ],
   "git_sha": "6e91243",
