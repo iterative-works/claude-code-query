@@ -44,3 +44,60 @@ A  mill
 ```
 
 ---
+
+## Phase 2: Source Reorganization (2026-03-31)
+
+**Layer:** Source Reorganization
+
+**What was built:**
+- Moved all source files from flat Scala CLI layout into Mill multi-module directories
+- `core/src/`, `direct/src/`, `effectful/src/` — production sources per module
+- `{module}/test/src/` — test sources per module
+- `effectful/test/resources/bin/` — mock CLI scripts for integration tests
+- `direct/test/resources/logback.xml`, `effectful/test/resources/logback.xml` — test logging config
+- `MockScriptResource.scala` — utility to extract mock scripts from classpath resources in Mill's forked test sandbox
+
+**Key decisions:**
+- Deleted `ClaudeCode.scala` (unused backward-compat facade) and `model.scala` (duplicate types)
+- Deleted `project.scala` and `publish-conf.scala` (Scala CLI configs superseded by `build.mill`)
+- Created `MockScriptResource` to resolve hardcoded `./test/bin/` paths that break in Mill's forked test runner
+- Fixed `FileSystemOpsTest` to use `/etc/hosts` instead of project-relative paths
+
+**Phase 1 gaps fixed:**
+- `os-lib` missing from `effectful` module (used by `FileSystemOps.scala`)
+- `munit-cats-effect` missing from `core.test` (used by `CLIArgumentBuilderTest`)
+- `scalacheck`/`munit-scalacheck` missing from `direct.test`
+- `effectful.test` module dependency on `direct.test` (for `TestAssumptions`)
+
+**Dependencies on other layers:**
+- Phase 1 (Build Infrastructure): `build.mill` module structure
+
+**Testing:**
+- All tests pass: `mill core.test`, `mill direct.test`, `mill effectful.test`
+- Pre-existing flaky test: `direct/ProcessManagerTest` zombie process count assertions (unrelated)
+
+**Code review:**
+- Iterations: 1
+- Findings: 3 critical (MockScriptResource safety, test guard), 5 warnings
+- All critical issues fixed in follow-up commit
+
+**Files changed:**
+```
+M  .gitignore
+M  build.mill
+R  works/iterative/claude/core/* → core/src/works/iterative/claude/core/*
+R  works/iterative/claude/direct/* → direct/src/works/iterative/claude/direct/*
+R  works/iterative/claude/effectful/* → effectful/src/works/iterative/claude/effectful/*
+R  test/works/iterative/claude/* → {module}/test/src/works/iterative/claude/*
+R  test/bin/* → effectful/test/resources/bin/*
+R  src/main/resources/logback.xml → effectful/test/resources/logback.xml
+A  direct/test/resources/logback.xml
+A  effectful/test/resources/logback.xml
+A  effectful/test/src/.../testing/MockScriptResource.scala
+D  works/iterative/claude/ClaudeCode.scala
+D  works/iterative/claude/model.scala
+D  project.scala
+D  publish-conf.scala
+```
+
+---

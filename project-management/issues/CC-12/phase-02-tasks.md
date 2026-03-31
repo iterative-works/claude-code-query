@@ -100,3 +100,4 @@
 - [x] [verify] Confirm `works/`, `test/`, `src/` directories no longer exist
 - [x] [verify] Confirm `project.scala` and `publish-conf.scala` no longer exist
 - [x] [verify] No source files contain changed package declarations (moves only, no package renames)
+**Phase Status:** Complete
