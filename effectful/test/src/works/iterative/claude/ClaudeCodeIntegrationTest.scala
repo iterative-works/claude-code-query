@@ -18,6 +18,7 @@ import works.iterative.claude.core.{
 }
 import scala.concurrent.duration.*
 import works.iterative.claude.core.model.*
+import works.iterative.claude.effectful.internal.testing.MockScriptResource
 
 class ClaudeCodeIntegrationTest extends CatsEffectSuite:
 
@@ -26,7 +27,7 @@ class ClaudeCodeIntegrationTest extends CatsEffectSuite:
 
   // Test query() method with simple prompt
   test("query with simple prompt returns assistant message and result"):
-    val mockClaudePath = "./test/bin/mock-claude"
+    val mockClaudePath = MockScriptResource.path("mock-claude")
     val options = QueryOptions(
       prompt = "What is 2+2?",
       pathToClaudeCodeExecutable = Some(mockClaudePath)
@@ -70,7 +71,7 @@ class ClaudeCodeIntegrationTest extends CatsEffectSuite:
 
   // Test queryResult() convenience method
   test("queryResult returns only the final answer text"):
-    val mockClaudePath = "./test/bin/mock-claude"
+    val mockClaudePath = MockScriptResource.path("mock-claude")
     val options = QueryOptions(
       prompt = "What is 5+5?",
       pathToClaudeCodeExecutable = Some(mockClaudePath)
@@ -83,7 +84,7 @@ class ClaudeCodeIntegrationTest extends CatsEffectSuite:
 
   // Test querySync() method
   test("querySync blocks and returns completed conversation messages"):
-    val mockClaudePath = "./test/bin/mock-claude"
+    val mockClaudePath = MockScriptResource.path("mock-claude")
     val options = QueryOptions(
       prompt = "What is 3+3?",
       pathToClaudeCodeExecutable = Some(mockClaudePath)
@@ -127,7 +128,7 @@ class ClaudeCodeIntegrationTest extends CatsEffectSuite:
   test(
     "query fails with ProcessExecutionError when CLI returns non-zero exit code"
   ):
-    val mockFailClaudePath = "./test/bin/mock-claude-fail"
+    val mockFailClaudePath = MockScriptResource.path("mock-claude-fail")
     val options = QueryOptions(
       prompt = "Test prompt",
       pathToClaudeCodeExecutable = Some(mockFailClaudePath)
@@ -152,7 +153,7 @@ class ClaudeCodeIntegrationTest extends CatsEffectSuite:
 
   // Test JsonParsingError handling
   test("query fails with JsonParsingError when CLI outputs malformed JSON"):
-    val mockBadJsonPath = "./test/bin/mock-claude-bad-json"
+    val mockBadJsonPath = MockScriptResource.path("mock-claude-bad-json")
     val options = QueryOptions(
       prompt = "Test prompt",
       pathToClaudeCodeExecutable = Some(mockBadJsonPath)
@@ -180,7 +181,7 @@ class ClaudeCodeIntegrationTest extends CatsEffectSuite:
 
   // Test ProcessTimeoutError handling
   test("query fails with ProcessTimeoutError when CLI process hangs"):
-    val mockHangPath = "./test/bin/mock-claude-hang"
+    val mockHangPath = MockScriptResource.path("mock-claude-hang")
     val options = QueryOptions(
       prompt = "Test prompt",
       pathToClaudeCodeExecutable = Some(mockHangPath),
@@ -205,7 +206,7 @@ class ClaudeCodeIntegrationTest extends CatsEffectSuite:
 
   // Test ConfigurationError handling
   test("query fails with ConfigurationError on invalid working directory"):
-    val mockClaudePath = "./test/bin/mock-claude"
+    val mockClaudePath = MockScriptResource.path("mock-claude")
     val invalidCwd = "/this/directory/does/not/exist/anywhere"
     val options = QueryOptions(
       prompt = "Test prompt",
@@ -264,7 +265,8 @@ class ClaudeCodeIntegrationTest extends CatsEffectSuite:
 
   // Test all message types parsing
   test("query can parse and return all message types"):
-    val mockAllMessagesPath = "./test/bin/mock-claude-all-messages"
+    val mockAllMessagesPath =
+      MockScriptResource.path("mock-claude-all-messages")
     val options = QueryOptions(
       prompt = "Test all message types",
       pathToClaudeCodeExecutable = Some(mockAllMessagesPath)
@@ -330,7 +332,7 @@ class ClaudeCodeIntegrationTest extends CatsEffectSuite:
 
   // Test environment variables integration
   test("query with environment variables passes them to subprocess"):
-    val mockEnvTestPath = "./test/bin/mock-claude-env-test"
+    val mockEnvTestPath = MockScriptResource.path("mock-claude-env-test")
     val options = QueryOptions(
       prompt = "Test environment variables",
       pathToClaudeCodeExecutable = Some(mockEnvTestPath),
@@ -376,7 +378,7 @@ class ClaudeCodeIntegrationTest extends CatsEffectSuite:
   test(
     "query with inheritEnvironment=true passes parent environment variables"
   ):
-    val mockInheritEnvPath = "./test/bin/mock-claude-inherit-env"
+    val mockInheritEnvPath = MockScriptResource.path("mock-claude-inherit-env")
     val options = QueryOptions(
       prompt = "Test environment inheritance",
       pathToClaudeCodeExecutable = Some(mockInheritEnvPath),
@@ -409,7 +411,7 @@ class ClaudeCodeIntegrationTest extends CatsEffectSuite:
   test(
     "query with inheritEnvironment=false still allows custom environment variables"
   ):
-    val mockEnvTestPath = "./test/bin/mock-claude-env-test"
+    val mockEnvTestPath = MockScriptResource.path("mock-claude-env-test")
     val options = QueryOptions(
       prompt = "Test custom environment without inheritance",
       pathToClaudeCodeExecutable = Some(mockEnvTestPath),
@@ -441,7 +443,7 @@ class ClaudeCodeIntegrationTest extends CatsEffectSuite:
 
   // Test environment variable override
   test("query with custom environment variables overrides inherited ones"):
-    val mockEnvTestPath = "./test/bin/mock-claude-env-test"
+    val mockEnvTestPath = MockScriptResource.path("mock-claude-env-test")
     val options = QueryOptions(
       prompt = "Test environment variable override",
       pathToClaudeCodeExecutable = Some(mockEnvTestPath),
