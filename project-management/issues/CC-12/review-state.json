@@ -29,11 +29,11 @@
       "path": "project-management/issues/CC-12/phase-02-tasks.md"
     }
   ],
-  "last_updated": "2026-03-31T10:39:41.658142842Z",
-  "status": "awaiting_review",
+  "last_updated": "2026-03-31T20:57:35.680877277Z",
+  "status": "phase_merged",
   "display": {
-    "text": "Phase 02: Awaiting Review",
-    "type": "warning",
+    "text": "Phase 02: Merged",
+    "type": "success",
     "subtext": "Source Reorganization"
   },
   "message": "Phase 02 implementation started",
@@ -99,6 +99,10 @@
     {
       "label": "Review Needed",
       "type": "warning"
+    },
+    {
+      "label": "Complete",
+      "type": "success"
     }
   ],
   "pr_url": "https://github.com/iterative-works/claude-code-query/pull/14"
