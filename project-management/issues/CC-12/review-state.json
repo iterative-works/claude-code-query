@@ -29,11 +29,11 @@
       "path": "project-management/issues/CC-12/phase-02-tasks.md"
     }
   ],
-  "last_updated": "2026-03-31T10:09:55.698486678Z",
-  "status": "implementing",
+  "last_updated": "2026-03-31T10:39:41.658142842Z",
+  "status": "awaiting_review",
   "display": {
-    "text": "Phase 02: Implementing",
-    "type": "progress",
+    "text": "Phase 02: Awaiting Review",
+    "type": "warning",
     "subtext": "Source Reorganization"
   },
   "message": "Phase 02 implementation started",
@@ -69,6 +69,11 @@
       "id": "implement",
       "label": "Continue",
       "skill": "wf-implement"
+    },
+    {
+      "id": "view-pr",
+      "label": "View Pull Request",
+      "skill": "external-link"
     }
   ],
   "git_sha": "6e91243",
@@ -90,7 +95,11 @@
     {
       "label": "In Progress",
       "type": "info"
+    },
+    {
+      "label": "Review Needed",
+      "type": "warning"
     }
   ],
-  "pr_url": "https://github.com/iterative-works/claude-code-query/pull/13"
+  "pr_url": "https://github.com/iterative-works/claude-code-query/pull/14"
 }
