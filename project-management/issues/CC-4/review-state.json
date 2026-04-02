@@ -1,0 +1,200 @@
+{
+  "version": 2,
+  "issue_id": "CC-4",
+  "artifacts": [
+    {
+      "label": "Analysis",
+      "path": "project-management/issues/CC-4/analysis.md",
+      "category": "input"
+    },
+    {
+      "label": "Tasks",
+      "path": "project-management/issues/CC-4/tasks.md",
+      "category": "output"
+    },
+    {
+      "label": "Phase 1 Context",
+      "path": "project-management/issues/CC-4/phase-01-context.md"
+    },
+    {
+      "label": "Phase 1 Tasks",
+      "path": "project-management/issues/CC-4/phase-01-tasks.md"
+    },
+    {
+      "label": "Phase 2 Context",
+      "path": "project-management/issues/CC-4/phase-02-context.md"
+    },
+    {
+      "label": "Phase 2 Tasks",
+      "path": "project-management/issues/CC-4/phase-02-tasks.md"
+    },
+    {
+      "label": "Phase 3 Context",
+      "path": "project-management/issues/CC-4/phase-03-context.md"
+    },
+    {
+      "label": "Phase 3 Tasks",
+      "path": "project-management/issues/CC-4/phase-03-tasks.md"
+    },
+    {
+      "label": "Phase 4 Context",
+      "path": "project-management/issues/CC-4/phase-04-context.md"
+    },
+    {
+      "label": "Phase 4 Tasks",
+      "path": "project-management/issues/CC-4/phase-04-tasks.md"
+    },
+    {
+      "label": "Implementation Log",
+      "path": "project-management/issues/CC-4/implementation-log.md"
+    },
+    {
+      "label": "Phase 5 Context",
+      "path": "project-management/issues/CC-4/phase-05-context.md"
+    },
+    {
+      "label": "Phase 5 Tasks",
+      "path": "project-management/issues/CC-4/phase-05-tasks.md"
+    },
+    {
+      "label": "Phase 6 Context",
+      "path": "project-management/issues/CC-4/phase-06-context.md"
+    },
+    {
+      "label": "Phase 6 Tasks",
+      "path": "project-management/issues/CC-4/phase-06-tasks.md"
+    },
+    {
+      "label": "Implementation Log",
+      "path": "project-management/issues/CC-4/implementation-log.md"
+    },
+    {
+      "label": "Release Notes",
+      "path": "project-management/issues/CC-4/release-notes.md"
+    },
+    {
+      "label": "Review Packet",
+      "path": "project-management/issues/CC-4/review-packet.md"
+    }
+  ],
+  "last_updated": "2026-03-25T12:28:36.534195007Z",
+  "status": "all_complete",
+  "display": {
+    "text": "Ready for Final Review",
+    "type": "success",
+    "subtext": "Re-exports and documentation"
+  },
+  "message": "All phases complete - final PR created",
+  "activity": "waiting",
+  "workflow_type": "waterfall",
+  "available_actions": [
+    {
+      "id": "create-tasks",
+      "label": "Generate Tasks",
+      "skill": "wf-create-tasks"
+    },
+    {
+      "id": "implement",
+      "label": "Start Implementation",
+      "skill": "wf-implement"
+    },
+    {
+      "id": "implement",
+      "label": "Start Implementation",
+      "skill": "wf-implement"
+    },
+    {
+      "id": "implement",
+      "label": "Continue",
+      "skill": "wf-implement"
+    },
+    {
+      "id": "implement",
+      "label": "Continue",
+      "skill": "wf-implement"
+    },
+    {
+      "id": "implement",
+      "label": "Continue",
+      "skill": "wf-implement"
+    },
+    {
+      "id": "implement",
+      "label": "Continue",
+      "skill": "wf-implement"
+    },
+    {
+      "id": "implement",
+      "label": "Continue",
+      "skill": "wf-implement"
+    },
+    {
+      "id": "implement",
+      "label": "Continue",
+      "skill": "wf-implement"
+    },
+    {
+      "id": "view-pr",
+      "label": "View Pull Request",
+      "skill": "external-link"
+    }
+  ],
+  "git_sha": "ed00850",
+  "needs_attention": true,
+  "phase_checkpoints": {
+    "6": {
+      "context_sha": "context_sha=1305980a69cb0e6e9f86fe21ca1d2ca03d18f0fb"
+    }
+  },
+  "badges": [
+    {
+      "label": "In Progress",
+      "type": "info"
+    },
+    {
+      "label": "Complete",
+      "type": "success"
+    },
+    {
+      "label": "In Progress",
+      "type": "info"
+    },
+    {
+      "label": "Complete",
+      "type": "success"
+    },
+    {
+      "label": "In Progress",
+      "type": "info"
+    },
+    {
+      "label": "Complete",
+      "type": "success"
+    },
+    {
+      "label": "In Progress",
+      "type": "info"
+    },
+    {
+      "label": "Complete",
+      "type": "success"
+    },
+    {
+      "label": "In Progress",
+      "type": "info"
+    },
+    {
+      "label": "Complete",
+      "type": "success"
+    },
+    {
+      "label": "In Progress",
+      "type": "info"
+    },
+    {
+      "label": "Complete",
+      "type": "success"
+    }
+  ],
+  "pr_url": "https://github.com/iterative-works/claude-code-query/pull/11"
+}

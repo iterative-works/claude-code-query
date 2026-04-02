@@ -19,3 +19,10 @@ case class ToolResultBlock(
     content: Option[String] = None,
     isError: Option[Boolean] = None
 ) extends ContentBlock
+
+case class ThinkingBlock(
+    thinking: String,
+    signature: String
+) extends ContentBlock
+
+case class RedactedThinkingBlock(data: String) extends ContentBlock

@@ -160,10 +160,89 @@ Represents structured content within assistant messages:
 sealed trait ContentBlock
 ├── TextBlock(text: String)
 ├── ToolUseBlock(id, name, input)
-└── ToolResultBlock(toolUseId, content, isError)
+├── ToolResultBlock(toolUseId, content, isError)
+├── ThinkingBlock(thinking, signature)
+└── RedactedThinkingBlock(data)
 ```
 
 **Design Note**: These types are **deliberately simplified** compared to the full TypeScript SDK, hiding session IDs and internal complexity to provide a clean user experience.
+
+## Conversation Log Parsing
+
+The SDK can read and parse Claude Code conversation log files (`.jsonl` files written by the Claude Code CLI). This subsystem follows the same functional core / dual-implementation pattern used by the query API.
+
+### Log File Format
+
+Claude Code writes conversation history as JSONL files, one JSON object per line. Each line is an envelope containing:
+- Common metadata: `uuid`, `parentUuid`, `sessionId`, `timestamp`, `isSidechain`, `cwd`, `version`
+- A `type` field that distinguishes the payload kind
+- Type-specific payload fields
+
+### Domain Model
+
+**Location**: `works.iterative.claude.core.log.model`
+
+```scala
+// Envelope type — one per JSONL line
+case class ConversationLogEntry(
+  uuid, parentUuid, timestamp, sessionId, isSidechain, cwd, version,
+  payload: LogEntryPayload
+)
+
+// Payload hierarchy
+sealed trait LogEntryPayload
+├── UserLogEntry(content: List[ContentBlock])
+├── AssistantLogEntry(content, model, usage, requestId)
+├── SystemLogEntry(subtype, data)
+├── ProgressLogEntry(data, parentToolUseId)
+├── QueueOperationLogEntry(operation, content)
+├── FileHistorySnapshotLogEntry(data)
+├── LastPromptLogEntry(data)
+└── RawLogEntry(entryType, json)   // fallback for unknown types
+
+case class TokenUsage(inputTokens, outputTokens, cacheCreationInputTokens, cacheReadInputTokens, serviceTier)
+case class LogFileMetadata(path, sessionId, summary, lastModified, fileSize, cwd, gitBranch, createdAt)
+```
+
+### Parsing Layer
+
+**ContentBlockParser** (`works.iterative.claude.core.parsing`): Pure function that decodes a circe `Json` value into a `ContentBlock`. Handles all five variants including `ThinkingBlock` and `RedactedThinkingBlock`.
+
+**ConversationLogParser** (`works.iterative.claude.core.log.parsing`): Pure function that decodes a single JSONL line string into an `Option[ConversationLogEntry]`. Returns `None` for blank lines or unrecognised JSON; unknown entry types are wrapped in `RawLogEntry` rather than discarded.
+
+### Service Layer
+
+Two parameterised traits provide the public contract:
+
+```scala
+trait ConversationLogIndex[F[_]]:
+  def listSessions(projectPath: os.Path): F[Seq[LogFileMetadata]]
+  def forSession(projectPath: os.Path, sessionId: String): F[Option[LogFileMetadata]]
+
+trait ConversationLogReader[F[_]]:
+  type EntryStream
+  def readAll(path: os.Path): F[List[ConversationLogEntry]]
+  def stream(path: os.Path): EntryStream
+```
+
+The `F[_]` parameter is instantiated as the identity functor (`[A] =>> A`) for direct-style callers and as `IO` for effectful callers.
+
+### Implementations
+
+| Implementation | Module | Effect | Stream type |
+|---|---|---|---|
+| `DirectConversationLogIndex` | `direct.log` | identity | — |
+| `DirectConversationLogReader` | `direct.log` | identity | `ox.flow.Flow[ConversationLogEntry]` |
+| `EffectfulConversationLogIndex` | `effectful.log` | `cats.effect.IO` | — |
+| `EffectfulConversationLogReader` | `effectful.log` | `cats.effect.IO` | `fs2.Stream[IO, ConversationLogEntry]` |
+
+### ProjectPathDecoder
+
+**Location**: `works.iterative.claude.core.log.ProjectPathDecoder`
+
+A pure utility that converts Claude's path-encoded project directory names back to filesystem path strings. Claude encodes an absolute path by replacing each `/` separator with `-`, so `/home/user/project` becomes `-home-user-project`. `ProjectPathDecoder.decode` reverses this transformation.
+
+Note: The decoding is ambiguous when original path segments contain `-` characters; callers should validate the result against the filesystem.
 
 ## Internal CLI Management Layer
 

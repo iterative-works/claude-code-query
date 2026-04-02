@@ -1,9 +1,9 @@
-// PURPOSE: Package object for direct API with convenient imports and type aliases
+// PURPOSE: Package object for effectful API with convenient imports and type aliases
 // PURPOSE: Enables single-import usage with all necessary model classes available
 
 package works.iterative.claude
 
-package object direct:
+package object effectful:
   // Type aliases for convenient usage
   type QueryOptions = works.iterative.claude.core.model.QueryOptions
   val QueryOptions = works.iterative.claude.core.model.QueryOptions
@@ -75,15 +75,15 @@ package object direct:
   type ConversationLogReader[F[_]] =
     works.iterative.claude.core.log.ConversationLogReader[F]
 
-  // Direct log implementations
-  type DirectConversationLogIndex =
-    works.iterative.claude.direct.log.DirectConversationLogIndex
-  val DirectConversationLogIndex =
-    works.iterative.claude.direct.log.DirectConversationLogIndex
-  type DirectConversationLogReader =
-    works.iterative.claude.direct.log.DirectConversationLogReader
-  val DirectConversationLogReader =
-    works.iterative.claude.direct.log.DirectConversationLogReader
+  // Effectful log implementations
+  type EffectfulConversationLogIndex =
+    works.iterative.claude.effectful.log.EffectfulConversationLogIndex
+  val EffectfulConversationLogIndex =
+    works.iterative.claude.effectful.log.EffectfulConversationLogIndex
+  type EffectfulConversationLogReader =
+    works.iterative.claude.effectful.log.EffectfulConversationLogReader
+  val EffectfulConversationLogReader =
+    works.iterative.claude.effectful.log.EffectfulConversationLogReader
 
   // Utility
   type ProjectPathDecoder =
