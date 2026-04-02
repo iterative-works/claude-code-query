@@ -14,11 +14,16 @@ EXPERIMENTAL - this code is not yet properly tested or documented, work in progr
 
 ## Quick Start
 
-Add the dependency to your project:
+Add the dependency to your project. Use the `direct` module for Ox-based direct-style code, or the `effectful` module for cats-effect/fs2:
 
 ```scala
-// project.scala (using scala-cli)
-//> using dep "works.iterative::claude-scala-sdk:0.1.0"
+// Mill
+ivy"works.iterative::claude-code-query-direct:0.1.0"
+ivy"works.iterative::claude-code-query-effectful:0.1.0"
+
+// SBT
+"works.iterative" %% "claude-code-query-direct" % "0.1.0"
+"works.iterative" %% "claude-code-query-effectful" % "0.1.0"
 ```
 
 ## Simple API (Blocking)
@@ -402,13 +407,18 @@ val program: IO[Unit] =
 
 ## Architecture
 
-The SDK is built on:
+The SDK is split into three modules:
+
+- **core**: Shared model types, JSON parsing, and CLI management. Depends only on circe.
+- **direct** (`claude-code-query-direct`): Ox-based synchronous API. Depends on core + Ox + os-lib + SLF4J.
+- **effectful** (`claude-code-query-effectful`): cats-effect/fs2 API. Depends on core + cats-effect + fs2 + log4cats.
+
+Technology stack:
 
 - **Ox**: Structured concurrency for safe concurrent operations (direct API)
 - **cats-effect IO + fs2**: Functional effects and streaming for the effectful API
 - **Scala 3**: Modern language features and type safety
 - **log4cats + SLF4J**: Flexible logging with both given-based and effectful approaches
-- **Dual API Design**: Choose between direct style or effectful programming
 
 ## Message Types
 
@@ -432,5 +442,6 @@ messages.foreach {
 ## Requirements
 
 - Scala 3.3+
+- Mill 1.1+ (or SBT 1.9+) as build tool
 - Claude Code CLI installed and available in PATH
 - SLF4J compatible logging framework (optional)

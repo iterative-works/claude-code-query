@@ -2,4 +2,6 @@
 .scala-build/
 .metals/
 .mcp.json
+out/
+*.semanticdb
 project-management/issues/CC-4/batch-implement.log

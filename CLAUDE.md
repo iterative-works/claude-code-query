@@ -8,13 +8,13 @@ This is an unofficial Scala SDK for Claude Code, designed as a thin wrapper arou
 
 ## Build and Development Commands
 
-- **Compile**: `scala-cli compile .`
-- **Run**: `scala-cli run .` 
-- **REPL**: `scala-cli repl .`
-- **Package**: `scala-cli package .`
-- **Run Single Test**: `scala-cli test . --test-only '*packageorclassnamepart*' -- '*test name*'`
+- **Compile**: `./mill __.compile`
+- **Test**: `./mill __.test`
+- **Run Module Tests**: `./mill direct.test` or `./mill effectful.test`
+- **Run Single Test**: `./mill direct.test --test-only '*ClassName*'`
+- **Publish to local Maven**: `./mill __.publishLocal`
 
-The project uses Scala CLI as the build tool with dependencies managed in `project.scala`.
+The project uses Mill as the build tool with three modules: `core`, `direct`, and `effectful`.
 
 ## Architecture
 
