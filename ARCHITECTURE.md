@@ -2,6 +2,50 @@
 
 This document describes the architectural design of the Claude Code Scala SDK, a functional wrapper around the Claude Code CLI.
 
+## Build Modules
+
+The SDK is organized as three independent Mill modules, each published as a separate artifact to Maven Central.
+
+### Module Layout
+
+```
+claude-code-query/
+├── core/src/          # Shared types, parsing, and CLI management
+├── direct/src/        # Ox-based direct-style API
+└── effectful/src/     # cats-effect/fs2 effectful API
+```
+
+### Dependency Graph
+
+```
+direct  ──┐
+           ├──▶  core
+effectful ─┘
+```
+
+Both `direct` and `effectful` depend on `core`. The two API modules are independent of each other and have no shared transitive contamination: `direct` does not pull in cats-effect or fs2, and `effectful` does not pull in Ox.
+
+### Published Artifact Coordinates
+
+| Module | Artifact |
+|--------|----------|
+| core | `works.iterative:claude-code-query-core_3:0.1.0` |
+| direct | `works.iterative:claude-code-query-direct_3:0.1.0` |
+| effectful | `works.iterative:claude-code-query-effectful_3:0.1.0` |
+
+### Build Commands
+
+```bash
+# Compile all modules
+mill __.compile
+
+# Run all tests
+mill __.test
+
+# Publish to local Maven repository
+mill __.publishLocal
+```
+
 ## Design Philosophy
 
 The SDK follows these key principles:
