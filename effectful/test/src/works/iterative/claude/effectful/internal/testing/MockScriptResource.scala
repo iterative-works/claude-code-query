@@ -36,14 +36,16 @@ object MockScriptResource:
     )
 
     val dest = tempDir.resolve(resourceName)
-    Using(resourceStream): stream =>
-      Files.copy(stream, dest, StandardCopyOption.REPLACE_EXISTING) match
-        case scala.util.Failure(e) =>
-          throw new RuntimeException(
-            s"Failed to extract mock script $resourceName",
-            e
-          )
-        case _ =>
+    Using(resourceStream)(stream =>
+      Files.copy(stream, dest, StandardCopyOption.REPLACE_EXISTING)
+    ).fold(
+      e =>
+        throw new RuntimeException(
+          s"Failed to extract mock script $resourceName",
+          e
+        ),
+      identity
+    )
     Files.setPosixFilePermissions(
       dest,
       PosixFilePermissions.fromString("rwxr-xr-x")
