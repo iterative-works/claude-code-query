@@ -27,16 +27,24 @@
     {
       "label": "Phase 2 Tasks",
       "path": "project-management/issues/CC-12/phase-02-tasks.md"
+    },
+    {
+      "label": "Phase 3 Context",
+      "path": "project-management/issues/CC-12/phase-03-context.md"
+    },
+    {
+      "label": "Phase 3 Tasks",
+      "path": "project-management/issues/CC-12/phase-03-tasks.md"
     }
   ],
-  "last_updated": "2026-03-31T20:57:35.680877277Z",
-  "status": "phase_merged",
+  "last_updated": "2026-04-02T10:53:31.411637697Z",
+  "status": "tasks_ready",
   "display": {
-    "text": "Phase 02: Merged",
+    "text": "Phase 3: Tasks Ready",
     "type": "success",
-    "subtext": "Source Reorganization"
+    "subtext": "Publishing Configuration"
   },
-  "message": "Phase 02 implementation started",
+  "message": "Phase 3 tasks ready",
   "activity": "waiting",
   "workflow_type": "waterfall",
   "available_actions": [
@@ -74,13 +82,18 @@
       "id": "view-pr",
       "label": "View Pull Request",
       "skill": "external-link"
+    },
+    {
+      "id": "implement",
+      "label": "Continue",
+      "skill": "wf-implement"
     }
   ],
   "git_sha": "6e91243",
   "needs_attention": true,
   "phase_checkpoints": {
-    "2": {
-      "context_sha": "context_sha=f2625c0a4a9054127fe7abac3c7cec4410c2372d"
+    "3": {
+      "context_sha": "context_sha=6a3ddfbe86fa7f12411aa32a85fd85a7293202b9"
     }
   },
   "badges": [
