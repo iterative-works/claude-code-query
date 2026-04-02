@@ -141,3 +141,47 @@ M  effectful/test/src/works/iterative/claude/effectful/internal/testing/MockScri
 ```
 
 ---
+
+## Phase 4: Verification (2026-04-02)
+
+**Layer:** Verification
+
+**What was built:**
+- Formal dependency tree verification using `mill show {module}.showMvnDepsTree` for all three modules
+- Cross-contamination smoke checks confirming no dependency leakage between modules
+- Updated `ARCHITECTURE.md` with Build Modules section (module layout, dependency graph, artifact coordinates, build commands)
+- Updated `README.md` with Maven Central coordinates for Mill and SBT, replaced Scala CLI references
+- Updated `CLAUDE.md` with Mill build commands
+- Fixed GitHub Actions workflow env var names (`MILL_SONATYPE_USERNAME`/`MILL_SONATYPE_PASSWORD`)
+- Removed stale `.bsp/scala-cli.json`, regenerated `.bsp/mill-bsp.json`
+
+**Key decisions:**
+- Used `showMvnDepsTree` (not `ivyDepsTree`) — the actual Mill command name for dependency tree inspection
+- Fixed workflow to use `MILL_SONATYPE_*` env vars (Mill's primary names per `SonatypeHelpers.scala`)
+- Fixed stale cache key in workflow that referenced deleted `project.scala`
+
+**Dependencies on other layers:**
+- Phase 1 (Build Infrastructure): Mill build structure
+- Phase 2 (Source Reorganization): Module layout and test organization
+- Phase 3 (Publishing Configuration): Artifact naming, publishing workflow
+
+**Testing:**
+- All 397 tests pass
+- Compilation clean with no warnings (fixed pre-existing unused `Long` warning in `MockScriptResource.scala`)
+- Dependency trees verified: core has only circe, direct has no cats-effect/fs2, effectful has no ox
+
+**Code review:**
+- Iterations: 1
+- Review file: review-phase-04-20260402.md
+- Result: Pass (0 critical, 2 warnings in test-only code, 5 suggestions — documentation wording addressed)
+
+**Files changed:**
+```
+M  .github/workflows/publish.yml
+M  ARCHITECTURE.md
+M  CLAUDE.md
+M  README.md
+M  effectful/test/src/works/iterative/claude/effectful/internal/testing/MockScriptResource.scala
+```
+
+---

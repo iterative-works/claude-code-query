@@ -23,7 +23,7 @@ direct  ──┐
 effectful ─┘
 ```
 
-Both `direct` and `effectful` depend on `core`. The two API modules are independent of each other and have no shared transitive contamination: `direct` does not pull in cats-effect or fs2, and `effectful` does not pull in Ox.
+Both `direct` and `effectful` depend on `core`. The two API modules are independent of each other and have no transitive dependency coupling: `direct` does not pull in cats-effect or fs2, and `effectful` does not pull in Ox.
 
 ### Published Artifact Coordinates
 

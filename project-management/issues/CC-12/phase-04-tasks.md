@@ -24,3 +24,4 @@
 - [x] [cleanup] Check `.bsp/` directory for stale Scala CLI entries; regenerate for Mill if needed (`mill mill.bsp.BSP/install`)
 - [x] [cleanup] Verify `.gitignore` includes Mill's `out/` directory
 - [x] [cleanup] Scan tracked files for leftover Scala CLI references: `git grep -l 'scala-cli\|//> using' -- ':!project-management/'` should return empty
+**Phase Status:** Complete
