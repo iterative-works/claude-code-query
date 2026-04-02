@@ -38,7 +38,14 @@ object MockScriptResource:
     val dest = tempDir.resolve(resourceName)
     Using(resourceStream)(stream =>
       Files.copy(stream, dest, StandardCopyOption.REPLACE_EXISTING)
-    ).get
+    ).fold(
+      e =>
+        throw new RuntimeException(
+          s"Failed to extract mock script $resourceName",
+          e
+        ),
+      identity
+    )
     Files.setPosixFilePermissions(
       dest,
       PosixFilePermissions.fromString("rwxr-xr-x")
