@@ -1,0 +1,40 @@
+{
+  "version": 2,
+  "issue_id": "CC-15",
+  "artifacts": [
+    {
+      "label": "Analysis",
+      "path": "project-management/issues/CC-15/analysis.md",
+      "category": "input"
+    }
+  ],
+  "last_updated": "2026-04-02T20:59:51.806458551Z",
+  "status": "analysis_ready",
+  "display": {
+    "text": "Analysis Ready",
+    "type": "success",
+    "subtext": "6 stories across 3 iterations"
+  },
+  "badges": [
+    {
+      "label": "Feature",
+      "type": "info"
+    }
+  ],
+  "message": "Analysis complete - ready for task generation",
+  "activity": "waiting",
+  "workflow_type": "agile",
+  "available_actions": [
+    {
+      "id": "create-tasks",
+      "label": "Generate Tasks",
+      "skill": "ag-create-tasks"
+    },
+    {
+      "id": "implement",
+      "label": "Start Implementation",
+      "skill": "ag-implement"
+    }
+  ],
+  "git_sha": "77b116b"
+}
