@@ -1,4 +1,4 @@
-//| mvnDeps: ["works.iterative::mill-iw-support::0.1.4-SNAPSHOT"]
+//| mvnDeps: ["works.iterative::mill-iw-support::0.1.3"]
 // PURPOSE: Mill build definition for the claude-code-query Scala SDK.
 // PURPOSE: Defines three modules: core (shared types/parsing), direct (Ox-based sync API), effectful (cats-effect/fs2 async API).
 package build
