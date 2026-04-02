@@ -37,14 +37,14 @@
       "path": "project-management/issues/CC-12/phase-03-tasks.md"
     }
   ],
-  "last_updated": "2026-04-02T10:53:31.411637697Z",
-  "status": "tasks_ready",
+  "last_updated": "2026-04-02T10:58:24.993447783Z",
+  "status": "implementing",
   "display": {
-    "text": "Phase 3: Tasks Ready",
-    "type": "success",
+    "text": "Phase 03: Implementing",
+    "type": "progress",
     "subtext": "Publishing Configuration"
   },
-  "message": "Phase 3 tasks ready",
+  "message": "Phase 03 implementation started",
   "activity": "waiting",
   "workflow_type": "waterfall",
   "available_actions": [
@@ -116,6 +116,10 @@
     {
       "label": "Complete",
       "type": "success"
+    },
+    {
+      "label": "In Progress",
+      "type": "info"
     }
   ],
   "pr_url": "https://github.com/iterative-works/claude-code-query/pull/14"
