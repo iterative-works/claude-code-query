@@ -101,3 +101,43 @@ D  publish-conf.scala
 ```
 
 ---
+
+## Phase 3: Publishing Configuration (2026-04-02)
+
+**Layer:** Publishing Configuration
+
+**What was built:**
+- `build.mill` — Added `artifactName` override in `SharedModule` to prefix `claude-code-query-` to each module name; bumped `publishVersion` from `0.1.0-SNAPSHOT` to `0.1.0`
+- `.github/workflows/publish.yml` — GitHub Actions workflow for automated publishing to Sonatype Central on `v*` tag push
+
+**Key decisions:**
+- `artifactName` override in `SharedModule` (shared prefix) rather than per-module overrides
+- Hardcoded version `0.1.0` rather than dynamic tag-based versioning (simplicity for first release)
+- GitHub Actions pinned to commit SHAs for supply chain security
+- Workflow uses minimal permissions (`contents: read`)
+
+**Dependencies on other layers:**
+- Phase 1 (Build Infrastructure): `SharedModule` with `PublishModule` mixin
+- Phase 2 (Source Reorganization): All sources in Mill layout, tests passing
+
+**Testing:**
+- All 397 tests pass after changes
+- `publishLocal` verified: artifacts at `works.iterative:claude-code-query-{core,direct,effectful}_3:0.1.0`
+- POM dependency isolation confirmed: core has only circe, direct has no cats-effect, effectful has no ox
+
+**Code review:**
+- Iterations: 1
+- Review file: review-phase-03-20260402.md
+- Result: Pass (0 critical, 5 warnings — security hardening and diagnostic context addressed)
+
+**Bug fix:**
+- `MockScriptResource.scala` — Fixed pre-existing compilation issue with `Files.copy` return type and restored diagnostic error context
+
+**Files changed:**
+```
+A  .github/workflows/publish.yml
+M  build.mill
+M  effectful/test/src/works/iterative/claude/effectful/internal/testing/MockScriptResource.scala
+```
+
+---

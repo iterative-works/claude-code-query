@@ -12,3 +12,4 @@
 - [x] [integration] Run `mill __.publishLocal` and verify all 3 artifacts appear under `~/.ivy2/local` with correct coordinates
 - [x] [integration] Inspect each generated POM for completeness (licenses, scm, developers, dependencies) and correct artifact naming
 - [x] [integration] Run full test suite (`mill __.test`) to confirm no regressions from build changes
+**Phase Status:** Complete
