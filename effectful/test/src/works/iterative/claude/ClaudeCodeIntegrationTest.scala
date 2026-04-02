@@ -475,6 +475,14 @@ class ClaudeCodeIntegrationTest extends CatsEffectSuite:
 
   // Test ANTHROPIC_API_KEY environment variable
   test("query with custom ANTHROPIC_API_KEY through environment variables"):
+    assume(
+      sys.env
+        .getOrElse("PATH", "")
+        .split(java.io.File.pathSeparator)
+        .map(java.nio.file.Paths.get(_).resolve("claude"))
+        .exists(java.nio.file.Files.isExecutable(_)),
+      "Claude CLI not installed — skipping real-CLI integration test"
+    )
     // Test that ANTHROPIC_API_KEY can be passed through environmentVariables
     // This verifies the new environment variable functionality
     // Note: inheritEnvironment=false requires PATH and HOME for the CLI to function
