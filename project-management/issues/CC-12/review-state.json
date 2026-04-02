@@ -35,16 +35,24 @@
     {
       "label": "Phase 3 Tasks",
       "path": "project-management/issues/CC-12/phase-03-tasks.md"
+    },
+    {
+      "label": "Phase 4 Context",
+      "path": "project-management/issues/CC-12/phase-04-context.md"
+    },
+    {
+      "label": "Phase 4 Tasks",
+      "path": "project-management/issues/CC-12/phase-04-tasks.md"
     }
   ],
-  "last_updated": "2026-04-02T11:06:56.065596060Z",
+  "last_updated": "2026-04-02T11:43:41.836278179Z",
   "status": "awaiting_review",
   "display": {
-    "text": "Phase 03: Awaiting Review",
+    "text": "Phase 04: Awaiting Review",
     "type": "warning",
-    "subtext": "Publishing Configuration"
+    "subtext": "Verification"
   },
-  "message": "Phase 03 implementation started",
+  "message": "Phase 04 implementation started",
   "activity": "waiting",
   "workflow_type": "waterfall",
   "available_actions": [
@@ -92,13 +100,23 @@
       "id": "view-pr",
       "label": "View Pull Request",
       "skill": "external-link"
+    },
+    {
+      "id": "implement",
+      "label": "Continue",
+      "skill": "wf-implement"
+    },
+    {
+      "id": "view-pr",
+      "label": "View Pull Request",
+      "skill": "external-link"
     }
   ],
   "git_sha": "6e91243",
   "needs_attention": true,
   "phase_checkpoints": {
-    "3": {
-      "context_sha": "context_sha=6a3ddfbe86fa7f12411aa32a85fd85a7293202b9"
+    "4": {
+      "context_sha": "context_sha=bd28f39d8e28c36e1e824a85e4bc959c51415d38"
     }
   },
   "badges": [
@@ -129,7 +147,15 @@
     {
       "label": "Review Needed",
       "type": "warning"
+    },
+    {
+      "label": "In Progress",
+      "type": "info"
+    },
+    {
+      "label": "Review Needed",
+      "type": "warning"
     }
   ],
-  "pr_url": "https://github.com/iterative-works/claude-code-query/pull/16"
+  "pr_url": "https://github.com/iterative-works/claude-code-query/pull/17"
 }

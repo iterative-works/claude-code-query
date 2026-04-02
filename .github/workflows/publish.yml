@@ -28,7 +28,7 @@ jobs:
             ~/.mill
             ~/.cache/mill
             out/
-          key: ${{ runner.os }}-mill-${{ hashFiles('build.mill', 'project.scala') }}
+          key: ${{ runner.os }}-mill-${{ hashFiles('build.mill') }}
           restore-keys: |
             ${{ runner.os }}-mill-
 
@@ -37,8 +37,8 @@ jobs:
 
       - name: Publish to Sonatype Central
         env:
-          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
-          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
+          MILL_SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
+          MILL_SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
           MILL_PGP_SECRET_BASE64: ${{ secrets.MILL_PGP_SECRET_BASE64 }}
           MILL_PGP_PASSPHRASE: ${{ secrets.MILL_PGP_PASSPHRASE }}
         run: ./mill mill.javalib.SonatypeCentralPublishModule/publishAll

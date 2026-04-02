@@ -44,7 +44,7 @@ object MockScriptResource:
           s"Failed to extract mock script $resourceName",
           e
         ),
-      identity
+      _ => ()
     )
     Files.setPosixFilePermissions(
       dest,
