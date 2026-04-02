@@ -45,11 +45,11 @@
       "path": "project-management/issues/CC-12/phase-04-tasks.md"
     }
   ],
-  "last_updated": "2026-04-02T11:31:39.627625997Z",
-  "status": "implementing",
+  "last_updated": "2026-04-02T11:43:41.836278179Z",
+  "status": "awaiting_review",
   "display": {
-    "text": "Phase 04: Implementing",
-    "type": "progress",
+    "text": "Phase 04: Awaiting Review",
+    "type": "warning",
     "subtext": "Verification"
   },
   "message": "Phase 04 implementation started",
@@ -105,6 +105,11 @@
       "id": "implement",
       "label": "Continue",
       "skill": "wf-implement"
+    },
+    {
+      "id": "view-pr",
+      "label": "View Pull Request",
+      "skill": "external-link"
     }
   ],
   "git_sha": "6e91243",
@@ -146,7 +151,11 @@
     {
       "label": "In Progress",
       "type": "info"
+    },
+    {
+      "label": "Review Needed",
+      "type": "warning"
     }
   ],
-  "pr_url": "https://github.com/iterative-works/claude-code-query/pull/16"
+  "pr_url": "https://github.com/iterative-works/claude-code-query/pull/17"
 }
