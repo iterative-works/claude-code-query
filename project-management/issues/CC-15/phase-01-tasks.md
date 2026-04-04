@@ -35,3 +35,4 @@
 - [x] [integration] Create `test/works/iterative/claude/core/model/SDKUserMessageRoundTripTest.scala` -- write a mock CLI bash script (inline heredoc) that reads a JSON line from stdin and echoes back an assistant message + result message to stdout; test encodes an SDKUserMessage, feeds it to the script via `ProcessBuilder`, reads stdout lines, parses them with `JsonParser`, and verifies the round-trip produces `AssistantMessage` and `ResultMessage`
 - [x] [integration] Create `test/works/iterative/claude/core/model/SDKUserMessageE2ETest.scala` -- gated on `claude` CLI availability via `TestAssumptions.assumeCommand("claude")`; starts `claude --print --input-format stream-json --output-format stream-json`, writes a properly formatted SDKUserMessage JSON line to stdin, and verifies the CLI does not error (exit code 0 or produces parseable output)
 - [x] [integration] Run full test suite (`scala-cli test .`) to confirm no regressions
+**Phase Status:** Complete
