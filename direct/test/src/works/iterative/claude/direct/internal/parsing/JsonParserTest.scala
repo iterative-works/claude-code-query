@@ -75,6 +75,19 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
         ) ++ optionalFields
         s"""{${allFields.mkString(",")}}"""
 
+      case KeepAliveMessage =>
+        s"""{"type":"keep_alive"}"""
+
+      case StreamEventMessage(data) =>
+        val dataJson = data
+          .map { case (key, value) =>
+            s""""$key":${serializeJsonValue(value)}"""
+          }
+          .mkString(",")
+        s"""{"type":"stream_event"${
+            if dataJson.nonEmpty then "," + dataJson else ""
+          }}"""
+
     private def serializeContentBlock(block: ContentBlock): String = block match
       case TextBlock(text) =>
         s"""{"type":"text","text":${escapeJsonString(text)}}"""
