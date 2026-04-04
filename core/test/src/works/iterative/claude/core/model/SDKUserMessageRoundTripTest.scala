@@ -6,12 +6,18 @@ package works.iterative.claude.core.model
 import munit.FunSuite
 import io.circe.syntax.*
 import works.iterative.claude.core.parsing.JsonParser
-import works.iterative.claude.direct.internal.testing.TestAssumptions
 
 class SDKUserMessageRoundTripTest extends FunSuite:
 
+  private def assumeUnixSystem(): Unit =
+    val osName = System.getProperty("os.name").toLowerCase
+    assume(
+      !osName.contains("windows"),
+      s"Test requires Unix-like system, but running on: $osName"
+    )
+
   test("Round-trip: encode SDKUserMessage, mock CLI echoes response, parse it"):
-    TestAssumptions.assumeUnixSystem()
+    assumeUnixSystem()
 
     val msg = SDKUserMessage("What is 2+2?", "session-abc", None)
     val jsonLine = msg.asJson.noSpaces
@@ -69,12 +75,12 @@ class SDKUserMessageRoundTripTest extends FunSuite:
           assertEquals(rm.sessionId, "session-abc")
           assertEquals(rm.result, Some("The answer is 4."))
         case other => fail(s"Expected ResultMessage, got $other")
-    finally java.nio.file.Files.deleteIfExists(scriptFile)
+    finally java.nio.file.Files.deleteIfExists(scriptFile): Unit
 
   test(
     "Mock session protocol: init message, stdin write, assistant + result response"
   ):
-    TestAssumptions.assumeUnixSystem()
+    assumeUnixSystem()
 
     val msg = SDKUserMessage("Hello", "pending", None)
     val jsonLine = msg.asJson.noSpaces
@@ -141,4 +147,4 @@ class SDKUserMessageRoundTripTest extends FunSuite:
         case Some(rm: ResultMessage) =>
           assertEquals(rm.sessionId, "real-session-42")
         case other => fail(s"Expected ResultMessage, got $other")
-    finally java.nio.file.Files.deleteIfExists(scriptFile)
+    finally java.nio.file.Files.deleteIfExists(scriptFile): Unit

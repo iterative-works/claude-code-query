@@ -5,15 +5,21 @@ package works.iterative.claude.core.model
 
 import munit.FunSuite
 import io.circe.syntax.*
-import works.iterative.claude.direct.internal.testing.TestAssumptions
+import scala.util.Try
 
 class SDKUserMessageE2ETest extends FunSuite:
+
+  private def assumeCommand(command: String): Unit =
+    val available = Try {
+      new ProcessBuilder("which", command).start().waitFor() == 0
+    }.getOrElse(false)
+    assume(available, s"Command '$command' not found in PATH")
 
   test(
     "Real CLI accepts SDKUserMessage JSON format via stream-json stdin"
   ):
     // Skips automatically when `claude` CLI is not available
-    TestAssumptions.assumeCommand("claude")
+    assumeCommand("claude")
 
     val msg = SDKUserMessage("What is 1+1?", "pending", None)
     val jsonLine = msg.asJson.noSpaces
