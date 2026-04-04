@@ -75,6 +75,19 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
         ) ++ optionalFields
         s"""{${allFields.mkString(",")}}"""
 
+      case KeepAliveMessage =>
+        s"""{"type":"keep_alive"}"""
+
+      case StreamEventMessage(data) =>
+        val dataJson = data
+          .map { case (key, value) =>
+            s""""$key":${serializeJsonValue(value)}"""
+          }
+          .mkString(",")
+        s"""{"type":"stream_event"${
+            if dataJson.nonEmpty then "," + dataJson else ""
+          }}"""
+
     private def serializeContentBlock(block: ContentBlock): String = block match
       case TextBlock(text) =>
         s"""{"type":"text","text":${escapeJsonString(text)}}"""
@@ -211,12 +224,23 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
       result
     )
 
+    // Generator for KeepAliveMessage
+    val keepAliveGen: Gen[KeepAliveMessage.type] =
+      Gen.const(KeepAliveMessage)
+
+    // Generator for StreamEventMessage
+    val streamEventGen: Gen[StreamEventMessage] = systemDataGen.map(
+      StreamEventMessage.apply
+    )
+
     // Generator for any Message type
     val messageGen: Gen[Message] = Gen.oneOf(
       userMessageGen,
       assistantMessageGen,
       systemMessageGen,
-      resultMessageGen
+      resultMessageGen,
+      keepAliveGen,
+      streamEventGen
     )
 
     // Implicit Arbitrary instances
@@ -225,6 +249,8 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
     given Arbitrary[AssistantMessage] = Arbitrary(assistantMessageGen)
     given Arbitrary[SystemMessage] = Arbitrary(systemMessageGen)
     given Arbitrary[ResultMessage] = Arbitrary(resultMessageGen)
+    given Arbitrary[KeepAliveMessage.type] = Arbitrary(keepAliveGen)
+    given Arbitrary[StreamEventMessage] = Arbitrary(streamEventGen)
 
   test("should parse valid JSON messages with line context") {
     // Setup: Valid JSON message strings from CLI output
@@ -517,6 +543,45 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
         case other =>
           fail(
             s"Expected Right(Some(ResultMessage(...))) but got: $other for JSON: $jsonString"
+          )
+    }
+  }
+
+  property(
+    "should maintain idempotency for KeepAliveMessage parsing specifically"
+  ) {
+    import MessageGenerators.*
+    import JsonSerializationUtils.*
+
+    forAll(keepAliveGen) { originalMessage =>
+      val jsonString = serializeMessage(originalMessage)
+      val parseResult = JsonParser.parseJsonLineWithContext(jsonString, 1)
+
+      parseResult match
+        case Right(Some(KeepAliveMessage)) => () // success
+        case other                         =>
+          fail(
+            s"Expected Right(Some(KeepAliveMessage)) but got: $other for JSON: $jsonString"
+          )
+    }
+  }
+
+  property(
+    "should maintain idempotency for StreamEventMessage parsing specifically"
+  ) {
+    import MessageGenerators.*
+    import JsonSerializationUtils.*
+
+    forAll(streamEventGen) { originalMessage =>
+      val jsonString = serializeMessage(originalMessage)
+      val parseResult = JsonParser.parseJsonLineWithContext(jsonString, 1)
+
+      parseResult match
+        case Right(Some(streamEvent: StreamEventMessage)) =>
+          assertEquals(streamEvent, originalMessage)
+        case other =>
+          fail(
+            s"Expected Right(Some(StreamEventMessage(...))) but got: $other for JSON: $jsonString"
           )
     }
   }

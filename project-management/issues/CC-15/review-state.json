@@ -23,25 +23,38 @@
       "category": "output"
     }
   ],
-  "last_updated": "2026-04-04T18:04:37.957011+00:00",
-  "status": "tasks_ready",
+  "last_updated": "2026-04-04T18:34:34.967987359Z",
+  "status": "awaiting_review",
   "display": {
-    "text": "Phase 1: Tasks Ready",
+    "text": "Phase 01: Awaiting Review",
     "subtext": "Stdin message format and response delimiting",
-    "type": "success"
+    "type": "warning"
   },
   "badges": [
     {
       "label": "Feature",
       "type": "info"
+    },
+    {
+      "label": "In Progress",
+      "type": "info"
+    },
+    {
+      "label": "Review Needed",
+      "type": "warning"
     }
   ],
-  "message": "Phase 1 tasks ready",
+  "message": "Phase 01 implementation started",
   "available_actions": [
     {
       "id": "implement",
       "label": "Continue",
       "skill": "ag-implement"
+    },
+    {
+      "id": "view-pr",
+      "label": "View Pull Request",
+      "skill": "external-link"
     }
   ],
   "git_sha": "9d2559e7ce400a2863b74af28e3638e0fa5a34fa",
@@ -49,5 +62,7 @@
     "1": {
       "context_sha": "520a5bf5a3502155be2bae1e8152fa2e4b551567"
     }
-  }
+  },
+  "needs_attention": true,
+  "pr_url": "https://github.com/iterative-works/claude-code-query/pull/22"
 }

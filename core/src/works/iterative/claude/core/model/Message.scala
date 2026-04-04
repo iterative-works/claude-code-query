@@ -26,3 +26,7 @@ case class ResultMessage(
     usage: Option[Map[String, Any]] = None,
     result: Option[String] = None
 ) extends Message
+
+case object KeepAliveMessage extends Message
+
+case class StreamEventMessage(data: Map[String, Any]) extends Message

@@ -140,3 +140,76 @@ class JsonParserTest extends FunSuite:
     val whitespaceLine = "   \t  \n  "
     val result = JsonParser.parseJsonLine(whitespaceLine)
     assertEquals(result, None, "Whitespace-only line should return None")
+
+  test("parseMessage parses keep_alive into KeepAliveMessage"):
+    val keepAliveStr = """{"type":"keep_alive"}"""
+    val json =
+      parser.parse(keepAliveStr).getOrElse(fail("Failed to parse JSON"))
+    val result = JsonParser.parseMessage(json)
+
+    result match
+      case Some(KeepAliveMessage) => () // success
+      case Some(other)            =>
+        fail(s"Expected KeepAliveMessage, got: ${other.getClass.getSimpleName}")
+      case None => fail("Expected KeepAliveMessage, got None")
+
+  test("parseMessage parses stream_event into StreamEventMessage"):
+    val streamEventStr = """{
+      "type": "stream_event",
+      "event": "content_block_delta",
+      "data": {"type": "text_delta", "text": "Hello"}
+    }"""
+
+    val json =
+      parser.parse(streamEventStr).getOrElse(fail("Failed to parse JSON"))
+    val result = JsonParser.parseMessage(json)
+
+    result match
+      case Some(StreamEventMessage(data)) =>
+        assert(data.contains("event"))
+        assertEquals(data("event"), "content_block_delta")
+        assert(data.contains("data"))
+        val nestedData = data("data").asInstanceOf[Map[String, Any]]
+        assertEquals(nestedData("type"), "text_delta")
+        assertEquals(nestedData("text"), "Hello")
+      case Some(other) =>
+        fail(
+          s"Expected StreamEventMessage, got: ${other.getClass.getSimpleName}"
+        )
+      case None => fail("Expected StreamEventMessage, got None")
+
+  test("ResultMessage parses realistic stream-json end-of-turn"):
+    val resultJsonStr = """{
+      "type": "result",
+      "subtype": "success",
+      "duration_ms": 3200,
+      "duration_api_ms": 2800,
+      "is_error": false,
+      "num_turns": 3,
+      "result": "Here is the final answer to your question.",
+      "session_id": "abc-def-123-456",
+      "total_cost_usd": 0.0042,
+      "usage": {"input_tokens": 1500, "output_tokens": 350}
+    }"""
+
+    val json =
+      parser.parse(resultJsonStr).getOrElse(fail("Failed to parse JSON"))
+    val result = JsonParser.parseMessage(json)
+
+    result match
+      case Some(rm: ResultMessage) =>
+        assertEquals(rm.subtype, "success")
+        assertEquals(rm.durationMs, 3200)
+        assertEquals(rm.durationApiMs, 2800)
+        assertEquals(rm.isError, false)
+        assertEquals(rm.numTurns, 3)
+        assertEquals(rm.sessionId, "abc-def-123-456")
+        assertEquals(rm.totalCostUsd, Some(0.0042))
+        assert(rm.usage.isDefined)
+        assertEquals(
+          rm.result,
+          Some("Here is the final answer to your question.")
+        )
+      case Some(other) =>
+        fail(s"Expected ResultMessage, got: ${other.getClass.getSimpleName}")
+      case None => fail("Expected ResultMessage, got None")

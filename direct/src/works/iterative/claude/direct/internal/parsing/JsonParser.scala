@@ -8,7 +8,9 @@ import works.iterative.claude.core.model.{
   UserMessage,
   AssistantMessage,
   SystemMessage,
-  ResultMessage
+  ResultMessage,
+  KeepAliveMessage,
+  StreamEventMessage
 }
 import works.iterative.claude.core.parsing.{JsonParser as CoreJsonParser}
 import works.iterative.claude.direct.Logger
@@ -109,7 +111,9 @@ object JsonParser:
   /** Extract message type for logging purposes */
   private def extractMessageType(message: Message): String =
     message match
-      case _: UserMessage      => "user"
-      case _: AssistantMessage => "assistant"
-      case _: SystemMessage    => "system"
-      case _: ResultMessage    => "result"
+      case _: UserMessage        => "user"
+      case _: AssistantMessage   => "assistant"
+      case _: SystemMessage      => "system"
+      case _: ResultMessage      => "result"
+      case KeepAliveMessage      => "keep_alive"
+      case _: StreamEventMessage => "stream_event"
