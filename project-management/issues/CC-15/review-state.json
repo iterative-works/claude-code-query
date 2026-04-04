@@ -26,14 +26,18 @@
       "label": "Phase 2 Context",
       "path": "project-management/issues/CC-15/phase-02-context.md",
       "category": "output"
+    },
+    {
+      "label": "Phase 2 Tasks",
+      "path": "project-management/issues/CC-15/phase-02-tasks.md"
     }
   ],
-  "last_updated": "2026-04-04T21:00:00Z",
-  "status": "context_ready",
+  "last_updated": "2026-04-04T20:34:15.658050061Z",
+  "status": "tasks_ready",
   "display": {
-    "text": "Phase 02: Context Ready",
+    "text": "Phase 02: Tasks Ready",
     "subtext": "SessionOptions configuration",
-    "type": "info"
+    "type": "success"
   },
   "badges": [
     {
@@ -45,8 +49,13 @@
       "type": "info"
     }
   ],
-  "message": "Phase 02 context ready for review",
+  "message": "Phase 02 tasks ready",
   "available_actions": [
+    {
+      "id": "implement",
+      "label": "Continue",
+      "skill": "ag-implement"
+    },
     {
       "id": "implement",
       "label": "Continue",
@@ -63,5 +72,5 @@
     }
   },
   "needs_attention": false,
-  "activity": "working"
+  "activity": "waiting"
 }
