@@ -10,11 +10,9 @@ import works.iterative.claude.direct.internal.testing.TestAssumptions
 class SDKUserMessageE2ETest extends FunSuite:
 
   test(
-    "Real CLI accepts SDKUserMessage JSON format via stream-json stdin".ignore
+    "Real CLI accepts SDKUserMessage JSON format via stream-json stdin"
   ):
-    // This test is ignored by default because it requires the real Claude CLI
-    // and API credentials. To run it manually, remove .ignore and ensure
-    // `claude` is in PATH with valid credentials.
+    // Skips automatically when `claude` CLI is not available
     TestAssumptions.assumeCommand("claude")
 
     val msg = SDKUserMessage("What is 1+1?", "pending", None)
@@ -23,6 +21,7 @@ class SDKUserMessageE2ETest extends FunSuite:
     val process = new ProcessBuilder(
       "claude",
       "--print",
+      "--verbose",
       "--input-format",
       "stream-json",
       "--output-format",
@@ -42,6 +41,6 @@ class SDKUserMessageE2ETest extends FunSuite:
 
     // The CLI should not crash with a format error
     assert(
-      exitCode == 0 || stdout.nonEmpty,
+      exitCode == 0,
       s"CLI should accept the message format. Exit: $exitCode, stderr: $stderr"
     )

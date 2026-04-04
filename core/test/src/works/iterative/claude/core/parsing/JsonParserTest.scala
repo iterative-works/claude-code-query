@@ -169,6 +169,9 @@ class JsonParserTest extends FunSuite:
         assert(data.contains("event"))
         assertEquals(data("event"), "content_block_delta")
         assert(data.contains("data"))
+        val nestedData = data("data").asInstanceOf[Map[String, Any]]
+        assertEquals(nestedData("type"), "text_delta")
+        assertEquals(nestedData("text"), "Hello")
       case Some(other) =>
         fail(
           s"Expected StreamEventMessage, got: ${other.getClass.getSimpleName}"
