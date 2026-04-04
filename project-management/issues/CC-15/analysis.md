@@ -290,67 +290,51 @@ This is a research-heavy story. The exact stdin JSON format for `--input-format 
 - Newline-delimited JSON writing to process stdin
 - Response boundary detection based on ResultMessage arrival
 
-## Technical Risks & Uncertainties
+## Technical Decisions (Resolved)
 
-### CLARIFY: Exact `--input-format stream-json` protocol
+### RESOLVED: Exact `--input-format stream-json` protocol
 
-The most critical unknown. We need to understand what JSON format the CLI expects on stdin and how it signals response boundaries on stdout.
+Investigated via the `@anthropic-ai/claude-agent-sdk` TypeScript SDK (v0.1.0).
 
-**Questions to answer:**
-1. What is the exact JSON schema for stdin messages? Is it `{"type": "user", "content": "..."}` or something else?
-2. How are response boundaries delimited on stdout? Is it always a `ResultMessage` with `type: "result"`?
-3. Does the CLI support any control messages (e.g., abort current turn, graceful shutdown)?
-4. Is `--print` compatible with `--input-format stream-json`, or does session mode replace it?
+**Stdin format** — `SDKUserMessage`:
+```json
+{"type": "user", "message": {"role": "user", "content": "..."}, "parent_tool_use_id": null, "session_id": "..."}
+```
 
-**Options:**
-- **Option A**: Read Claude Code CLI source / documentation to understand the protocol before implementation
-- **Option B**: Experiment with the CLI manually (`echo '...' | claude --input-format stream-json`) to discover the protocol
-- **Option C**: Start with the Python SDK's session implementation as reference
+**Session lifecycle:**
+1. CLI sends `system`/`init` message on stdout with assigned `session_id`
+2. Client sends `SDKUserMessage` on stdin using that `session_id` (first message can use `"pending"`)
+3. CLI responds with interleaved `stream_event`, `assistant`, and `keep_alive` messages
+4. `ResultMessage` with `type: "result"` signals end-of-turn
+5. Process stays alive for next turn
 
-**Impact:** Blocks Stories 1, 2, 3, and 6. This must be resolved first.
+**Additional message types discovered:**
+- `stream_event` — partial streaming events (content deltas), new type not in current model
+- `keep_alive` — periodic heartbeat messages
+- `control_request` / `control_response` — bidirectional control (interrupt, model switch, etc.) — out of scope for now
 
----
-
-### CLARIFY: Session trait design -- shared or separate per API style
-
-**Questions to answer:**
-1. Should there be a shared `Session` trait in `core` with API-specific implementations?
-2. Or should direct and effectful each define their own Session independently?
-3. Does `Session` need to expose session ID from ResultMessage?
-
-**Options:**
-- **Option A**: Shared trait in `core` with `send` returning a generic streaming type -- likely impractical due to Flow vs Stream difference
-- **Option B**: Separate Session traits per API style with a shared SessionOptions in core -- mirrors current QueryOptions/ClaudeCode split
-- **Option C**: Single Session trait parameterized by effect type (higher-kinded) -- more complex but DRY
-
-**Impact:** Affects code organization and potential code duplication between direct/effectful APIs.
+**CLI flags:** `--print --input-format stream-json --output-format stream-json` (all three required)
 
 ---
 
-### CLARIFY: Turn sequencing semantics
+### RESOLVED: Session trait design — separate per API style (Option B)
 
-**Questions to answer:**
-1. What happens if the user calls `send` before the previous turn's response is fully consumed?
-2. Should we enforce sequential access (error if previous Flow/Stream not drained)?
-3. Or should we auto-drain the previous response before sending the next message?
-
-**Options:**
-- **Option A**: Enforce sequential -- throw/raise error if previous turn not complete
-- **Option B**: Auto-drain previous turn's remaining messages before sending next
-- **Option C**: Let the CLI handle it and don't add client-side enforcement
-
-**Impact:** Affects API ergonomics and potential for data loss (unconsumed messages).
+Separate Session traits for direct and effectful APIs, with shared `SessionOptions` in `core.model`. This mirrors the existing `ClaudeCode` / `QueryOptions` split. `Flow` and `Stream` are fundamentally different types, making a shared trait impractical without unnecessary complexity.
 
 ---
 
-### CLARIFY: CLI argument compatibility with session mode
+### RESOLVED: Turn sequencing — delegate to CLI (Option C)
 
-**Questions to answer:**
-1. Which existing QueryOptions flags are valid in session mode? (`--model`, `--system-prompt`, `--allowed-tools`, etc.)
-2. Is `--print` used in session mode or is it implied?
-3. Are `--continue` and `--resume` meaningful in session mode (the session IS the continuation)?
+No client-side enforcement. The CLI supports queueing messages, so if the user calls `send` before the previous turn is fully consumed, the CLI handles it. This simplifies the implementation and avoids silently discarding messages.
 
-**Impact:** Determines which fields SessionOptions should include vs exclude.
+---
+
+### RESOLVED: CLI argument compatibility with session mode
+
+- `--print` is **required** for `--input-format stream-json` (non-interactive mode prerequisite)
+- `--continue` and `--resume` **are valid** in session mode (resume a previous conversation in streaming mode)
+- All other flags (model, system-prompt, allowed-tools, permission-mode, max-turns, etc.) are valid as startup flags
+- `SessionOptions` should include everything from `QueryOptions` **except `prompt`** (prompts are sent per-turn via stdin)
 
 ## Total Estimates
 
@@ -364,13 +348,13 @@ The most critical unknown. We need to understand what JSON format the CLI expect
 
 **Total Range:** 40 - 56 hours
 
-**Confidence:** Low
+**Confidence:** Medium
 
 **Reasoning:**
-- The `--input-format stream-json` protocol is not well-documented and needs investigation before reliable estimates
-- Story 1 and 3 complexity depends heavily on protocol details discovered in Story 6
+- Protocol is now well-understood from the TypeScript Agent SDK
 - Ox Flow and fs2 Stream composition for long-lived bidirectional I/O is non-trivial
 - No prior art in this codebase for keeping a process alive across multiple interactions
+- Story 6 effort may decrease since protocol research is complete
 
 ## Testing Approach
 
@@ -445,7 +429,6 @@ None -- this is a library, no persistent storage.
 ## Dependencies
 
 ### Prerequisites
-- Resolution of CLARIFY: `--input-format stream-json` protocol (blocks everything)
 - Claude Code CLI version that supports `--input-format stream-json`
 
 ### Story Dependencies
@@ -458,7 +441,6 @@ None -- this is a library, no persistent storage.
 
 ### External Blockers
 - Claude Code CLI must support `--input-format stream-json` in the installed version
-- Protocol documentation or source code access for the CLI
 
 ---
 
@@ -489,11 +471,8 @@ None -- this is a library, no persistent storage.
 
 ---
 
-**Analysis Status:** Ready for Review
+**Analysis Status:** All CLARIFYs Resolved
 
 **Next Steps:**
-1. Resolve CLARIFY markers -- especially the `--input-format stream-json` protocol (investigate CLI source or experiment)
-2. Decide on Session trait design (shared vs separate per API style)
-3. Decide on turn sequencing semantics
-4. Run **ag-create-tasks** with the issue ID
-5. Run **ag-implement** for iterative story implementation
+1. Run **ag-create-tasks** with the issue ID
+2. Run **ag-implement** for iterative story implementation
