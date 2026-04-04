@@ -6,14 +6,19 @@
       "label": "Analysis",
       "path": "project-management/issues/CC-15/analysis.md",
       "category": "input"
+    },
+    {
+      "label": "Tasks",
+      "path": "project-management/issues/CC-15/tasks.md",
+      "category": "output"
     }
   ],
-  "last_updated": "2026-04-02T20:59:51.806458551Z",
-  "status": "analysis_ready",
+  "last_updated": "2026-04-04T16:05:26.013171675Z",
+  "status": "tasks_ready",
   "display": {
-    "text": "Analysis Ready",
+    "text": "Tasks Ready",
     "type": "success",
-    "subtext": "6 stories across 3 iterations"
+    "subtext": "6 phases identified"
   },
   "badges": [
     {
@@ -21,20 +26,13 @@
       "type": "info"
     }
   ],
-  "message": "Analysis complete - ready for task generation",
-  "activity": "waiting",
-  "workflow_type": "agile",
+  "message": "Task breakdown complete. Ready to begin implementation.",
   "available_actions": [
-    {
-      "id": "create-tasks",
-      "label": "Generate Tasks",
-      "skill": "ag-create-tasks"
-    },
     {
       "id": "implement",
       "label": "Start Implementation",
       "skill": "ag-implement"
     }
   ],
-  "git_sha": "77b116b"
+  "git_sha": "d7fa4b1"
 }
