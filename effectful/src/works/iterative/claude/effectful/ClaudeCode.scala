@@ -2,29 +2,44 @@
 // PURPOSE: Provides streaming query interface to Claude Code CLI functionality
 package works.iterative.claude.effectful
 
-import cats.effect.IO
+import cats.effect.{IO, Resource}
 import fs2.Stream
-import fs2.io.process.{Process, ProcessBuilder}
-import fs2.io.file.Path
 import org.typelevel.log4cats.Logger
-import org.typelevel.log4cats.slf4j.Slf4jLogger
 import works.iterative.claude.core.model.*
-import works.iterative.claude.core.model.QueryOptions
-import works.iterative.claude.effectful.internal.parsing.JsonParser
+import works.iterative.claude.core.model.{QueryOptions, SessionOptions}
 import works.iterative.claude.core.{
   ProcessExecutionError,
   JsonParsingError,
-  ProcessTimeoutError,
   ConfigurationError
 }
 import works.iterative.claude.effectful.internal.cli.{
   CLIDiscovery,
-  ProcessManager
+  ProcessManager,
+  SessionProcess
 }
 import works.iterative.claude.core.cli.CLIArgumentBuilder
 
 object ClaudeCode:
   // Public API - High-level "What" operations
+  def session(options: SessionOptions)(using
+      logger: Logger[IO]
+  ): Resource[IO, Session] =
+    discoverExecutableForSession(options).flatMap { executablePath =>
+      SessionProcess.start(executablePath, options)
+    }
+
+  private def discoverExecutableForSession(
+      options: SessionOptions
+  )(using logger: Logger[IO]): Resource[IO, String] =
+    options.pathToClaudeCodeExecutable match
+      case Some(path) => Resource.pure(path)
+      case None       =>
+        Resource
+          .eval(CLIDiscovery.findClaude(logger))
+          .flatMap:
+            case Right(path) => Resource.pure(path)
+            case Left(error) => Resource.eval(IO.raiseError(error))
+
   def queryResult(options: QueryOptions)(using logger: Logger[IO]): IO[String] =
     querySync(options)(using logger).map(extractTextFromMessages)
 
