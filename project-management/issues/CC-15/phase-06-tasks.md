@@ -73,3 +73,4 @@
 - [x] [integration] Verify no regressions in existing direct session and query tests
 - [x] [integration] Verify no regressions in existing effectful session and query tests
 - [x] [integration] Verify no compilation warnings across all modules (`./mill __.compile`)
+**Phase Status:** Complete

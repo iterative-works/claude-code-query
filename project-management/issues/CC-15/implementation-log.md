@@ -294,3 +294,56 @@ A  effectful/test/src/works/iterative/claude/effectful/SessionTest.scala
 ```
 
 ---
+
+## Phase 6: Error handling - process crash and malformed JSON (2026-04-05)
+
+**What was built:**
+- `core/src/.../core/CLIError.scala` — Added `SessionProcessDied(exitCode: Option[Int], stderr: String)` and `SessionClosedError(sessionId: String)` to the sealed `CLIError` hierarchy
+- `direct/src/.../internal/cli/SessionProcess.scala` — Added `AtomicBoolean alive` flag, `safeExitCode()` helper, liveness checks in `send()` (throws `SessionClosedError` / `SessionProcessDied`), EOF detection in `stream()` (throws `SessionProcessDied` when no `ResultMessage` seen), idempotent `close()`
+- `effectful/src/.../internal/cli/SessionProcess.scala` — Added `Ref[IO, Boolean] aliveRef` and `Ref[IO, Option[CLIError]] pendingErrorRef`, fixed malformed JSON bug (changed `IO.raiseError` to log+skip), process death detection in stdout reader completion handler, liveness check in `send`, error propagation in `stream` via `onFinalize`
+- `direct/test/.../testing/SessionMockCliScript.scala` — Added `createImmediateExitScript`, `createCrashMidTurnScript`, `createCrashBetweenTurnsScript`, `createMalformedJsonMidTurnScript` builders
+
+**Decisions made:**
+- `SessionClosedError` is direct-API-only (effectful uses Resource lifecycle for close semantics)
+- Effectful `aliveRef` is set to `false` on any stdout stream completion (not just non-zero exit), since a dead process can't accept input regardless of exit code
+- `pendingErrorRef` only set for non-zero exits (zero exit is abnormal for a session but not an error in the same sense)
+- `safeExitCode()` extracted as private helper to eliminate 3x duplication of try/catch pattern in direct SessionProcess
+- Comment added to effectful `stream` explaining the dual `resultSeenRef` + `pendingErrorRef` mechanism
+
+**Patterns applied:**
+- AtomicBoolean liveness flag (direct) / Ref[IO, Boolean] (effectful) for fail-fast error detection
+- Two-ref error propagation: `pendingErrorRef` carries error from background fiber to foreground stream, `resultSeenRef` disambiguates normal vs abnormal EOF
+- Mock script pattern extended with crash and malformed JSON scenarios
+
+**Testing:**
+- Direct unit tests: 5 tests in SessionErrorTest.scala (closed send, idempotent close, dead send, crash mid-turn stream, malformed JSON recovery)
+- Direct integration tests: 4 tests in SessionErrorIntegrationTest.scala (crash mid-turn, crash between turns, malformed JSON, multiple malformed lines)
+- Effectful unit tests: 4 tests in SessionErrorTest.scala (dead send, crash mid-turn stream, malformed JSON, send after death with no pending error)
+- Effectful integration tests: 4 tests in SessionErrorIntegrationTest.scala (crash mid-turn, crash between turns, malformed JSON, resource cleanup after crash)
+
+**Code review:**
+- Iterations: 1
+- Skills applied: style, testing, scala3, composition, architecture
+- Critical findings: 3 (Thread.sleep flaky timing, duplicate tests, missing effectful dead-send test) — all fixed
+- Warnings addressed: import braces, FiniteDuration DSL, duplicated stderr message, exit code duplication, exit code assertions in I2 tests, resultSeenRef comment
+- Deferred: CLIError enum refactoring (pre-existing, applies to whole hierarchy), ProcessMonitor abstraction (would be premature for 2 refs)
+
+**For next phases:**
+- This is the final phase — all session API features are complete
+- Error types are extensible: additional session errors can be added to the CLIError hierarchy
+- Mock script infrastructure supports crash and malformed JSON scenarios for future regression testing
+
+**Files changed:**
+```
+M  core/src/works/iterative/claude/core/CLIError.scala
+M  direct/src/works/iterative/claude/direct/internal/cli/SessionProcess.scala
+A  direct/test/src/works/iterative/claude/direct/SessionErrorIntegrationTest.scala
+A  direct/test/src/works/iterative/claude/direct/SessionErrorTest.scala
+M  direct/test/src/works/iterative/claude/direct/SessionTest.scala
+M  direct/test/src/works/iterative/claude/direct/internal/testing/SessionMockCliScript.scala
+M  effectful/src/works/iterative/claude/effectful/internal/cli/SessionProcess.scala
+A  effectful/test/src/works/iterative/claude/effectful/SessionErrorIntegrationTest.scala
+A  effectful/test/src/works/iterative/claude/effectful/SessionErrorTest.scala
+```
+
+---
