@@ -7,6 +7,10 @@ package object direct:
   // Type aliases for convenient usage
   type QueryOptions = works.iterative.claude.core.model.QueryOptions
   val QueryOptions = works.iterative.claude.core.model.QueryOptions
+  type SessionOptions = works.iterative.claude.core.model.SessionOptions
+  val SessionOptions = works.iterative.claude.core.model.SessionOptions
+  type SDKUserMessage = works.iterative.claude.core.model.SDKUserMessage
+  val SDKUserMessage = works.iterative.claude.core.model.SDKUserMessage
 
   // Re-export all model classes that users need
   type Message = works.iterative.claude.core.model.Message

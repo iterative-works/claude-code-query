@@ -6,10 +6,12 @@ import ox.*
 import ox.flow.Flow
 import works.iterative.claude.core.cli.CLIArgumentBuilder
 import works.iterative.claude.core.ConfigurationError
+import works.iterative.claude.core.model.SessionOptions
 import works.iterative.claude.direct.internal.cli.{
   ProcessManager,
   CLIDiscovery,
-  FileSystemOps
+  FileSystemOps,
+  SessionProcess
 }
 import works.iterative.claude.direct.Logger
 
@@ -47,6 +49,13 @@ class ClaudeCode(using logger: Logger, ox: Ox):
   def queryResult(options: QueryOptions): String =
     val messages = executeQuery(options)
     ClaudeCode.extractAssistantTextContent(messages)
+
+  /** Starts a long-lived CLI process and returns a Session for multi-turn
+    * conversations. The process stays alive until `Session.close()` is called.
+    * Background forks for stderr capture run within the provided Ox scope.
+    */
+  def session(options: SessionOptions): Session =
+    ClaudeCode.createSession(options)
 
   private def executeQuery(options: QueryOptions): List[Message] =
     ClaudeCode.executeQuery(options)
@@ -87,6 +96,14 @@ object ClaudeCode:
     * queries.
     */
   def concurrent(using Logger, Ox): ClaudeCode = new ClaudeCode()
+
+  /** Starts a long-lived CLI session and returns it for multi-turn
+    * conversations. The caller must provide an Ox scope for background forks
+    * (stderr capture). The session remains open until `Session.close()` is
+    * called.
+    */
+  def session(options: SessionOptions)(using Logger, Ox): Session =
+    createSession(options)
 
   // ==== MAIN EXECUTION LOGIC ====
 
@@ -147,3 +164,17 @@ object ClaudeCode:
         textBlock.text
       }
       .getOrElse("")
+
+  private[direct] def createSession(
+      options: SessionOptions
+  )(using logger: Logger, ox: Ox): Session =
+    validateWorkingDirectory(options.cwd)
+    val executablePath = resolveSessionExecutablePath(options)
+    SessionProcess.start(executablePath, options)
+
+  private def resolveSessionExecutablePath(options: SessionOptions): String =
+    options.pathToClaudeCodeExecutable.getOrElse {
+      CLIDiscovery.findClaude match
+        case Right(path) => path
+        case Left(error) => throw new RuntimeException(error.message)
+    }
