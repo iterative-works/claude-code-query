@@ -6,10 +6,12 @@ import ox.*
 import ox.flow.Flow
 import works.iterative.claude.core.cli.CLIArgumentBuilder
 import works.iterative.claude.core.ConfigurationError
+import works.iterative.claude.core.model.SessionOptions
 import works.iterative.claude.direct.internal.cli.{
   ProcessManager,
   CLIDiscovery,
-  FileSystemOps
+  FileSystemOps,
+  SessionProcess
 }
 import works.iterative.claude.direct.Logger
 
@@ -47,6 +49,13 @@ class ClaudeCode(using logger: Logger, ox: Ox):
   def queryResult(options: QueryOptions): String =
     val messages = executeQuery(options)
     ClaudeCode.extractAssistantTextContent(messages)
+
+  /** Starts a long-lived CLI process and returns a Session for multi-turn
+    * conversations. The process stays alive until `Session.close()` is called.
+    * Background forks for stderr capture run within the provided Ox scope.
+    */
+  def session(options: SessionOptions): Session =
+    ClaudeCode.createSession(options)
 
   private def executeQuery(options: QueryOptions): List[Message] =
     ClaudeCode.executeQuery(options)
@@ -88,6 +97,14 @@ object ClaudeCode:
     */
   def concurrent(using Logger, Ox): ClaudeCode = new ClaudeCode()
 
+  /** Starts a long-lived CLI session and returns it for multi-turn
+    * conversations. The caller must provide an Ox scope for background forks
+    * (stderr capture). The session remains open until `Session.close()` is
+    * called.
+    */
+  def session(options: SessionOptions)(using Logger, Ox): Session =
+    createSession(options)
+
   // ==== MAIN EXECUTION LOGIC ====
 
   private def executeQuery(
@@ -103,7 +120,9 @@ object ClaudeCode:
 
   private def resolveClaudeExecutablePath(options: QueryOptions): String =
     options.pathToClaudeCodeExecutable.getOrElse {
-      discoverClaudeExecutablePath(options)
+      // For testing, if executableArgs is provided, use /bin/echo to simulate the CLI
+      if options.executableArgs.isDefined then "/bin/echo"
+      else resolveExecutablePath(None)
     }
 
   private def buildCliArguments(options: QueryOptions): List[String] =
@@ -125,14 +144,15 @@ object ClaudeCode:
         )
     }
 
-  private def discoverClaudeExecutablePath(options: QueryOptions): String =
-    // For testing purposes with T6.2, if executableArgs is provided, use /bin/echo
-    // This allows the test to pass by using echo to simulate the CLI
-    if options.executableArgs.isDefined then "/bin/echo"
-    else
+  /** Resolves the Claude CLI executable path from an explicit override or CLI
+    * discovery.
+    */
+  private def resolveExecutablePath(explicit: Option[String]): String =
+    explicit.getOrElse {
       CLIDiscovery.findClaude match
         case Right(path) => path
         case Left(error) => throw new RuntimeException(error.message)
+    }
 
   private def extractAssistantTextContent(messages: List[Message]): String =
     messages
@@ -147,3 +167,13 @@ object ClaudeCode:
         textBlock.text
       }
       .getOrElse("")
+
+  private[direct] def createSession(
+      options: SessionOptions
+  )(using logger: Logger, ox: Ox): Session =
+    validateWorkingDirectory(options.cwd)
+    val executablePath = resolveSessionExecutablePath(options)
+    SessionProcess.start(executablePath, options)
+
+  private def resolveSessionExecutablePath(options: SessionOptions): String =
+    resolveExecutablePath(options.pathToClaudeCodeExecutable)
