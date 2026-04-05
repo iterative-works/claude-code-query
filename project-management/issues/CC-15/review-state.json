@@ -72,12 +72,12 @@
       "path": "project-management/issues/CC-15/phase-06-tasks.md"
     }
   ],
-  "last_updated": "2026-04-05T14:06:36.655289737Z",
-  "status": "tasks_ready",
+  "last_updated": "2026-04-05T14:07:10.542286791Z",
+  "status": "implementing",
   "display": {
-    "text": "Phase 6: Tasks Ready",
+    "text": "Phase 06: Implementing",
     "subtext": "Error handling - process crash and malformed JSON",
-    "type": "success"
+    "type": "progress"
   },
   "badges": [
     {
@@ -87,9 +87,13 @@
     {
       "label": "Review Needed",
       "type": "warning"
+    },
+    {
+      "label": "In Progress",
+      "type": "info"
     }
   ],
-  "message": "Phase 6 tasks ready",
+  "message": "Phase 06 implementation started",
   "available_actions": [
     {
       "id": "view-pr",
