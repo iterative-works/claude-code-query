@@ -52,3 +52,33 @@ M  effectful/test/.../ProcessManagerTest.scala
 ```
 
 ---
+
+## Phase 2: CI pipeline updates (2026-04-05)
+
+**Layer:** CI / Infrastructure
+
+**What was built:**
+- `.github/workflows/publish.yml` — Added `./mill __.itest` step between unit tests and publish
+
+**Key decisions:**
+- No `ANTHROPIC_API_KEY` binding needed — integration tests use mock CLI scripts, not real API calls
+- Step ordering: test → itest → publish ensures both test suites gate publishing
+
+**Dependencies on other layers:**
+- Phase 1: itest modules must exist in `build.mill` (completed)
+
+**Testing:**
+- No new tests — this is a CI configuration change
+- Validated YAML syntax and step ordering
+
+**Code review:**
+- Iterations: 1
+- Review file: review-phase-02-20260405.md
+- No critical issues; 2 pre-existing warnings noted (API key binding, action pinning)
+
+**Files changed:**
+```
+M  .github/workflows/publish.yml
+```
+
+---
