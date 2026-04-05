@@ -57,3 +57,42 @@ M  test/works/iterative/claude/direct/internal/parsing/JsonParserTest.scala
 ```
 
 ---
+
+## Phase 2: SessionOptions configuration (2026-04-04)
+
+**What was built:**
+- `core/src/works/iterative/claude/core/model/SessionOptions.scala` - Case class with all 18 fields from `QueryOptions` except `prompt`, fluent `with*` builder methods, and `SessionOptions.defaults` companion factory
+- `core/src/works/iterative/claude/core/cli/CLIArgumentBuilder.scala` - Added `buildSessionArgs(options: SessionOptions): List[String]` method that prepends required streaming flags (`--print --input-format stream-json --output-format stream-json`) and maps all option fields to CLI flags
+
+**Decisions made:**
+- Duplicated field-by-field flag mapping in `buildSessionArgs` rather than extracting shared helper with `buildArgs` — both methods are small and mechanical; extraction deferred until a third call site appears (per phase context guidance)
+- `SessionOptions` is a flat case class parallel to `QueryOptions` rather than composing a shared `CommonOptions` — matches existing API ergonomics; refactoring deferred
+
+**Patterns applied:**
+- Fluent builder: Same `with*` method pattern as `QueryOptions` for API consistency
+- Companion object factory: `SessionOptions.defaults` mirrors `QueryOptions.simple(prompt)` idiom
+
+**Testing:**
+- Unit tests: 3 tests for SessionOptions construction, defaults equality, and all 18 builder methods (using structural equality via `copy`)
+- Unit tests: 16 tests for buildSessionArgs covering required flags, flag ordering, each field mapping, None handling, and multi-field combinations
+
+**Code review:**
+- Iterations: 1
+- Review skills: style, testing, scala3, composition
+- Findings addressed: removed redundant self-import, replaced magic number `5` with `requiredFlags.length`, improved builder isolation tests to use full structural equality via `assertEquals(built, base.copy(...))`
+- Deferred: shared arg-building helper extraction, `optArg`/`flagArg` private helpers (deliberate per phase context)
+
+**For next phases:**
+- `SessionOptions` is ready for use as session startup configuration in Phase 3 (direct API) and Phase 5 (effectful API)
+- `buildSessionArgs` provides the CLI arguments needed to launch a streaming session subprocess
+- Process-level fields (`timeout`, `inheritEnvironment`, `environmentVariables`, `executable`, `executableArgs`, `pathToClaudeCodeExecutable`) are carried in `SessionOptions` but not mapped to CLI flags — consumed by the session runner
+
+**Files changed:**
+```
+A  core/src/works/iterative/claude/core/model/SessionOptions.scala
+M  core/src/works/iterative/claude/core/cli/CLIArgumentBuilder.scala
+A  core/test/src/works/iterative/claude/core/model/SessionOptionsTest.scala
+A  core/test/src/works/iterative/claude/core/cli/SessionOptionsArgsTest.scala
+```
+
+---

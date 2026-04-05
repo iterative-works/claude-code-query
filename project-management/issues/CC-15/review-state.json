@@ -32,12 +32,12 @@
       "path": "project-management/issues/CC-15/phase-02-tasks.md"
     }
   ],
-  "last_updated": "2026-04-04T20:34:15.658050061Z",
-  "status": "tasks_ready",
+  "last_updated": "2026-04-04T20:44:00.099486323Z",
+  "status": "awaiting_review",
   "display": {
-    "text": "Phase 02: Tasks Ready",
+    "text": "Phase 02: Awaiting Review",
     "subtext": "SessionOptions configuration",
-    "type": "success"
+    "type": "warning"
   },
   "badges": [
     {
@@ -47,9 +47,17 @@
     {
       "label": "In Progress",
       "type": "info"
+    },
+    {
+      "label": "In Progress",
+      "type": "info"
+    },
+    {
+      "label": "Review Needed",
+      "type": "warning"
     }
   ],
-  "message": "Phase 02 tasks ready",
+  "message": "Phase 02 implementation started",
   "available_actions": [
     {
       "id": "implement",
@@ -60,6 +68,11 @@
       "id": "implement",
       "label": "Continue",
       "skill": "ag-implement"
+    },
+    {
+      "id": "view-pr",
+      "label": "View Pull Request",
+      "skill": "external-link"
     }
   ],
   "git_sha": "e68cf43",
@@ -71,6 +84,7 @@
       "context_sha": "e68cf43"
     }
   },
-  "needs_attention": false,
-  "activity": "waiting"
+  "needs_attention": true,
+  "activity": "waiting",
+  "pr_url": "https://github.com/iterative-works/claude-code-query/pull/24"
 }
