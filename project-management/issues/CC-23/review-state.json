@@ -1,18 +1,28 @@
 {
   "version": 2,
   "issue_id": "CC-23",
-  "workflow_type": "waterfall",
-  "status": "tasks_ready",
-  "activity": "waiting",
-  "phase": 0,
-  "step": "tasks",
-  "branch": "CC-23",
-  "git_sha": "4f4e89e",
-  "last_updated": "2026-04-05T20:42:20Z",
+  "artifacts": [
+    {
+      "label": "Analysis",
+      "path": "project-management/issues/CC-23/analysis.md",
+      "category": "input"
+    },
+    {
+      "label": "Tasks",
+      "path": "project-management/issues/CC-23/tasks.md",
+      "category": "output"
+    },
+    {
+      "label": "Phase 1 Context",
+      "path": "project-management/issues/CC-23/phase-01-context.md"
+    }
+  ],
+  "last_updated": "2026-04-05T20:59:10.477232827Z",
+  "status": "context_ready",
   "display": {
-    "text": "Tasks Ready",
-    "subtext": "2 phases identified",
-    "type": "success"
+    "text": "Phase 1: Context Ready",
+    "type": "info",
+    "subtext": "Build modules and test file moves"
   },
   "badges": [
     {
@@ -24,28 +34,13 @@
       "type": "info"
     }
   ],
-  "needs_attention": false,
-  "message": "Task breakdown complete. Ready to begin implementation.",
-  "artifacts": [
-    {
-      "label": "Analysis",
-      "path": "project-management/issues/CC-23/analysis.md",
-      "category": "input"
-    },
-    {
-      "label": "Tasks",
-      "path": "project-management/issues/CC-23/tasks.md",
-      "category": "output"
+  "message": "Phase 1 context ready for review",
+  "activity": "working",
+  "workflow_type": "waterfall",
+  "git_sha": "ac380b5",
+  "phase_checkpoints": {
+    "1": {
+      "context_sha": "context_sha=ac380b582174ad3b7665da6a946fe927e89c09ba"
     }
-  ],
-  "available_actions": [
-    {
-      "id": "implement",
-      "label": "Start Implementation",
-      "skill": "wf-implement"
-    }
-  ],
-  "pr_url": null,
-  "phase_checkpoints": {},
-  "batch_mode": false
+  }
 }
