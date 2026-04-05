@@ -42,14 +42,18 @@
     {
       "label": "Phase 4 Context",
       "path": "project-management/issues/CC-15/phase-04-context.md"
+    },
+    {
+      "label": "Phase 4 Tasks",
+      "path": "project-management/issues/CC-15/phase-04-tasks.md"
     }
   ],
-  "last_updated": "2026-04-05T08:47:10.589926530Z",
-  "status": "context_ready",
+  "last_updated": "2026-04-05T08:48:32.598944499Z",
+  "status": "tasks_ready",
   "display": {
-    "text": "Phase 4: Context Ready",
+    "text": "Phase 4: Tasks Ready",
     "subtext": "Direct API - Multi-turn conversation",
-    "type": "info"
+    "type": "success"
   },
   "badges": [
     {
@@ -69,7 +73,7 @@
       "type": "warning"
     }
   ],
-  "message": "Phase 4 context ready for review",
+  "message": "Phase 4 tasks ready",
   "available_actions": [
     {
       "id": "implement",
@@ -85,6 +89,11 @@
       "id": "view-pr",
       "label": "View Pull Request",
       "skill": "external-link"
+    },
+    {
+      "id": "implement",
+      "label": "Continue",
+      "skill": "ag-implement"
     }
   ],
   "git_sha": "84ba56e",
@@ -94,6 +103,6 @@
     }
   },
   "needs_attention": true,
-  "activity": "working",
+  "activity": "waiting",
   "pr_url": "https://github.com/iterative-works/claude-code-query/pull/25"
 }
