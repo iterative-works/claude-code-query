@@ -350,17 +350,23 @@ Error handling flows through all layers with typed error contexts
 
 ### Testing Strategy
 
-**Unit Testing**:
+Tests are split into two Mill target groups based on whether they require external processes:
+
+**Unit Tests (`mill __.test`)**:
+- Run fast, in-memory tests only
 - Each component is tested independently
 - ProcessManager configuration is tested separately from execution
 - JsonParser handles various message formats and edge cases
 - CLIArgumentBuilder verifies correct parameter mapping
 
-**Integration Testing**:
+**Integration Tests (`mill __.itest`)**:
+- Tests that spawn real subprocesses or require the Claude Code CLI
 - End-to-end CLI execution with real processes
 - Environment variable handling
 - Error propagation and logging
 - Timeout and failure scenarios
+
+A test belongs in `itest` if it spawns a subprocess (`os.proc`, `ProcessBuilder`), requires the Claude CLI installed, manipulates environment variables, or takes more than a few seconds due to external dependencies.
 
 **Architecture Benefits**:
 - **Clean separation** enables focused unit tests
