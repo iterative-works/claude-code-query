@@ -2,29 +2,32 @@
 // PURPOSE: Provides streaming query interface to Claude Code CLI functionality
 package works.iterative.claude.effectful
 
-import cats.effect.IO
+import cats.effect.{IO, Resource}
 import fs2.Stream
-import fs2.io.process.{Process, ProcessBuilder}
-import fs2.io.file.Path
 import org.typelevel.log4cats.Logger
-import org.typelevel.log4cats.slf4j.Slf4jLogger
 import works.iterative.claude.core.model.*
-import works.iterative.claude.core.model.QueryOptions
-import works.iterative.claude.effectful.internal.parsing.JsonParser
+import works.iterative.claude.core.model.{QueryOptions, SessionOptions}
 import works.iterative.claude.core.{
   ProcessExecutionError,
   JsonParsingError,
-  ProcessTimeoutError,
   ConfigurationError
 }
 import works.iterative.claude.effectful.internal.cli.{
   CLIDiscovery,
-  ProcessManager
+  ProcessManager,
+  SessionProcess
 }
 import works.iterative.claude.core.cli.CLIArgumentBuilder
 
 object ClaudeCode:
   // Public API - High-level "What" operations
+  def session(options: SessionOptions)(using
+      logger: Logger[IO]
+  ): Resource[IO, Session] =
+    Resource
+      .eval(resolveExecutable(options.pathToClaudeCodeExecutable))
+      .flatMap(SessionProcess.start(_, options))
+
   def queryResult(options: QueryOptions)(using logger: Logger[IO]): IO[String] =
     querySync(options)(using logger).map(extractTextFromMessages)
 
@@ -60,17 +63,21 @@ object ClaudeCode:
   ): Stream[IO, Unit] =
     Stream.eval(logger.info(s"Initiating query with prompt: $prompt"))
 
+  private def resolveExecutable(
+      path: Option[String]
+  )(using logger: Logger[IO]): IO[String] =
+    path match
+      case Some(p) => IO.pure(p)
+      case None    =>
+        CLIDiscovery.findClaude(logger).flatMap {
+          case Right(p)    => IO.pure(p)
+          case Left(error) => IO.raiseError(error)
+        }
+
   private def discoverExecutablePath(options: QueryOptions)(using
       logger: Logger[IO]
   ): Stream[IO, String] =
-    options.pathToClaudeCodeExecutable match
-      case Some(explicitPath) => Stream.eval(IO.pure(explicitPath))
-      case None               =>
-        Stream
-          .eval(CLIDiscovery.findClaude(logger))
-          .flatMap:
-            case Right(path) => Stream.emit(path)
-            case Left(error) => Stream.raiseError[IO](error)
+    Stream.eval(resolveExecutable(options.pathToClaudeCodeExecutable))
 
   private def buildCLIArguments(options: QueryOptions): List[String] =
     List("--print", "--verbose", "--output-format", "stream-json") ++

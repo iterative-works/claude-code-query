@@ -197,3 +197,100 @@ M  direct/test/src/works/iterative/claude/direct/SessionE2ETest.scala
 ```
 
 ---
+
+### Refactoring R1: Split Session.send into send + stream (CQS) (2026-04-05)
+
+**Trigger:** Comparison with the V2 Claude Agent SDK revealed our `send()` combines a command (write prompt to stdin) and a query (read response stream) in one method, violating command-query separation. The V2 SDK separates these as `send()` (void) and `stream()` (async generator).
+
+**What changed:**
+- `direct/src/.../Session.scala` — trait split: `send(prompt: String): Flow[Message]` → `send(prompt: String): Unit` + `stream(): Flow[Message]`
+- `direct/src/.../internal/cli/SessionProcess.scala` — implementation split: stdin write separated from stdout reading loop
+- `direct/test/src/.../SessionTest.scala` — all call sites updated from `session.send(x).runToList()` to `session.send(x); session.stream().runToList()`
+- `direct/test/src/.../SessionIntegrationTest.scala` — same call site pattern update
+- `direct/test/src/.../SessionE2ETest.scala` — same call site pattern update
+
+**Before → After:**
+- `session.send("prompt").forEach(...)` → `session.send("prompt"); session.stream().forEach(...)`
+- `send` no longer returns a value; `stream` is a separate query method
+- Internal mechanics unchanged: stdin writing, stdout reading, session ID updates, stderr capture all preserved
+
+**Patterns applied:**
+- Command-Query Separation (CQS): `send` is a command (side effect, returns Unit), `stream` is a query (returns data, no side effect beyond reading)
+
+**Testing:**
+- Tests updated: 15 call sites across 3 test files
+- All 193 direct tests passing, no regressions
+- No new tests added (mechanical refactoring — same assertions, different call patterns)
+
+**Code review:**
+- Iterations: 1
+- Review file: review-refactor-05-R1-20260405-144725.md
+- Skills applied: style, testing, scala3, composition
+- Composition reviewer raised design concern about CQS split breaking composability — triaged as deliberate decision aligning with V2 SDK direction
+- Warnings addressed: duplicate Scaladoc removed, dead `caught != null` assertion removed, PURPOSE comment updated
+- Deferred to Phase 6: `stream()` without `send()` guard, `close()` without consuming stream test
+
+**Files changed:**
+```
+M  direct/src/works/iterative/claude/direct/Session.scala
+M  direct/src/works/iterative/claude/direct/internal/cli/SessionProcess.scala
+M  direct/test/src/works/iterative/claude/direct/SessionTest.scala
+M  direct/test/src/works/iterative/claude/direct/SessionIntegrationTest.scala
+M  direct/test/src/works/iterative/claude/direct/SessionE2ETest.scala
+```
+
+---
+
+## Phase 5: Effectful API - Session lifecycle with Resource (2026-04-05)
+
+**What was built:**
+- `effectful/src/.../effectful/Session.scala` — Session trait with `send(prompt: String): IO[Unit]`, `stream: Stream[IO, Message]`, `sessionId: IO[String]`
+- `effectful/src/.../internal/cli/SessionProcess.scala` — Resource-based implementation using `ProcessBuilder.spawn[IO]` with three background fibers (stdin writer, stdout reader, stderr capture), stdin `Queue` to keep pipe open across turns, `IO.race` for init message extraction
+- `effectful/src/.../effectful/ClaudeCode.scala` — Added `session(SessionOptions)(using Logger[IO]): Resource[IO, Session]` factory method and shared `resolveExecutable` helper
+- `effectful/src/.../effectful/package.scala` — Added `SessionOptions` type and value re-exports
+
+**Decisions made:**
+- Used a `Queue[IO, Option[Chunk[Byte]]]` for stdin: fs2 process stdin pipe closes after first stream completes, so a background fiber drains the queue into stdin keeping it open across multiple `send` calls
+- Used `IO.race` between `messageQueue.take` and `IO.sleep(1.second)` for init message extraction: more reliable than polling or timeout-cancellation
+- Reused `SessionMockCliScript` from `direct.internal.testing` rather than duplicating: cross-module test dependency accepted for now, extraction to shared module deferred
+- No `close()` method on effectful Session: Resource finalizer handles cleanup, matching cats-effect idioms
+
+**Patterns applied:**
+- Resource-based lifecycle: `Resource[IO, Session]` for deterministic cleanup on normal exit and error
+- Queue-based stdin bridge: `Queue.unbounded[IO, Option[Chunk[Byte]]]` with `None` as close signal
+- `Stream.fromQueueNoneTerminated` + `takeThrough` for constant-space message consumption (fixed from recursive `++ stream` during code review)
+- Shared executable discovery: extracted `resolveExecutable` helper used by both `session` and `query` paths
+
+**Testing:**
+- Unit tests: 9 tests in SessionTest.scala (encoding, session ID lifecycle, stream termination, multi-turn isolation, three-turn cycling)
+- Integration tests: 9 tests in SessionIntegrationTest.scala (full lifecycle, Resource cleanup, stdin verification, session ID progression, variable message counts, factory method)
+- E2E tests: 3 tests in SessionE2ETest.scala (single-turn, multi-turn context dependency, session ID validation — gated on CLI availability)
+- Re-export test: 1 test added to EffectfulPackageReexportTest.scala
+
+**Code review:**
+- Iterations: 1
+- Review file: review-phase-05-20260405-152422.md
+- Skills applied: style, testing, scala3, composition, architecture
+- Critical findings: 2 (recursive stream, duplicated executable discovery) — both fixed
+- Warnings addressed: 3 (FiniteDuration string constructor, PURPOSE comment, pure test in IO)
+- Deferred: cross-module test dependency, unbounded queues, `"pending"` sentinel
+
+**For next phases:**
+- Effectful `Session` API is complete and mirrors the direct API with cats-effect idioms
+- `ClaudeCode.session` factory follows the same pattern as `query`/`querySync`/`queryResult`
+- Error handling (Phase 6) can add process liveness checks, typed errors for process crashes, and malformed JSON handling in the continuous-reading context
+- `SessionMockCliScript` should eventually be extracted to shared test-support module
+
+**Files changed:**
+```
+M  effectful/src/works/iterative/claude/effectful/ClaudeCode.scala
+A  effectful/src/works/iterative/claude/effectful/Session.scala
+A  effectful/src/works/iterative/claude/effectful/internal/cli/SessionProcess.scala
+M  effectful/src/works/iterative/claude/effectful/package.scala
+M  effectful/test/src/works/iterative/claude/effectful/EffectfulPackageReexportTest.scala
+A  effectful/test/src/works/iterative/claude/effectful/SessionE2ETest.scala
+A  effectful/test/src/works/iterative/claude/effectful/SessionIntegrationTest.scala
+A  effectful/test/src/works/iterative/claude/effectful/SessionTest.scala
+```
+
+---

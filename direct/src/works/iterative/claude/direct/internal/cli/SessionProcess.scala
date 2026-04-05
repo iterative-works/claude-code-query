@@ -38,7 +38,7 @@ private[direct] class SessionProcess(
 
   def sessionId: String = currentSessionId.get()
 
-  def send(prompt: String): Flow[Message] =
+  def send(prompt: String): Unit =
     val msg =
       SDKUserMessage(content = prompt, sessionId = currentSessionId.get())
     val json = msg.asJson.noSpaces
@@ -47,13 +47,14 @@ private[direct] class SessionProcess(
     stdinWriter.newLine()
     stdinWriter.flush()
 
+  def stream(): Flow[Message] =
     Flow.usingEmit { emit =>
       var done = false
       var lineNumber = 0
       while !done do
         val line = stdoutReader.readLine()
         if line == null then
-          logger.debug("stdout EOF reached during send")
+          logger.debug("stdout EOF reached during stream")
           done = true
         else
           lineNumber += 1
@@ -143,16 +144,6 @@ object SessionProcess:
   private val InitReadTimeoutMs = 500L // Wait up to 500ms for init message
   private val InitReadRetryDelayMs = 10L // Sleep between ready() checks
 
-  /** Reads from stdout to extract the session_id from the CLI's init message.
-    *
-    * Waits up to InitReadTimeoutMs for the process to emit an init message.
-    * Only reads if the process is still alive (to avoid consuming messages from
-    * quick-exit mock scripts used in tests). Stops as soon as the init message
-    * is found, a non-init message is encountered, or the timeout expires.
-    *
-    * If no init message is found, the session ID remains "pending" and will be
-    * updated from the first ResultMessage when `send` is called.
-    */
   /** Reads from stdout to find the session_id in the CLI's init message.
     *
     * Returns the extracted session ID if an init message is found within the

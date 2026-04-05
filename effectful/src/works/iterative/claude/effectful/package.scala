@@ -7,6 +7,8 @@ package object effectful:
   // Type aliases for convenient usage
   type QueryOptions = works.iterative.claude.core.model.QueryOptions
   val QueryOptions = works.iterative.claude.core.model.QueryOptions
+  type SessionOptions = works.iterative.claude.core.model.SessionOptions
+  val SessionOptions = works.iterative.claude.core.model.SessionOptions
 
   // Re-export all model classes that users need
   type Message = works.iterative.claude.core.model.Message

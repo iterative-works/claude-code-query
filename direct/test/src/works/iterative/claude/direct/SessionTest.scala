@@ -152,7 +152,8 @@ class SessionTest extends munit.FunSuite:
       val options = SessionOptions().withClaudeExecutable(script.toString)
       val session = ClaudeCode.session(options)
       try
-        val messages = session.send("test").runToList()
+        session.send("test")
+        val messages = session.stream().runToList()
 
         // Should have assistant + result only
         val resultMessages = messages.collect { case r: ResultMessage => r }
@@ -191,10 +192,11 @@ class SessionTest extends munit.FunSuite:
       val options = SessionOptions().withClaudeExecutable(script.toString)
       val session = ClaudeCode.session(options)
       try
-        // Run the flow to completion
-        val _ = session.send("test").runToList()
+        // Run the stream to completion
+        session.send("test")
+        val _ = session.stream().runToList()
 
-        // After send completes, session ID should be updated from ResultMessage
+        // After stream completes, session ID should be updated from ResultMessage
         assertEquals(session.sessionId, "updated-session-id-456")
       finally session.close()
     }
@@ -228,8 +230,10 @@ class SessionTest extends munit.FunSuite:
       val options = SessionOptions().withClaudeExecutable(script.toString)
       val session = ClaudeCode.session(options)
       try
-        val turn1Messages = session.send("First prompt").runToList()
-        val turn2Messages = session.send("Second prompt").runToList()
+        session.send("First prompt")
+        val turn1Messages = session.stream().runToList()
+        session.send("Second prompt")
+        val turn2Messages = session.stream().runToList()
 
         // Turn 1 should have exactly assistant + result
         assertEquals(turn1Messages.length, 2)
@@ -298,12 +302,14 @@ class SessionTest extends munit.FunSuite:
       val options = SessionOptions().withClaudeExecutable(script.toString)
       val session = ClaudeCode.session(options)
       try
-        val _ = session.send("First prompt").runToList()
+        session.send("First prompt")
+        val _ = session.stream().runToList()
 
-        // After first send, sessionId must be updated from the ResultMessage
+        // After first turn, sessionId must be updated from the ResultMessage
         assertEquals(session.sessionId, firstTurnSessionId)
 
-        val _ = session.send("Second prompt").runToList()
+        session.send("Second prompt")
+        val _ = session.stream().runToList()
       finally session.close()
 
       // Verify the second SDKUserMessage sent to stdin contained the first turn's session ID
@@ -354,10 +360,12 @@ class SessionTest extends munit.FunSuite:
       val options = SessionOptions().withClaudeExecutable(script.toString)
       val session = ClaudeCode.session(options)
       try
-        val _ = session.send("First prompt").runToList()
+        session.send("First prompt")
+        val _ = session.stream().runToList()
         assertEquals(session.sessionId, turn1SessionId)
 
-        val _ = session.send("Second prompt").runToList()
+        session.send("Second prompt")
+        val _ = session.stream().runToList()
         assertEquals(session.sessionId, turn2SessionId)
       finally session.close()
     }
@@ -389,7 +397,8 @@ class SessionTest extends munit.FunSuite:
       val session = ClaudeCode.session(options)
       try
         val results = (1 to 3).map { i =>
-          val messages = session.send(s"Prompt $i").runToList()
+          session.send(s"Prompt $i")
+          val messages = session.stream().runToList()
           // Each turn must end with its own ResultMessage
           val resultMsg = messages
             .collectFirst { case r: ResultMessage => r }
@@ -448,12 +457,8 @@ class SessionTest extends munit.FunSuite:
 
       // Verify the session is no longer usable — send should throw because
       // the underlying stdin writer is closed
-      val caught = intercept[Exception] {
-        session.send("should fail").runToList()
+      intercept[Exception] {
+        session.send("should fail")
       }
-      assert(
-        caught != null,
-        "Expected an exception when sending to a closed session"
-      )
     }
   }
