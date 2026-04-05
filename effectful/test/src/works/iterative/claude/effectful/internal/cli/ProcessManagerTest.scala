@@ -2,11 +2,10 @@
 // PURPOSE: Tests configureProcessBuilder behavior without spawning real processes.
 package works.iterative.claude.effectful.internal.cli
 
-import munit.CatsEffectSuite
 import works.iterative.claude.core.model.QueryOptions
 import works.iterative.claude.effectful.internal.cli.ProcessManager
 
-class ProcessManagerTest extends CatsEffectSuite:
+class ProcessManagerTest extends munit.FunSuite:
 
   test("configureProcessBuilder creates ProcessBuilder successfully"):
     val options = QueryOptions(prompt = "test prompt")

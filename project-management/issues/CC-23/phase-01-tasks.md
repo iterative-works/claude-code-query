@@ -66,3 +66,4 @@
 - [x] [impl] Update `ARCHITECTURE.md` — add or update testing strategy section to describe test/itest split and classification criteria
 - [x] [impl] Update `README.md` — add `./mill __.itest` if test commands are mentioned
 - [x] [verify] Commit documentation changes
+**Phase Status:** Complete
