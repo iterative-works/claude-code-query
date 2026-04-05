@@ -236,7 +236,6 @@ class ClaudeCodeIntegrationTest extends munit.FunSuite:
 
       // Explicit environmental assumptions - fail fast if prerequisites aren't met
       assume(isClaudeCliInstalled(), "Test requires Claude CLI to be installed")
-      assume(isNodeJsAvailable(), "Test requires Node.js to be available")
       assume(
         hasApiKeyOrMockSetup(),
         "Test requires API key configuration or mock setup"
@@ -283,16 +282,6 @@ class ClaudeCodeIntegrationTest extends munit.FunSuite:
   private def isClaudeCliInstalled(): Boolean = {
     try {
       val process = ProcessBuilder("claude", "--version").start()
-      val exitCode = process.waitFor()
-      exitCode == 0
-    } catch {
-      case _: Exception => false
-    }
-  }
-
-  private def isNodeJsAvailable(): Boolean = {
-    try {
-      val process = ProcessBuilder("node", "--version").start()
       val exitCode = process.waitFor()
       exitCode == 0
     } catch {

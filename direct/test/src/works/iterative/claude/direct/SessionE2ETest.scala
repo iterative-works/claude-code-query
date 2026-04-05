@@ -14,12 +14,6 @@ class SessionE2ETest extends munit.FunSuite:
       process.waitFor() == 0
     catch case _: Exception => false
 
-  private def isNodeJsAvailable(): Boolean =
-    try
-      val process = ProcessBuilder("node", "--version").start()
-      process.waitFor() == 0
-    catch case _: Exception => false
-
   private def hasApiKeyOrCredentials(): Boolean =
     val hasApiKey = sys.env.contains("ANTHROPIC_API_KEY")
     val homeDir = sys.env.get("HOME").orElse(sys.env.get("USERPROFILE"))
@@ -31,7 +25,6 @@ class SessionE2ETest extends munit.FunSuite:
 
   private def assumeClaudeAvailable(): Unit =
     assume(isClaudeCliInstalled(), "Test requires Claude CLI to be installed")
-    assume(isNodeJsAvailable(), "Test requires Node.js to be available")
     assume(
       hasApiKeyOrCredentials(),
       "Test requires API key or credentials file"
