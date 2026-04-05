@@ -34,14 +34,18 @@
     {
       "label": "Phase 3 Context",
       "path": "project-management/issues/CC-15/phase-03-context.md"
+    },
+    {
+      "label": "Phase 3 Tasks",
+      "path": "project-management/issues/CC-15/phase-03-tasks.md"
     }
   ],
-  "last_updated": "2026-04-05T06:56:09.471870405Z",
-  "status": "context_ready",
+  "last_updated": "2026-04-05T07:31:41.688055579Z",
+  "status": "tasks_ready",
   "display": {
-    "text": "Phase 3: Context Ready",
+    "text": "Phase 3: Tasks Ready",
     "subtext": "Direct API - Basic session lifecycle",
-    "type": "info"
+    "type": "success"
   },
   "badges": [
     {
@@ -61,7 +65,7 @@
       "type": "warning"
     }
   ],
-  "message": "Phase 3 context ready for review",
+  "message": "Phase 3 tasks ready",
   "available_actions": [
     {
       "id": "implement",
@@ -79,13 +83,13 @@
       "skill": "external-link"
     }
   ],
-  "git_sha": "e68cf43",
+  "git_sha": "9cd6ae4",
   "phase_checkpoints": {
     "3": {
       "context_sha": "context_sha=a57d892d9b461489e2e67059bfd6d4859f2d8376"
     }
   },
   "needs_attention": true,
-  "activity": "working",
+  "activity": "waiting",
   "pr_url": "https://github.com/iterative-works/claude-code-query/pull/24"
 }
