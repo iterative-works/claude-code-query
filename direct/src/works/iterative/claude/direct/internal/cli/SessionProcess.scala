@@ -35,8 +35,14 @@ private[direct] class SessionProcess(
 )(using logger: Logger)
     extends Session:
 
+  private[direct] def underlyingProcess: Process = process
+
   private val currentSessionId = new AtomicReference[String]("pending")
   private val alive = new AtomicBoolean(true)
+
+  private def safeExitCode(): Option[Int] =
+    try Some(process.exitValue())
+    catch case _: Exception => None
 
   def sessionId: String = currentSessionId.get()
 
@@ -44,10 +50,7 @@ private[direct] class SessionProcess(
     if !alive.get() then throw SessionClosedError(currentSessionId.get())
     if !process.isAlive then
       alive.set(false)
-      val exitCode =
-        try Some(process.exitValue())
-        catch case _: Exception => None
-      throw SessionProcessDied(exitCode, captureRemainingStderr())
+      throw SessionProcessDied(safeExitCode(), captureRemainingStderr())
     val msg =
       SDKUserMessage(content = prompt, sessionId = currentSessionId.get())
     val json = msg.asJson.noSpaces
@@ -59,10 +62,7 @@ private[direct] class SessionProcess(
     catch
       case e: java.io.IOException =>
         alive.set(false)
-        val exitCode =
-          try Some(process.exitValue())
-          catch case _: Exception => None
-        throw SessionProcessDied(exitCode, e.getMessage)
+        throw SessionProcessDied(safeExitCode(), e.getMessage)
 
   def stream(): Flow[Message] =
     Flow.usingEmit { emit =>
@@ -76,11 +76,8 @@ private[direct] class SessionProcess(
           done = true
           if !resultSeen then
             // Unexpected EOF before ResultMessage — process died mid-turn
-            val exitCode =
-              try Some(process.exitValue())
-              catch case _: Exception => None
             alive.set(false)
-            throw SessionProcessDied(exitCode, captureRemainingStderr())
+            throw SessionProcessDied(safeExitCode(), captureRemainingStderr())
         else
           lineNumber += 1
           JsonParser.parseJsonLineWithContextWithLogging(line, lineNumber) match

@@ -141,15 +141,15 @@ object SessionProcess:
       .compile
       .drain
       .flatMap { _ =>
-        // Check exit code when stdout stream completes
-        IO(process.exitValue).flatten.attempt.flatMap {
-          case Right(code) if code != 0 =>
-            aliveRef.set(false) *>
+        // When stdout stream completes, the process is dead regardless of exit code
+        aliveRef.set(false) *>
+          IO(process.exitValue).flatten.attempt.flatMap {
+            case Right(code) if code != 0 =>
               pendingErrorRef.set(
                 Some(SessionProcessDied(Some(code), ""))
               )
-          case _ => IO.unit
-        }
+            case _ => IO.unit
+          }
       }
       .guarantee(messageQueue.offer(None))
 
@@ -220,7 +220,7 @@ private class SessionImpl(
           case Some(err) => IO.raiseError(err)
           case None      =>
             IO.raiseError(
-              SessionProcessDied(None, "Session process is not alive")
+              SessionProcessDied(None, "")
             )
         }
       else
@@ -245,6 +245,17 @@ private class SessionImpl(
     * ResultMessage is received, checks pendingErrorRef and raises the error if
     * present (process died mid-turn).
     */
+  /** Reads messages from the shared queue until (and including) a
+    * ResultMessage, then stops. If the queue signals EOF (None) before a
+    * ResultMessage is received, checks pendingErrorRef and raises the error if
+    * present (process died mid-turn).
+    *
+    * resultSeenRef tracks whether the stream completed normally (via
+    * ResultMessage). pendingErrorRef carries the process-death error from the
+    * stdout reader fiber. Both are needed because the queue EOF (None) is the
+    * same signal for normal process shutdown and abnormal exit — resultSeenRef
+    * disambiguates the two cases so onFinalize only raises on abnormal exit.
+    */
   def stream: Stream[IO, Message] =
     Stream.eval(IO.ref(false)).flatMap { resultSeenRef =>
       Stream
@@ -255,7 +266,6 @@ private class SessionImpl(
         }
         .takeThrough(!_.isInstanceOf[ResultMessage])
         .onFinalize {
-          // After the stream ends, check if it ended without a ResultMessage
           resultSeenRef.get.flatMap { resultSeen =>
             if !resultSeen then
               pendingErrorRef.get.flatMap {

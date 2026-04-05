@@ -6,9 +6,10 @@ import cats.effect.IO
 import munit.CatsEffectSuite
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.testing.TestingLogger
-import works.iterative.claude.core.{SessionProcessDied}
+import works.iterative.claude.core.SessionProcessDied
 import works.iterative.claude.core.model.*
 import works.iterative.claude.direct.internal.testing.SessionMockCliScript
+import scala.concurrent.duration.*
 
 class SessionErrorTest extends CatsEffectSuite:
 
@@ -24,18 +25,26 @@ class SessionErrorTest extends CatsEffectSuite:
     ClaudeCode
       .session(options)
       .use { session =>
-        // Wait for the process to die
-        IO.sleep(scala.concurrent.duration.FiniteDuration(200, "ms")) *>
-          session.send("should fail").attempt.map { result =>
-            assert(
-              result.isLeft,
-              s"Expected send to fail but got: $result"
-            )
-            assert(
-              result.swap.toOption.exists(_.isInstanceOf[SessionProcessDied]),
-              s"Expected SessionProcessDied, got: ${result.swap.toOption}"
-            )
-          }
+        // Poll until send fails (process has exited), with a timeout
+        def pollUntilDead(remaining: Int): IO[Either[Throwable, Unit]] =
+          if remaining <= 0 then IO.pure(Right(()))
+          else
+            session.send("should fail").attempt.flatMap {
+              case Left(err) => IO.pure(Left(err))
+              case Right(_)  =>
+                IO.sleep(50.millis) *> pollUntilDead(remaining - 1)
+            }
+
+        pollUntilDead(100).map { result =>
+          assert(
+            result.isLeft,
+            s"Expected send to fail but got: $result"
+          )
+          assert(
+            result.swap.toOption.exists(_.isInstanceOf[SessionProcessDied]),
+            s"Expected SessionProcessDied, got: ${result.swap.toOption}"
+          )
+        }
       }
       .guarantee(IO { SessionMockCliScript.cleanup(script): Unit })
   }
@@ -70,7 +79,7 @@ class SessionErrorTest extends CatsEffectSuite:
   // ============================================================
 
   test(
-    "malformed JSON line is logged and skipped; valid messages in the same turn arrive normally"
+    "malformed JSON line is logged and skipped; valid messages arrive with exactly 1 ResultMessage"
   ) {
     val script = SessionMockCliScript.createMalformedJsonMidTurnScript()
     val options = SessionOptions().withClaudeExecutable(script.toString)
@@ -85,36 +94,51 @@ class SessionErrorTest extends CatsEffectSuite:
             messages.exists(_.isInstanceOf[AssistantMessage]),
             s"Expected AssistantMessage in stream: $messages"
           )
-          assert(
-            messages.exists(_.isInstanceOf[ResultMessage]),
-            s"Expected ResultMessage in stream: $messages"
+
+          val resultMessages = messages.collect { case r: ResultMessage => r }
+          assertEquals(
+            resultMessages.length,
+            1,
+            s"Expected exactly 1 ResultMessage, got: $messages"
           )
       }
       .guarantee(IO { SessionMockCliScript.cleanup(script): Unit })
   }
 
   // ============================================================
-  // E4: Session remains functional after malformed JSON
+  // E4: send after process death with no pending error raises SessionProcessDied
   // ============================================================
 
   test(
-    "session remains functional after a malformed JSON line - ResultMessage arrives"
+    "send after process death with no pending error raises SessionProcessDied"
   ) {
-    val script = SessionMockCliScript.createMalformedJsonMidTurnScript()
+    // Use a script that exits immediately — the stdout reader may not have
+    // time to set a pendingError, exercising the None branch in pendingErrorRef
+    val script = SessionMockCliScript.createImmediateExitScript(exitCode = 0)
     val options = SessionOptions().withClaudeExecutable(script.toString)
     ClaudeCode
       .session(options)
       .use { session =>
-        for
-          _ <- session.send("test")
-          messages <- session.stream.compile.toList
-        yield
-          val resultMessages = messages.collect { case r: ResultMessage => r }
-          assertEquals(
-            resultMessages.length,
-            1,
-            s"Expected 1 ResultMessage, got: $messages"
+        // Poll until the process is detected as dead
+        def pollUntilDead(remaining: Int): IO[Either[Throwable, Unit]] =
+          if remaining <= 0 then IO.pure(Right(()))
+          else
+            session.send("should fail").attempt.flatMap {
+              case Left(err) => IO.pure(Left(err))
+              case Right(_)  =>
+                IO.sleep(50.millis) *> pollUntilDead(remaining - 1)
+            }
+
+        pollUntilDead(100).map { result =>
+          assert(
+            result.isLeft,
+            s"Expected send to fail but got: $result"
           )
+          assert(
+            result.swap.toOption.exists(_.isInstanceOf[SessionProcessDied]),
+            s"Expected SessionProcessDied, got: ${result.swap.toOption}"
+          )
+        }
       }
       .guarantee(IO { SessionMockCliScript.cleanup(script): Unit })
   }

@@ -6,9 +6,10 @@ import cats.effect.IO
 import munit.CatsEffectSuite
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.testing.TestingLogger
-import works.iterative.claude.core.{SessionProcessDied}
+import works.iterative.claude.core.SessionProcessDied
 import works.iterative.claude.core.model.*
 import works.iterative.claude.direct.internal.testing.SessionMockCliScript
+import scala.concurrent.duration.*
 
 class SessionErrorIntegrationTest extends CatsEffectSuite:
 
@@ -58,15 +59,31 @@ class SessionErrorIntegrationTest extends CatsEffectSuite:
             turn1Messages.exists(_.isInstanceOf[ResultMessage]),
             s"Expected ResultMessage in turn 1: $turn1Messages"
           )
-          // Wait for process to exit
-          _ <- IO.sleep(scala.concurrent.duration.FiniteDuration(200, "ms"))
-          // Second send should fail
-          result <- session.send("Second prompt").attempt
+          // Poll until the process is detected as dead
+          result <- {
+            def pollUntilDead(remaining: Int): IO[Either[Throwable, Unit]] =
+              if remaining <= 0 then IO.pure(Right(()))
+              else
+                session.send("Second prompt").attempt.flatMap {
+                  case Left(err) => IO.pure(Left(err))
+                  case Right(_)  =>
+                    IO.sleep(50.millis) *> pollUntilDead(remaining - 1)
+                }
+            pollUntilDead(100)
+          }
         yield
           assert(result.isLeft, s"Expected second send to fail: $result")
+          val err = result.swap.toOption.collect { case e: SessionProcessDied =>
+            e
+          }
           assert(
-            result.swap.toOption.exists(_.isInstanceOf[SessionProcessDied]),
+            err.isDefined,
             s"Expected SessionProcessDied, got: ${result.swap.toOption}"
+          )
+          assertEquals(
+            err.get.exitCode,
+            Some(1),
+            s"Expected exit code 1, got: ${err.get.exitCode}"
           )
       }
       .guarantee(IO { SessionMockCliScript.cleanup(script): Unit })
@@ -111,9 +128,16 @@ class SessionErrorIntegrationTest extends CatsEffectSuite:
     ClaudeCode
       .session(options)
       .use { session =>
-        // Wait for process to die
-        IO.sleep(scala.concurrent.duration.FiniteDuration(200, "ms")) *>
-          session.sessionId.map(_ => ())
+        // Poll until the process is detected as dead
+        def pollUntilDead(remaining: Int): IO[Unit] =
+          if remaining <= 0 then IO.unit
+          else
+            session.send("probe").attempt.flatMap {
+              case Left(_)  => IO.unit
+              case Right(_) =>
+                IO.sleep(50.millis) *> pollUntilDead(remaining - 1)
+            }
+        pollUntilDead(100)
       }
       .guarantee(IO { SessionMockCliScript.cleanup(script): Unit })
     // If we get here without timeout, the test passes

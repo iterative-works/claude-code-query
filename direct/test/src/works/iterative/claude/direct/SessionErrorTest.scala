@@ -83,8 +83,14 @@ class SessionErrorTest extends munit.FunSuite:
       val options = SessionOptions().withClaudeExecutable(script.toString)
       val session = ClaudeCode.session(options)
 
-      // Wait briefly for the process to actually die
-      Thread.sleep(200)
+      // Wait for the process to actually exit (up to 5 seconds)
+      val proc = session
+        .asInstanceOf[
+          works.iterative.claude.direct.internal.cli.SessionProcess
+        ]
+        .underlyingProcess
+      val exited = proc.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)
+      assert(exited, "Process should have exited within timeout")
 
       val _ = intercept[SessionProcessDied] {
         session.send("should fail - process is dead")
@@ -122,7 +128,7 @@ class SessionErrorTest extends munit.FunSuite:
   // ============================================================
 
   test(
-    "malformed JSON line mid-turn is skipped and stream completes normally with valid messages"
+    "malformed JSON line mid-turn is skipped and stream completes with valid messages"
   ) {
     given logger: MockLogger = MockLogger()
     supervised {
@@ -140,38 +146,12 @@ class SessionErrorTest extends munit.FunSuite:
         messages.exists(_.isInstanceOf[AssistantMessage]),
         s"Expected AssistantMessage in stream: $messages"
       )
-      assert(
-        messages.exists(_.isInstanceOf[ResultMessage]),
-        s"Expected ResultMessage in stream: $messages"
-      )
-
-      session.close()
-    }
-  }
-
-  // ============================================================
-  // E6: Session remains functional after malformed JSON
-  // ============================================================
-
-  test(
-    "session remains functional after a malformed JSON line - valid messages arrive"
-  ) {
-    given logger: MockLogger = MockLogger()
-    supervised {
-      val script = SessionMockCliScript.createMalformedJsonMidTurnScript()
-      createdScripts += script
-
-      val options = SessionOptions().withClaudeExecutable(script.toString)
-      val session = ClaudeCode.session(options)
-
-      session.send("test")
-      val messages = session.stream().runToList()
 
       val resultMessages = messages.collect { case r: ResultMessage => r }
       assertEquals(
         resultMessages.length,
         1,
-        s"Expected 1 ResultMessage, got: $messages"
+        s"Expected exactly 1 ResultMessage, got: $messages"
       )
 
       session.close()

@@ -3,7 +3,7 @@
 package works.iterative.claude.direct
 
 import ox.*
-import works.iterative.claude.core.{SessionClosedError, SessionProcessDied}
+import works.iterative.claude.core.SessionProcessDied
 import works.iterative.claude.core.model.*
 import works.iterative.claude.direct.internal.testing.{
   MockLogger,
@@ -76,13 +76,24 @@ class SessionErrorIntegrationTest extends munit.FunSuite:
         s"Expected ResultMessage in turn 1: $turn1Messages"
       )
 
-      // Wait for process to exit after completing turn 1
-      Thread.sleep(200)
+      // Wait for the process to actually exit (up to 5 seconds)
+      val proc = session
+        .asInstanceOf[
+          works.iterative.claude.direct.internal.cli.SessionProcess
+        ]
+        .underlyingProcess
+      val exited = proc.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)
+      assert(exited, "Process should have exited within timeout")
 
       // Second send or stream should fail because the process exited
-      intercept[SessionProcessDied] {
+      val caught = intercept[SessionProcessDied] {
         session.send("Second prompt - process is dead")
-      }: Unit
+      }
+      assertEquals(
+        caught.exitCode,
+        Some(1),
+        s"Expected exit code 1, got: ${caught.exitCode}"
+      )
 
       session.close()
     }
