@@ -24,107 +24,61 @@ Mill natively supports multiple test submodules. Adding `itest` as a peer to `te
 
 ## Architecture Design
 
-**Purpose:** Define WHAT components each layer needs, not HOW they're implemented.
+This issue does not follow the typical domain/application/infrastructure/presentation layering. The work decomposes into two implementation layers: build and test structure changes, then CI updates.
 
-This issue does not follow the typical domain/application/infrastructure/presentation layering. Instead, the work decomposes into five implementation layers aligned to the build structure and CI pipeline.
-
-### Build Definition Layer
+### Layer 1: Build Modules and Test File Moves
 
 **Components:**
-- `core.itest` module definition in `build.mill`
-- `direct.itest` module definition in `build.mill`
-- `effectful.itest` module definition in `build.mill`
+- `core.itest`, `direct.itest`, `effectful.itest` module definitions in `build.mill`
+- Moved test files in `{module}/itest/src/` directories
+- Split `ProcessManagerTest.scala` files (unit portions stay in `test`, process-spawning portions move to `itest`)
+
+**Files to move to `core/itest/src/`:**
+- `SDKUserMessageRoundTripTest.scala` (spawns bash processes for stdin/stdout piping)
+- `SDKUserMessageE2ETest.scala` (requires real Claude CLI)
+
+**Files to move to `direct/itest/src/`:**
+- `ClaudeCodeIntegrationTest.scala`
+- `ClaudeCodeStreamingTest.scala`
+- `SessionIntegrationTest.scala`
+- `SessionErrorIntegrationTest.scala`
+- `SessionE2ETest.scala`
+- `EnvironmentTest.scala` (environment manipulation)
+- Process-spawning test cases extracted from `ProcessManagerTest.scala` → `ProcessManagerIntegrationTest.scala`
+
+**Files to move to `effectful/itest/src/`:**
+- `ClaudeCodeIntegrationTest.scala`
+- `SessionIntegrationTest.scala`
+- `SessionErrorIntegrationTest.scala`
+- `SessionE2ETest.scala`
+- `EnvironmentValidationTest.scala`
+- `EnvironmentInheritanceTest.scala`
+- `EnvironmentSecurityTest.scala`
+- Process-spawning test cases extracted from `ProcessManagerTest.scala` → `ProcessManagerIntegrationTest.scala`
 
 **Responsibilities:**
 - Define `itest` as `ScalaTests with TestModule.Munit` inside each top-level module
-- Wire correct `moduleDeps` so itest modules can access test helpers and main source
-- Wire correct `mvnDeps` (same test dependencies as corresponding `test` module)
+- Wire `moduleDeps` so itest modules can access test helpers (itest depends on test)
+- Wire `effectful.itest` to also depend on `direct.test` (for `SessionMockCliScript`, `TestAssumptions`)
+- Split `ProcessManagerTest.scala` in both direct and effectful: pure-logic tests stay, process-spawning tests move to `ProcessManagerIntegrationTest.scala`
+- Test helpers in `direct/test/src/.../internal/testing/` remain in `test`
 - Ensure `itest` modules are NOT included in publish targets
-
-**Estimated Effort:** 1-2 hours
-**Complexity:** Straightforward
-
----
-
-### Core itest Layer
-
-**Components:**
-- `core/itest/src/` directory with moved test files
-- Files to move:
-  - `SDKUserMessageRoundTripTest.scala` (property-based roundtrip, spawns processes)
-  - `SDKUserMessageE2ETest.scala` (requires real Claude CLI)
-
-**Responsibilities:**
-- Move files preserving package structure
-- Verify moved tests compile and pass in new location
-- Verify remaining unit tests in `core/test` still compile and pass
-
-**Estimated Effort:** 0.5-1 hours
-**Complexity:** Straightforward
-
----
-
-### Direct itest Layer
-
-**Components:**
-- `direct/itest/src/` directory with moved test files
-- Files to move:
-  - `ClaudeCodeIntegrationTest.scala`
-  - `ClaudeCodeStreamingTest.scala`
-  - `SessionIntegrationTest.scala`
-  - `SessionErrorIntegrationTest.scala`
-  - `SessionE2ETest.scala`
-  - `EnvironmentTest.scala` (environment manipulation)
-- Files to evaluate:
-  - `ProcessManagerTest.scala` (described as "mixed" -- may need splitting)
-
-**Responsibilities:**
-- Move files preserving package structure
-- Determine whether `ProcessManagerTest.scala` should be split (unit portions stay, process-spawning portions move) or moved wholesale
-- Ensure test helpers in `direct/test/src/.../internal/testing/` remain in `test` (they are dependencies for both `test` and `itest`)
 - Verify all tests compile and pass in their new locations
+- Update CLAUDE.md, ARCHITECTURE.md, and README with new `__.itest` command
 
-**Estimated Effort:** 1-2 hours
-**Complexity:** Moderate (ProcessManagerTest split decision)
-
----
-
-### Effectful itest Layer
-
-**Components:**
-- `effectful/itest/src/` directory with moved test files
-- Files to move:
-  - `ClaudeCodeIntegrationTest.scala`
-  - `SessionIntegrationTest.scala`
-  - `SessionErrorIntegrationTest.scala`
-  - `SessionE2ETest.scala`
-  - `EnvironmentValidationTest.scala`
-  - `EnvironmentInheritanceTest.scala`
-  - `EnvironmentSecurityTest.scala`
-- Files to evaluate:
-  - `ProcessManagerTest.scala` (same mixed concern as direct)
-
-**Responsibilities:**
-- Move files preserving package structure
-- Wire `effectful.itest` moduleDeps to include `direct.test` (for `SessionMockCliScript`, `TestAssumptions`)
-- Determine ProcessManagerTest split strategy (should match decision made for direct)
-- Verify all tests compile and pass
-
-**Estimated Effort:** 1-2 hours
-**Complexity:** Moderate (cross-module test helper dependency)
+**Estimated Effort:** 3-6 hours
+**Complexity:** Moderate (ProcessManagerTest splitting requires reading each test case)
 
 ---
 
-### CI and Workflow Layer
+### Layer 2: CI Pipeline Updates
 
 **Components:**
 - Updated `.github/workflows/publish.yml`
-- Potential new CI workflow for integration tests (or updated existing)
 
 **Responsibilities:**
 - Add `./mill __.itest` step to CI pipeline (after unit tests, before publish)
-- Decide whether itest failures should block publish
-- Optionally add a separate CI workflow or job for integration tests on PRs
+- Ensure itest failures are reported correctly
 
 **Estimated Effort:** 0.5-1 hours
 **Complexity:** Straightforward
@@ -164,52 +118,23 @@ A test belongs in `test` if it:
 2. Uses only in-memory mocks/stubs
 3. Runs in milliseconds
 
-## Technical Risks & Uncertainties
+## Technical Decisions (Resolved)
 
-### CLARIFY: ProcessManagerTest Split Strategy
+### ProcessManagerTest Split Strategy
 
-Both `direct` and `effectful` have `ProcessManagerTest.scala` files described as "mixed" -- containing both unit test cases and cases that spawn real processes.
+**Decision:** Split into two files. Pure-logic unit tests stay in `ProcessManagerTest.scala` under `test`, process-spawning tests move to `ProcessManagerIntegrationTest.scala` under `itest`. This maximizes unit test coverage for fast feedback.
 
-**Questions to answer:**
-1. Should we split these files into unit and integration portions, or move them wholesale to itest?
-2. If splitting, what is the dividing line for which test cases stay vs. move?
-3. Should the split produce two files (e.g., `ProcessManagerTest.scala` in test and `ProcessManagerIntegrationTest.scala` in itest)?
+### SDKUserMessageRoundTripTest Classification
 
-**Options:**
-- **Option A**: Move entire file to itest. Simpler, but loses fast feedback on pure-logic portions.
-- **Option B**: Split into two files. More precise, but requires reading each test case to classify.
-- **Option C**: Keep in test, tag integration tests with Munit tags and filter at runtime. Avoids file moves but doesn't give separate Mill targets.
-
-**Impact:** Affects the test count in each module and the granularity of the fast test suite.
-
----
-
-### CLARIFY: SDKUserMessageRoundTripTest Classification
-
-The issue lists `SDKUserMessageRoundTripTest` as integration, but it is a property-based roundtrip test that may or may not spawn processes. If it only tests serialization/deserialization roundtripping (encode then decode), it could be a unit test.
-
-**Questions to answer:**
-1. Does this test spawn subprocesses or only test pure encode/decode logic?
-2. If it spawns processes, is that essential to the test or incidental?
-
-**Options:**
-- **Option A**: Move to itest as stated in the issue (safe default).
-- **Option B**: Keep in test if it turns out to be pure logic.
-
-**Impact:** Minor -- one file, but sets precedent for classification rigor.
-
----
+**Decision:** Integration test. The test spawns bash subprocesses (`ProcessBuilder`) to simulate CLI stdin/stdout piping. The process spawning is essential to the test's purpose (validating the JSON format works through a real process boundary). Moves to `core/itest`.
 
 ## Total Estimates
 
 **Per-Layer Breakdown:**
-- Build Definition Layer: 1-2 hours
-- Core itest Layer: 0.5-1 hours
-- Direct itest Layer: 1-2 hours
-- Effectful itest Layer: 1-2 hours
-- CI and Workflow Layer: 0.5-1 hours
+- Layer 1 (Build + file moves): 3-6 hours
+- Layer 2 (CI updates): 0.5-1 hours
 
-**Total Range:** 4 - 8 hours
+**Total Range:** 3.5 - 7 hours
 
 **Confidence:** High
 
@@ -221,35 +146,21 @@ The issue lists `SDKUserMessageRoundTripTest` as integration, but it is a proper
 
 ## Testing Strategy
 
-### Per-Layer Testing
+**Layer 1 verification:**
+- `./mill __.compile` succeeds (all modules including itest)
+- `./mill __.test` runs ONLY unit tests (no process spawning)
+- `./mill __.itest` runs ONLY integration/E2E tests
+- Each module's test and itest can be run individually
+- Test helpers accessible from itest via `moduleDeps`
+- `SessionMockCliScript` from `direct.test` accessible from `effectful.itest`
 
-**Build Definition Layer:**
-- Verify `./mill __.compile` succeeds (all modules including itest)
-- Verify `./mill __.test` runs ONLY unit tests
-- Verify `./mill __.itest` runs ONLY integration/E2E tests
-- Verify `./mill core.itest` / `./mill direct.itest` / `./mill effectful.itest` work individually
-
-**Core itest Layer:**
-- Run `./mill core.test` -- all remaining unit tests pass
-- Run `./mill core.itest` -- moved tests pass
-
-**Direct itest Layer:**
-- Run `./mill direct.test` -- all remaining unit tests pass
-- Run `./mill direct.itest` -- moved tests pass
-- Verify test helpers are accessible from itest
-
-**Effectful itest Layer:**
-- Run `./mill effectful.test` -- all remaining unit tests pass
-- Run `./mill effectful.itest` -- moved tests pass
-- Verify `SessionMockCliScript` from `direct.test` is accessible
-
-**CI and Workflow Layer:**
-- Verify publish workflow runs both test and itest steps
-- Verify itest failures are reported correctly
+**Layer 2 verification:**
+- CI workflow runs both `__.test` and `__.itest` steps
+- itest failures are reported correctly
 
 **Regression Coverage:**
-- Total test count across test + itest should equal the original test count
-- No test should be lost or duplicated in the move
+- Total test count across test + itest equals the original test count
+- No test lost or duplicated
 
 ## Deployment Considerations
 
@@ -269,13 +180,10 @@ Revert the commit. Tests move back to their original locations.
 ## Dependencies
 
 ### Prerequisites
-- Clear classification of every test file as unit or integration/E2E
-- Decision on ProcessManagerTest split strategy
+- None (classification decisions are resolved)
 
 ### Layer Dependencies
-- Build Definition Layer must be done first (itest modules must exist before files can be moved)
-- Core, Direct, and Effectful itest layers can be done in parallel after Build Definition
-- CI layer can be done last or in parallel with test moves
+- Layer 1 must complete before Layer 2 (CI needs functional itest modules)
 
 ### External Blockers
 None.
@@ -301,19 +209,8 @@ None.
 
 ## Implementation Sequence
 
-**Recommended Layer Order:**
-
-1. **Build Definition Layer** - Must be first: creates the itest module targets that files will be moved into
-2. **Core itest Layer** - Simplest module, fewest files to move, validates the pattern works
-3. **Direct itest Layer** - More files, includes the ProcessManagerTest decision, test helpers stay in test
-4. **Effectful itest Layer** - Mirrors direct, adds cross-module dependency verification
-5. **CI and Workflow Layer** - Last: updates CI to use the new test targets
-
-**Ordering Rationale:**
-- Build definition must precede any file moves
-- Core first as a proof-of-concept (only 2 files to move)
-- Direct before effectful because effectful.itest depends on direct.test
-- CI last because it depends on all itest modules being functional
+1. **Layer 1: Build + file moves** — Add itest modules to build.mill, move/split all test files, update docs, verify compilation and test counts
+2. **Layer 2: CI updates** — Add `__.itest` step to GitHub Actions workflow
 
 ## Documentation Requirements
 
@@ -327,6 +224,5 @@ None.
 **Analysis Status:** Ready for Review
 
 **Next Steps:**
-1. Resolve CLARIFY markers (ProcessManagerTest split, SDKUserMessageRoundTripTest classification)
-2. Run **wf-create-tasks** with the issue ID
-3. Run **wf-implement** for layer-by-layer implementation
+1. Run **wf-create-tasks** with the issue ID
+2. Run **wf-implement** for layer-by-layer implementation
