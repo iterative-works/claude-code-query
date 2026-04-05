@@ -26,21 +26,19 @@ class SessionTest extends CatsEffectSuite:
     val parsed = parser.parse(json).toOption.get
     val cursor = parsed.hcursor
 
-    IO {
-      assertEquals(cursor.downField("type").as[String].toOption, Some("user"))
-      assertEquals(
-        cursor.downField("message").downField("role").as[String].toOption,
-        Some("user")
-      )
-      assertEquals(
-        cursor.downField("message").downField("content").as[String].toOption,
-        Some("Hello, Claude!")
-      )
-      assertEquals(
-        cursor.downField("session_id").as[String].toOption,
-        Some("sess-42")
-      )
-    }
+    assertEquals(cursor.downField("type").as[String].toOption, Some("user"))
+    assertEquals(
+      cursor.downField("message").downField("role").as[String].toOption,
+      Some("user")
+    )
+    assertEquals(
+      cursor.downField("message").downField("content").as[String].toOption,
+      Some("Hello, Claude!")
+    )
+    assertEquals(
+      cursor.downField("session_id").as[String].toOption,
+      Some("sess-42")
+    )
   }
 
   // ============================================================

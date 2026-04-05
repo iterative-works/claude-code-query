@@ -1,10 +1,11 @@
 // PURPOSE: Resource-based effectful Session implementation backed by a long-lived CLI process
-// PURPOSE: Manages stdin writing, stdout streaming via Queue, stderr capture, and process lifecycle
+// PURPOSE: Handles session startup, multi-turn message routing, and deterministic process cleanup
 package works.iterative.claude.effectful.internal.cli
 
 import cats.effect.{IO, Ref, Resource}
 import cats.effect.std.Queue
 import fs2.{Chunk, Stream}
+import scala.concurrent.duration.*
 import fs2.io.process.ProcessBuilder
 import fs2.io.file.Path
 import io.circe.syntax.*
@@ -111,8 +112,7 @@ object SessionProcess:
       .drain
       .guarantee(messageQueue.offer(None))
 
-  private val InitReadTimeout =
-    scala.concurrent.duration.FiniteDuration(1000, "ms")
+  private val InitReadTimeout = 1.second
 
   /** Waits for the first message from the stdout reader and checks if it's the
     * init SystemMessage. If so, extracts the session ID. Otherwise, re-enqueues
@@ -188,14 +188,6 @@ private class SessionImpl(
     * ResultMessage, then stops.
     */
   def stream: Stream[IO, Message] =
-    Stream.eval(messageQueue.take).flatMap {
-      case None =>
-        // Stdout closed — no more messages
-        Stream.empty
-      case Some(msg) =>
-        msg match
-          case _: ResultMessage =>
-            Stream.emit(msg)
-          case _ =>
-            Stream.emit(msg) ++ stream
-    }
+    Stream
+      .fromQueueNoneTerminated(messageQueue)
+      .takeThrough(!_.isInstanceOf[ResultMessage])

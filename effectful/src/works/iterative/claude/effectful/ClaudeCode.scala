@@ -24,21 +24,9 @@ object ClaudeCode:
   def session(options: SessionOptions)(using
       logger: Logger[IO]
   ): Resource[IO, Session] =
-    discoverExecutableForSession(options).flatMap { executablePath =>
-      SessionProcess.start(executablePath, options)
-    }
-
-  private def discoverExecutableForSession(
-      options: SessionOptions
-  )(using logger: Logger[IO]): Resource[IO, String] =
-    options.pathToClaudeCodeExecutable match
-      case Some(path) => Resource.pure(path)
-      case None       =>
-        Resource
-          .eval(CLIDiscovery.findClaude(logger))
-          .flatMap:
-            case Right(path) => Resource.pure(path)
-            case Left(error) => Resource.eval(IO.raiseError(error))
+    Resource
+      .eval(resolveExecutable(options.pathToClaudeCodeExecutable))
+      .flatMap(SessionProcess.start(_, options))
 
   def queryResult(options: QueryOptions)(using logger: Logger[IO]): IO[String] =
     querySync(options)(using logger).map(extractTextFromMessages)
@@ -75,17 +63,21 @@ object ClaudeCode:
   ): Stream[IO, Unit] =
     Stream.eval(logger.info(s"Initiating query with prompt: $prompt"))
 
+  private def resolveExecutable(
+      path: Option[String]
+  )(using logger: Logger[IO]): IO[String] =
+    path match
+      case Some(p) => IO.pure(p)
+      case None    =>
+        CLIDiscovery.findClaude(logger).flatMap {
+          case Right(p)    => IO.pure(p)
+          case Left(error) => IO.raiseError(error)
+        }
+
   private def discoverExecutablePath(options: QueryOptions)(using
       logger: Logger[IO]
   ): Stream[IO, String] =
-    options.pathToClaudeCodeExecutable match
-      case Some(explicitPath) => Stream.eval(IO.pure(explicitPath))
-      case None               =>
-        Stream
-          .eval(CLIDiscovery.findClaude(logger))
-          .flatMap:
-            case Right(path) => Stream.emit(path)
-            case Left(error) => Stream.raiseError[IO](error)
+    Stream.eval(resolveExecutable(options.pathToClaudeCodeExecutable))
 
   private def buildCLIArguments(options: QueryOptions): List[String] =
     List("--print", "--verbose", "--output-format", "stream-json") ++
