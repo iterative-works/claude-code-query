@@ -155,3 +155,45 @@ A  direct/test/src/works/iterative/claude/direct/internal/testing/SessionMockCli
 ```
 
 ---
+
+## Phase 4: Direct API - Multi-turn conversation (2026-04-05)
+
+**What was built:**
+- Multi-turn conversation test coverage across all three test levels (unit, integration, E2E)
+- No production code changes were needed — `SessionProcess` from Phase 3 already handled multi-turn correctly
+
+**Decisions made:**
+- Phase is purely test-focused: the mechanical infrastructure for multi-turn already existed in Phase 3, so Phase 4 validates it works correctly
+- Removed IT9 (duplicate of T10 in SessionTest) during code review to avoid test duplication across unit/integration layers
+- Added message ordering assertions (not just type membership) to verify protocol ordering
+
+**Patterns applied:**
+- Dedicated `createdFiles` cleanup list in SessionTest (matching SessionIntegrationTest pattern) for non-script temp files
+- Extracted `assumeClaudeAvailable()` helper in E2E tests to reduce repeated assume blocks
+- Used `.getOrElse(fail(...))` instead of `.isDefined`/`.get` for idiomatic Scala 3 Option handling in test assertions
+
+**Testing:**
+- Unit tests: 4 tests added (T8-T11) — message isolation, session ID propagation, session ID updates, three-turn cycling
+- Integration tests: 3 tests added (IT6-IT8) — two-turn lifecycle, stdin capture with ID progression, variable message counts per turn
+- E2E tests: 2 tests added — context-dependent follow-up ("remember 42"), session ID stability across turns
+
+**Code review:**
+- Iterations: 1
+- Skills applied: testing, style, scala3
+- Critical findings: 1 (captureFile cleanup list) — fixed
+- Warnings addressed: duplicate IT9 removed, session ID stability assertion added, message ordering assertions added, test ordering fixed, redundant import removed, fully-qualified imports simplified
+- Suggestions addressed: `.getOrElse(fail(...))` pattern, `assumeClaudeAvailable()` helper
+
+**For next phases:**
+- Multi-turn conversation is fully validated in the direct API — Phase 5 (effectful API) can reference the same test patterns
+- `SessionMockCliScript` multi-turn support confirmed working — no changes were needed to the mock infrastructure
+- Error handling (Phase 6) can build on these tests to add failure scenarios during multi-turn sessions
+
+**Files changed:**
+```
+M  direct/test/src/works/iterative/claude/direct/SessionTest.scala
+M  direct/test/src/works/iterative/claude/direct/SessionIntegrationTest.scala
+M  direct/test/src/works/iterative/claude/direct/SessionE2ETest.scala
+```
+
+---
