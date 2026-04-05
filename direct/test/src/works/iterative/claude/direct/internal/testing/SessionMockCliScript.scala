@@ -163,5 +163,106 @@ object SessionMockCliScript:
 
     sb.toString()
 
+  /** Creates a script that exits immediately without reading any stdin. Used to
+    * test send() to a dead process.
+    */
+  def createImmediateExitScript(exitCode: Int = 1): Path =
+    val content = s"#!/bin/bash\nexit $exitCode\n"
+    writeExecutableScript("mock-immediate-exit-", content)
+
+  /** Creates a script that emits one assistant message then crashes with the
+    * given exit code before emitting a ResultMessage.
+    */
+  def createCrashMidTurnScript(exitCode: Int = 1): Path =
+    val initMessages = List(CommonResponses.initMessage())
+    val partialResponse =
+      CommonResponses.assistantMessage("Partial response before crash")
+    val content =
+      generateCrashMidTurnScript(initMessages, partialResponse, exitCode)
+    writeExecutableScript("mock-crash-mid-turn-", content)
+
+  /** Creates a script that completes one full turn (with ResultMessage) then
+    * exits before reading the second prompt.
+    */
+  def createCrashBetweenTurnsScript(exitCode: Int = 1): Path =
+    val sessionId = CommonResponses.initSessionId
+    val turn1 = TurnResponse(
+      List(
+        CommonResponses.assistantMessage("Turn 1 complete"),
+        CommonResponses.resultMessage(sessionId)
+      )
+    )
+    val content = generateCrashBetweenTurnsScript(
+      List(CommonResponses.initMessage()),
+      turn1,
+      exitCode
+    )
+    writeExecutableScript("mock-crash-between-turns-", content)
+
+  /** Creates a script that emits a valid assistant message, then an invalid
+    * JSON line, then a valid ResultMessage.
+    */
+  def createMalformedJsonMidTurnScript(): Path =
+    val sessionId = CommonResponses.initSessionId
+    val messages = List(
+      CommonResponses.assistantMessage("Before bad line"),
+      "{bad json: not valid}",
+      CommonResponses.resultMessage(sessionId)
+    )
+    val turnResponse = TurnResponse(messages)
+    createSessionScript(
+      initMessages = List(CommonResponses.initMessage()),
+      turnResponses = List(turnResponse)
+    )
+
+  private def generateCrashMidTurnScript(
+      initMessages: List[String],
+      partialMessage: String,
+      exitCode: Int
+  ): String =
+    val sb = new StringBuilder
+    sb.append("#!/bin/bash\n")
+    sb.append("# Mock script: emits partial output then crashes\n\n")
+    initMessages.foreach { msg =>
+      sb.append(s"echo '${escapeSingleQuote(msg)}'\n")
+    }
+    // Wait for one line of stdin, then emit partial response and crash
+    sb.append("read -r _line\n")
+    sb.append(s"echo '${escapeSingleQuote(partialMessage)}'\n")
+    sb.append(s"exit $exitCode\n")
+    sb.toString()
+
+  private def generateCrashBetweenTurnsScript(
+      initMessages: List[String],
+      turn1: TurnResponse,
+      exitCode: Int
+  ): String =
+    val sb = new StringBuilder
+    sb.append("#!/bin/bash\n")
+    sb.append("# Mock script: completes one turn then crashes\n\n")
+    initMessages.foreach { msg =>
+      sb.append(s"echo '${escapeSingleQuote(msg)}'\n")
+    }
+    // Read first prompt, respond fully
+    sb.append("read -r _line\n")
+    turn1.messages.foreach { msg =>
+      sb.append(s"echo '${escapeSingleQuote(msg)}'\n")
+    }
+    // Exit before reading second prompt
+    sb.append(s"exit $exitCode\n")
+    sb.toString()
+
+  private def writeExecutableScript(prefix: String, content: String): Path =
+    val tempDir = Files.createTempDirectory(prefix)
+    val scriptPath = tempDir.resolve(s"mock-${System.currentTimeMillis()}")
+    Using.resource(new PrintWriter(new FileWriter(scriptPath.toFile))) {
+      _.write(content)
+    }
+    Files.setPosixFilePermissions(
+      scriptPath,
+      PosixFilePermissions.fromString("rwxr-xr-x")
+    )
+    scriptPath
+
   private def escapeSingleQuote(s: String): String =
     s.replace("'", "'\\''")

@@ -455,10 +455,9 @@ class SessionTest extends munit.FunSuite:
       // after close(), sending should fail because stdin is closed
       session.close()
 
-      // Verify the session is no longer usable — send should throw because
-      // the underlying stdin writer is closed
-      intercept[Exception] {
+      // Verify the session is no longer usable — send should throw SessionClosedError
+      intercept[works.iterative.claude.core.SessionClosedError] {
         session.send("should fail")
-      }
+      }: Unit
     }
   }

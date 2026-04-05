@@ -10,6 +10,7 @@ import fs2.io.process.ProcessBuilder
 import fs2.io.file.Path
 import io.circe.syntax.*
 import org.typelevel.log4cats.Logger
+import works.iterative.claude.core.{CLIError, SessionProcessDied}
 import works.iterative.claude.core.model.*
 import works.iterative.claude.core.cli.CLIArgumentBuilder
 import works.iterative.claude.effectful.Session
@@ -38,13 +39,25 @@ object SessionProcess:
       // message queue: Some(msg) = message, None = stdout EOF
       messageQueue <- Resource.eval(Queue.unbounded[IO, Option[Message]])
       sessionIdRef <- Resource.eval(Ref.of[IO, String]("pending"))
+      // alive ref: set to false when the process dies
+      aliveRef <- Resource.eval(Ref.of[IO, Boolean](true))
+      // pendingError ref: carries process-death error from stdout reader to stream
+      pendingErrorRef <- Resource.eval(
+        Ref.of[IO, Option[CLIError]](None)
+      )
       // Background fiber: drains stdinQueue into process.stdin
       _ <- Resource.make(
         startStdinWriter(process, stdinQueue).start
       )(_.cancel)
       // Background fiber: reads process.stdout into messageQueue
       _ <- Resource.make(
-        startStdoutReader(process, messageQueue, sessionIdRef).start
+        startStdoutReader(
+          process,
+          messageQueue,
+          sessionIdRef,
+          aliveRef,
+          pendingErrorRef
+        ).start
       )(_.cancel)
       // Background fiber: captures stderr for diagnostics
       _ <- Resource.make(
@@ -52,7 +65,13 @@ object SessionProcess:
       )(_.cancel)
       // Read init message to prime sessionId before returning the session
       _ <- Resource.eval(readInitMessage(messageQueue, sessionIdRef))
-    yield new SessionImpl(stdinQueue, sessionIdRef, messageQueue)
+    yield new SessionImpl(
+      stdinQueue,
+      sessionIdRef,
+      messageQueue,
+      aliveRef,
+      pendingErrorRef
+    )
 
   private def buildProcess(
       executablePath: String,
@@ -83,12 +102,17 @@ object SessionProcess:
       .drain
 
   /** Background fiber: reads stdout lines, parses into messages, and enqueues
-    * them. Also updates sessionIdRef on ResultMessage. Signals EOF with None.
+    * them. Malformed JSON lines are logged and skipped. When stdout completes,
+    * checks the process exit code: non-zero exit sets aliveRef to false and
+    * stores a SessionProcessDied in pendingErrorRef. Always offers None to
+    * signal EOF.
     */
   private def startStdoutReader(
       process: fs2.io.process.Process[IO],
       messageQueue: Queue[IO, Option[Message]],
-      sessionIdRef: Ref[IO, String]
+      sessionIdRef: Ref[IO, String],
+      aliveRef: Ref[IO, Boolean],
+      pendingErrorRef: Ref[IO, Option[CLIError]]
   )(using logger: Logger[IO]): IO[Unit] =
     process.stdout
       .through(fs2.text.utf8.decode)
@@ -98,7 +122,13 @@ object SessionProcess:
         JsonParser.parseJsonLineWithContext(line, idx.toInt + 1, logger)
       }
       .evalMap {
-        case Left(err)        => IO.raiseError(err)
+        case Left(err) =>
+          // Malformed JSON: log and skip rather than terminating the reader
+          logger
+            .warn(s"Malformed JSON line skipped: ${err.message}")
+            .as(
+              None: Option[Message]
+            )
         case Right(None)      => IO.pure(None: Option[Message])
         case Right(Some(msg)) =>
           msg match
@@ -110,6 +140,17 @@ object SessionProcess:
       .evalMap(msg => messageQueue.offer(Some(msg)))
       .compile
       .drain
+      .flatMap { _ =>
+        // Check exit code when stdout stream completes
+        IO(process.exitValue).flatten.attempt.flatMap {
+          case Right(code) if code != 0 =>
+            aliveRef.set(false) *>
+              pendingErrorRef.set(
+                Some(SessionProcessDied(Some(code), ""))
+              )
+          case _ => IO.unit
+        }
+      }
       .guarantee(messageQueue.offer(None))
 
   private val InitReadTimeout = 1.second
@@ -164,30 +205,64 @@ object SessionProcess:
 private class SessionImpl(
     stdinQueue: Queue[IO, Option[Chunk[Byte]]],
     sessionIdRef: Ref[IO, String],
-    messageQueue: Queue[IO, Option[Message]]
+    messageQueue: Queue[IO, Option[Message]],
+    aliveRef: Ref[IO, Boolean],
+    pendingErrorRef: Ref[IO, Option[CLIError]]
 )(using logger: Logger[IO])
     extends Session:
 
   def sessionId: IO[String] = sessionIdRef.get
 
   def send(prompt: String): IO[Unit] =
-    sessionIdRef.get.flatMap { currentId =>
-      val msg = SDKUserMessage(content = prompt, sessionId = currentId)
-      val json = msg.asJson.noSpaces + "\n"
-      logger.debug(
-        s"Writing SDKUserMessage to stdin: ${msg.asJson.noSpaces}"
-      ) *>
-        stdinQueue.offer(
-          Some(
-            Chunk.array(json.getBytes(java.nio.charset.StandardCharsets.UTF_8))
-          )
-        )
+    aliveRef.get.flatMap { isAlive =>
+      if !isAlive then
+        pendingErrorRef.get.flatMap {
+          case Some(err) => IO.raiseError(err)
+          case None      =>
+            IO.raiseError(
+              SessionProcessDied(None, "Session process is not alive")
+            )
+        }
+      else
+        sessionIdRef.get.flatMap { currentId =>
+          val msg = SDKUserMessage(content = prompt, sessionId = currentId)
+          val json = msg.asJson.noSpaces + "\n"
+          logger.debug(
+            s"Writing SDKUserMessage to stdin: ${msg.asJson.noSpaces}"
+          ) *>
+            stdinQueue.offer(
+              Some(
+                Chunk.array(
+                  json.getBytes(java.nio.charset.StandardCharsets.UTF_8)
+                )
+              )
+            )
+        }
     }
 
   /** Reads messages from the shared queue until (and including) a
-    * ResultMessage, then stops.
+    * ResultMessage, then stops. If the queue signals EOF (None) before a
+    * ResultMessage is received, checks pendingErrorRef and raises the error if
+    * present (process died mid-turn).
     */
   def stream: Stream[IO, Message] =
-    Stream
-      .fromQueueNoneTerminated(messageQueue)
-      .takeThrough(!_.isInstanceOf[ResultMessage])
+    Stream.eval(IO.ref(false)).flatMap { resultSeenRef =>
+      Stream
+        .fromQueueNoneTerminated(messageQueue)
+        .evalTap {
+          case _: ResultMessage => resultSeenRef.set(true)
+          case _                => IO.unit
+        }
+        .takeThrough(!_.isInstanceOf[ResultMessage])
+        .onFinalize {
+          // After the stream ends, check if it ended without a ResultMessage
+          resultSeenRef.get.flatMap { resultSeen =>
+            if !resultSeen then
+              pendingErrorRef.get.flatMap {
+                case Some(err) => IO.raiseError(err)
+                case None      => IO.unit
+              }
+            else IO.unit
+          }
+        }
+    }

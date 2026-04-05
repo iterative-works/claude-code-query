@@ -6,6 +6,7 @@ import ox.*
 import ox.flow.Flow
 import works.iterative.claude.core.model.*
 import works.iterative.claude.core.cli.CLIArgumentBuilder
+import works.iterative.claude.core.{SessionClosedError, SessionProcessDied}
 import works.iterative.claude.direct.{Logger, Session}
 import works.iterative.claude.direct.internal.parsing.JsonParser
 import io.circe.syntax.*
@@ -16,7 +17,7 @@ import java.io.{
   OutputStreamWriter
 }
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 import scala.jdk.CollectionConverters.*
 
 /** Session implementation backed by a long-lived CLI process.
@@ -35,27 +36,51 @@ private[direct] class SessionProcess(
     extends Session:
 
   private val currentSessionId = new AtomicReference[String]("pending")
+  private val alive = new AtomicBoolean(true)
 
   def sessionId: String = currentSessionId.get()
 
   def send(prompt: String): Unit =
+    if !alive.get() then throw SessionClosedError(currentSessionId.get())
+    if !process.isAlive then
+      alive.set(false)
+      val exitCode =
+        try Some(process.exitValue())
+        catch case _: Exception => None
+      throw SessionProcessDied(exitCode, captureRemainingStderr())
     val msg =
       SDKUserMessage(content = prompt, sessionId = currentSessionId.get())
     val json = msg.asJson.noSpaces
     logger.debug(s"Writing SDKUserMessage to stdin: $json")
-    stdinWriter.write(json)
-    stdinWriter.newLine()
-    stdinWriter.flush()
+    try
+      stdinWriter.write(json)
+      stdinWriter.newLine()
+      stdinWriter.flush()
+    catch
+      case e: java.io.IOException =>
+        alive.set(false)
+        val exitCode =
+          try Some(process.exitValue())
+          catch case _: Exception => None
+        throw SessionProcessDied(exitCode, e.getMessage)
 
   def stream(): Flow[Message] =
     Flow.usingEmit { emit =>
       var done = false
       var lineNumber = 0
+      var resultSeen = false
       while !done do
         val line = stdoutReader.readLine()
         if line == null then
           logger.debug("stdout EOF reached during stream")
           done = true
+          if !resultSeen then
+            // Unexpected EOF before ResultMessage — process died mid-turn
+            val exitCode =
+              try Some(process.exitValue())
+              catch case _: Exception => None
+            alive.set(false)
+            throw SessionProcessDied(exitCode, captureRemainingStderr())
         else
           lineNumber += 1
           JsonParser.parseJsonLineWithContextWithLogging(line, lineNumber) match
@@ -67,6 +92,7 @@ private[direct] class SessionProcess(
               message match
                 case result: ResultMessage =>
                   currentSessionId.set(result.sessionId)
+                  resultSeen = true
                   done = true
                 case _ => ()
             case Right(None) => ()
@@ -75,19 +101,41 @@ private[direct] class SessionProcess(
     }
 
   def close(): Unit =
-    logger.debug("Closing session process")
-    try stdinWriter.close()
-    catch case _: Exception => ()
+    if alive.compareAndSet(true, false) then
+      logger.debug("Closing session process")
+      try stdinWriter.close()
+      catch case _: Exception => ()
+      try
+        val exited = process.waitFor(5, TimeUnit.SECONDS)
+        if !exited then
+          logger.debug("Process did not exit in time, destroying forcibly")
+          process.destroyForcibly(): Unit
+      catch
+        case _: InterruptedException =>
+          process.destroyForcibly(): Unit
+      try stdoutReader.close()
+      catch case _: Exception => ()
+    else logger.debug("close() called on already-closed session — ignoring")
+
+  /** Attempt to drain any remaining stderr for error context. Returns empty
+    * string if nothing is available.
+    */
+  private def captureRemainingStderr(): String =
+    val stderrReader =
+      new BufferedReader(new InputStreamReader(process.getErrorStream))
     try
-      val exited = process.waitFor(5, TimeUnit.SECONDS)
-      if !exited then
-        logger.debug("Process did not exit in time, destroying forcibly")
-        process.destroyForcibly(): Unit
-    catch
-      case _: InterruptedException =>
-        process.destroyForcibly(): Unit
-    try stdoutReader.close()
-    catch case _: Exception => ()
+      val sb = new StringBuilder
+      var line: String = null
+      while stderrReader.ready() && {
+          line = stderrReader.readLine(); line != null
+        }
+      do
+        val _ = sb.append(line).append("\n")
+      sb.toString().trim
+    catch case _: Exception => ""
+    finally
+      try stderrReader.close()
+      catch case _: Exception => ()
 
 object SessionProcess:
 

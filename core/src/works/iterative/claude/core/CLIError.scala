@@ -49,3 +49,15 @@ case class EnvironmentValidationError(
 ) extends CLIError:
   val message =
     s"Invalid environment variable names: ${invalidVariables.mkString(", ")}. $reason"
+
+case class SessionProcessDied(
+    exitCode: Option[Int],
+    stderr: String
+) extends CLIError:
+  val message = exitCode match
+    case Some(code) =>
+      s"Session process exited unexpectedly with code $code. $stderr"
+    case None => s"Session process is not alive. $stderr"
+
+case class SessionClosedError(sessionId: String) extends CLIError:
+  val message = s"Cannot send to closed session '$sessionId'"
