@@ -2,7 +2,7 @@
 
 **Phase:** 5
 **Created:** 2026-04-05
-**Status:** Planned
+**Status:** Complete
 
 ## Decision Summary
 
@@ -49,19 +49,19 @@ Test usage becomes `session.send("..."); session.stream().forEach(...)`.
 
 ## Tasks
 
-- [ ] [impl] [Analysis] Review all usages of `Session.send` in tests to confirm scope
-- [ ] [impl] [Refactor] Split `Session` trait: `send(prompt: String): Unit` + `stream(): Flow[Message]`
-- [ ] [impl] [Refactor] Split `SessionProcess.send` into `send` (stdin write) and `stream` (stdout read + emit)
-- [ ] [impl] [Test] Update `SessionTest.scala` call sites: `send` then `stream`
-- [ ] [impl] [Test] Update `SessionIntegrationTest.scala` call sites
-- [ ] [impl] [Test] Update `SessionE2ETest.scala` call sites
-- [ ] [impl] [Verify] Run all tests (`./mill __.test`), ensure nothing broke
-- [ ] [impl] [Cleanup] Remove any dead code from the split
+- [x] [impl] [Analysis] Review all usages of `Session.send` in tests to confirm scope
+- [x] [impl] [Refactor] Split `Session` trait: `send(prompt: String): Unit` + `stream(): Flow[Message]`
+- [x] [impl] [Refactor] Split `SessionProcess.send` into `send` (stdin write) and `stream` (stdout read + emit)
+- [x] [impl] [Test] Update `SessionTest.scala` call sites: `send` then `stream`
+- [x] [impl] [Test] Update `SessionIntegrationTest.scala` call sites
+- [x] [impl] [Test] Update `SessionE2ETest.scala` call sites
+- [x] [impl] [Verify] Run all tests (`./mill __.test`), ensure nothing broke
+- [x] [impl] [Cleanup] Remove any dead code from the split
 
 ## Verification
 
-- [ ] All existing tests pass
-- [ ] `Session` trait has separate `send` and `stream` methods
-- [ ] `send` returns `Unit`, `stream` returns `Flow[Message]`
-- [ ] No regressions in functionality
+- [x] All existing tests pass
+- [x] `Session` trait has separate `send` and `stream` methods
+- [x] `send` returns `Unit`, `stream` returns `Flow[Message]`
+- [x] No regressions in functionality
 - [ ] Direct API ClaudeCode.session factory still works

@@ -51,7 +51,8 @@ class SessionIntegrationTest extends munit.FunSuite:
       val options = SessionOptions().withClaudeExecutable(script.toString)
       val session = ClaudeCode.session(options)
       try
-        val messages = session.send("What is the answer?").runToList()
+        session.send("What is the answer?")
+        val messages = session.stream().runToList()
 
         // Should have assistant + result
         assertEquals(messages.length, 2)
@@ -108,7 +109,8 @@ class SessionIntegrationTest extends munit.FunSuite:
       val options = SessionOptions().withClaudeExecutable(script.toString)
       val session = ClaudeCode.session(options)
       try
-        val _ = session.send("Hello from test").runToList()
+        session.send("Hello from test")
+        val _ = session.stream().runToList()
       finally session.close()
 
       val capturedLines = Files.readAllLines(captureFile)
@@ -204,7 +206,8 @@ class SessionIntegrationTest extends munit.FunSuite:
       val options = SessionOptions().withClaudeExecutable(script.toString)
       val session = ClaudeCode.session(options)
       try
-        val messages = session.send("test").runToList()
+        session.send("test")
+        val messages = session.stream().runToList()
 
         assert(
           messages.exists(_ == KeepAliveMessage),
@@ -259,7 +262,8 @@ class SessionIntegrationTest extends munit.FunSuite:
       val claude = ClaudeCode.concurrent
       val session = claude.session(options)
       try
-        val messages = session.send("factory test").runToList()
+        session.send("factory test")
+        val messages = session.stream().runToList()
 
         assert(
           messages.exists(_.isInstanceOf[AssistantMessage]),
@@ -315,7 +319,8 @@ class SessionIntegrationTest extends munit.FunSuite:
         // Init message is consumed before any send
         assertEquals(session.sessionId, initSessionId)
 
-        val turn1Messages = session.send("First question").runToList()
+        session.send("First question")
+        val turn1Messages = session.stream().runToList()
         assertEquals(turn1Messages.length, 2)
         turn1Messages.head match
           case AssistantMessage(content) =>
@@ -328,7 +333,8 @@ class SessionIntegrationTest extends munit.FunSuite:
 
         assertEquals(session.sessionId, turn1SessionId)
 
-        val turn2Messages = session.send("Second question").runToList()
+        session.send("Second question")
+        val turn2Messages = session.stream().runToList()
         assertEquals(turn2Messages.length, 2)
         turn2Messages.head match
           case AssistantMessage(content) =>
@@ -383,8 +389,10 @@ class SessionIntegrationTest extends munit.FunSuite:
       val session = ClaudeCode.session(options)
       try
         assertEquals(session.sessionId, initSessionId)
-        val _ = session.send("Prompt one").runToList()
-        val _ = session.send("Prompt two").runToList()
+        session.send("Prompt one")
+        val _ = session.stream().runToList()
+        session.send("Prompt two")
+        val _ = session.stream().runToList()
       finally session.close()
 
       val lines = Files.readAllLines(captureFile)
@@ -451,7 +459,8 @@ class SessionIntegrationTest extends munit.FunSuite:
       val options = SessionOptions().withClaudeExecutable(script.toString)
       val session = ClaudeCode.session(options)
       try
-        val turn1Messages = session.send("Short turn").runToList()
+        session.send("Short turn")
+        val turn1Messages = session.stream().runToList()
         assertEquals(
           turn1Messages.length,
           2,
@@ -470,7 +479,8 @@ class SessionIntegrationTest extends munit.FunSuite:
           "Turn 1 must not contain KeepAliveMessage"
         )
 
-        val turn2Messages = session.send("Verbose turn").runToList()
+        session.send("Verbose turn")
+        val turn2Messages = session.stream().runToList()
         assertEquals(
           turn2Messages.length,
           4,

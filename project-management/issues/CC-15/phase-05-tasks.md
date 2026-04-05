@@ -2,7 +2,7 @@
 
 ## Refactoring
 
-- [ ] [impl] Refactoring R1: Split direct Session.send into send + stream (CQS) — see `refactor-phase-05-R1.md`
+- [x] [impl] Refactoring R1: Split direct Session.send into send + stream (CQS) — see `refactor-phase-05-R1.md`
 
 ## Setup
 

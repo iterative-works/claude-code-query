@@ -197,3 +197,46 @@ M  direct/test/src/works/iterative/claude/direct/SessionE2ETest.scala
 ```
 
 ---
+
+### Refactoring R1: Split Session.send into send + stream (CQS) (2026-04-05)
+
+**Trigger:** Comparison with the V2 Claude Agent SDK revealed our `send()` combines a command (write prompt to stdin) and a query (read response stream) in one method, violating command-query separation. The V2 SDK separates these as `send()` (void) and `stream()` (async generator).
+
+**What changed:**
+- `direct/src/.../Session.scala` — trait split: `send(prompt: String): Flow[Message]` → `send(prompt: String): Unit` + `stream(): Flow[Message]`
+- `direct/src/.../internal/cli/SessionProcess.scala` — implementation split: stdin write separated from stdout reading loop
+- `direct/test/src/.../SessionTest.scala` — all call sites updated from `session.send(x).runToList()` to `session.send(x); session.stream().runToList()`
+- `direct/test/src/.../SessionIntegrationTest.scala` — same call site pattern update
+- `direct/test/src/.../SessionE2ETest.scala` — same call site pattern update
+
+**Before → After:**
+- `session.send("prompt").forEach(...)` → `session.send("prompt"); session.stream().forEach(...)`
+- `send` no longer returns a value; `stream` is a separate query method
+- Internal mechanics unchanged: stdin writing, stdout reading, session ID updates, stderr capture all preserved
+
+**Patterns applied:**
+- Command-Query Separation (CQS): `send` is a command (side effect, returns Unit), `stream` is a query (returns data, no side effect beyond reading)
+
+**Testing:**
+- Tests updated: 15 call sites across 3 test files
+- All 193 direct tests passing, no regressions
+- No new tests added (mechanical refactoring — same assertions, different call patterns)
+
+**Code review:**
+- Iterations: 1
+- Review file: review-refactor-05-R1-20260405-144725.md
+- Skills applied: style, testing, scala3, composition
+- Composition reviewer raised design concern about CQS split breaking composability — triaged as deliberate decision aligning with V2 SDK direction
+- Warnings addressed: duplicate Scaladoc removed, dead `caught != null` assertion removed, PURPOSE comment updated
+- Deferred to Phase 6: `stream()` without `send()` guard, `close()` without consuming stream test
+
+**Files changed:**
+```
+M  direct/src/works/iterative/claude/direct/Session.scala
+M  direct/src/works/iterative/claude/direct/internal/cli/SessionProcess.scala
+M  direct/test/src/works/iterative/claude/direct/SessionTest.scala
+M  direct/test/src/works/iterative/claude/direct/SessionIntegrationTest.scala
+M  direct/test/src/works/iterative/claude/direct/SessionE2ETest.scala
+```
+
+---

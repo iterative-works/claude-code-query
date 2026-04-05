@@ -38,8 +38,8 @@ class SessionE2ETest extends munit.FunSuite:
       val options = SessionOptions()
       val session = ClaudeCode.session(options)
       try
-        val messages =
-          session.send("What is 1+1? Reply with just the number.").runToList()
+        session.send("What is 1+1? Reply with just the number.")
+        val messages = session.stream().runToList()
 
         assert(messages.nonEmpty, "Expected messages from real CLI session")
         assert(
@@ -62,17 +62,13 @@ class SessionE2ETest extends munit.FunSuite:
       val options = SessionOptions()
       val session = ClaudeCode.session(options)
       try
-        val _ =
-          session
-            .send("Remember the number 42. Reply only with 'OK'.")
-            .runToList()
+        session.send("Remember the number 42. Reply only with 'OK'.")
+        val _ = session.stream().runToList()
 
-        val secondTurnMessages =
-          session
-            .send(
-              "What number did I ask you to remember? Reply with just the number."
-            )
-            .runToList()
+        session.send(
+          "What number did I ask you to remember? Reply with just the number."
+        )
+        val secondTurnMessages = session.stream().runToList()
 
         val assistantMessages =
           secondTurnMessages.collect { case a: AssistantMessage => a }
@@ -100,8 +96,8 @@ class SessionE2ETest extends munit.FunSuite:
       val options = SessionOptions()
       val session = ClaudeCode.session(options)
       try
-        val _ =
-          session.send("What is 1+1? Reply with just the number.").runToList()
+        session.send("What is 1+1? Reply with just the number.")
+        val _ = session.stream().runToList()
 
         assert(
           session.sessionId != "pending",
@@ -125,12 +121,12 @@ class SessionE2ETest extends munit.FunSuite:
       val options = SessionOptions()
       val session = ClaudeCode.session(options)
       try
-        val _ =
-          session.send("What is 1+1? Reply with just the number.").runToList()
+        session.send("What is 1+1? Reply with just the number.")
+        val _ = session.stream().runToList()
         val afterFirstTurn = session.sessionId
 
-        val _ =
-          session.send("What is 2+2? Reply with just the number.").runToList()
+        session.send("What is 2+2? Reply with just the number.")
+        val _ = session.stream().runToList()
         val afterSecondTurn = session.sessionId
 
         assert(
