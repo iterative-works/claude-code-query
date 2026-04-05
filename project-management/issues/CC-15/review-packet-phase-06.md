@@ -1,6 +1,6 @@
 ---
-generated_from: 6a52a33a8991f1f83a658b9d3ef4a431befafaed
-generated_at: 2026-04-05T14:33:05Z
+generated_from: ca775206d06d33158507ea3203808bd2df83b5b5
+generated_at: 2026-04-05T16:33:59Z
 branch: CC-15-phase-06
 issue_id: CC-15
 phase: 6
@@ -16,158 +16,182 @@ files_analyzed:
   - effectful/test/src/works/iterative/claude/effectful/SessionErrorTest.scala
 ---
 
-# Review Packet: Phase 6 - Error handling - process crash and malformed JSON
+# Review Packet: Phase 6 - Error Handling (Process Crash and Malformed JSON)
 
 ## Goals
 
-This phase hardens both the direct (Ox) and effectful (cats-effect/fs2) session APIs against failure conditions: unexpected process death and malformed JSON on stdout. Before this phase, a process crash mid-turn would silently end the stream without signalling an error, and a single malformed JSON line in the effectful API would kill the entire stdout reader fiber.
+This phase hardens the session API by making error conditions surface as typed
+`CLIError` values rather than raw exceptions or silent incomplete streams.
 
 Key objectives:
-- Add `SessionProcessDied` and `SessionClosedError` to the `CLIError` hierarchy so callers receive typed, actionable errors instead of raw `IOException`s or silent stream truncation
-- In the direct API: check process liveness before `send`, detect unexpected EOF in `stream` (stdout closed before `ResultMessage`), and make `close()` idempotent
-- In the effectful API: check the alive ref before enqueuing to stdin, fix the stdout reader to log-and-skip malformed JSON instead of raising it as a fatal error, and propagate process-death through `pendingErrorRef` so `stream` can raise it after seeing the EOF sentinel
-- Add `SessionMockCliScript` helpers for crash and malformed-JSON scenarios and provide comprehensive unit + integration test coverage for all error paths in both APIs
+
+- Add two new error types to the `CLIError` hierarchy: `SessionProcessDied`
+  (process crashed) and `SessionClosedError` (send after explicit close)
+- Direct API: detect process death before writing to stdin and detect unexpected
+  stdout EOF mid-turn (before `ResultMessage`)
+- Direct API: make `close()` idempotent
+- Effectful API: fix a bug where a single malformed JSON line would kill the
+  entire stdout reader fiber; change to log-and-skip to match the direct API
+- Effectful API: detect process death in `send` via an `aliveRef`, and surface
+  process-death errors from `stream` via a `pendingErrorRef` set by the stdout
+  reader fiber
+- Ensure all error paths carry the exit code and stderr context where available
 
 ## Scenarios
 
-- [ ] `send` after `close()` throws `SessionClosedError` with a message containing "closed"
-- [ ] `close()` is idempotent — calling it twice does not throw
-- [ ] `send` to a dead process throws `SessionProcessDied` (direct)
+- [ ] `send` after `close()` throws `SessionClosedError` carrying the session ID (direct)
+- [ ] `close()` called twice does not throw (idempotent)
+- [ ] `send` to a dead process throws `SessionProcessDied` with an exit code (direct)
+- [ ] `stream` raises `SessionProcessDied` when the process exits mid-turn before `ResultMessage` (direct)
+- [ ] Malformed JSON line mid-turn is skipped; subsequent valid messages and `ResultMessage` arrive normally (direct)
 - [ ] `send` to a dead process raises `SessionProcessDied` in IO (effectful)
-- [ ] `stream` raises `SessionProcessDied` when the process exits mid-turn before a `ResultMessage` is received (direct)
-- [ ] `stream` raises `SessionProcessDied` when the process exits mid-turn before a `ResultMessage` is received (effectful)
-- [ ] A malformed JSON line mid-turn is logged and skipped; the stream completes normally with valid messages (direct)
-- [ ] A malformed JSON line mid-turn is logged and skipped; valid messages arrive (effectful) — fixes previous behavior where `IO.raiseError` terminated the stdout reader
-- [ ] Multiple malformed JSON lines do not accumulate errors; all valid messages arrive (direct)
-- [ ] Session remains functional (valid `ResultMessage` received) after a malformed JSON line
-- [ ] Process crash mid-turn surfaces `SessionProcessDied` with the correct exit code (integration, direct + effectful)
-- [ ] Process crash between turns: second `send` raises `SessionProcessDied` (integration, direct + effectful)
-- [ ] Malformed JSON recovery with a mock script: valid messages still arrive (integration, direct + effectful)
+- [ ] `stream` raises `SessionProcessDied` when the process exits mid-turn before `ResultMessage` (effectful)
+- [ ] Malformed JSON line is logged and skipped; valid messages in the same turn arrive (effectful)
+- [ ] Process crash between turns: second `send` raises `SessionProcessDied` carrying the exit code (both APIs)
+- [ ] Multiple malformed JSON lines do not accumulate errors; all valid messages arrive
 - [ ] Resource cleanup completes without hanging after process dies (effectful)
 
 ## Entry Points
 
 | File | Method/Class | Why Start Here |
 |------|--------------|----------------|
-| `core/src/works/iterative/claude/core/CLIError.scala` | `SessionProcessDied`, `SessionClosedError` | New error types added to the sealed hierarchy; understand the typed error surface first |
-| `direct/src/works/iterative/claude/direct/internal/cli/SessionProcess.scala` | `send()`, `stream()`, `close()` | Core direct implementation with liveness check, EOF detection, and idempotent close |
-| `effectful/src/works/iterative/claude/effectful/internal/cli/SessionProcess.scala` | `startStdoutReader`, `SessionImpl.send`, `SessionImpl.stream` | Effectful implementation; `startStdoutReader` contains the malformed-JSON fix and exit-code detection |
-| `direct/test/src/works/iterative/claude/direct/internal/testing/SessionMockCliScript.scala` | `createCrashMidTurnScript`, `createCrashBetweenTurnsScript`, `createMalformedJsonMidTurnScript`, `createImmediateExitScript` | New mock script factories that back all error-scenario tests |
+| `core/src/works/iterative/claude/core/CLIError.scala` | `SessionProcessDied`, `SessionClosedError` | New error types; defines what callers catch |
+| `direct/src/works/iterative/claude/direct/internal/cli/SessionProcess.scala` | `send()`, `stream()`, `close()` | All three methods changed; liveness logic is here |
+| `effectful/src/works/iterative/claude/effectful/internal/cli/SessionProcess.scala` | `startStdoutReader`, `SessionImpl.send`, `SessionImpl.stream` | Bug fix (malformed JSON) and new liveness/error-propagation machinery |
+| `direct/test/src/works/iterative/claude/direct/internal/testing/SessionMockCliScript.scala` | `createCrashMidTurnScript`, `createCrashBetweenTurnsScript`, `createImmediateExitScript` | New script builders used by all error tests |
 
 ## Diagrams
 
-### Error propagation — direct API
+### Error Type Hierarchy
 
 ```
-send("prompt")
+CLIError (sealed trait)
+├── CLINotFoundError
+├── ProcessError
+├── ProcessExecutionError
+├── JsonParsingError
+├── ProcessTimeoutError
+├── ConfigurationError
+├── EnvironmentValidationError
+├── SessionProcessDied(exitCode: Option[Int], stderr: String)   ← NEW
+└── SessionClosedError(sessionId: String)                        ← NEW
+```
+
+### Direct API: Process Liveness Check Flow
+
+```
+send(prompt)
   │
-  ├─ alive.get() == false ──► throw SessionClosedError
-  ├─ !process.isAlive ──────► alive.set(false); throw SessionProcessDied(exitCode, stderr)
+  ├─ alive == false ──→ throw SessionClosedError(sessionId)
+  │
+  ├─ !process.isAlive ──→ alive=false → throw SessionProcessDied(exitCode, stderr)
+  │
   └─ write to stdinWriter
-       └─ IOException ───────► alive.set(false); throw SessionProcessDied(exitCode, msg)
+       │
+       └─ IOException ──→ alive=false → throw SessionProcessDied(exitCode, e.getMessage)
 
 stream()
   │
-  └─ loop: stdoutReader.readLine()
-       ├─ null (EOF) and resultSeen == true ──► normal end-of-turn (healthy close)
-       ├─ null (EOF) and resultSeen == false ─► alive.set(false);
-       │                                        throw SessionProcessDied(exitCode, stderr)
-       ├─ Right(Some(ResultMessage)) ──────────► emit; resultSeen = true; done = true
-       ├─ Right(Some(msg)) ────────────────────► emit; continue
-       ├─ Right(None) ─────────────────────────► continue (empty/filtered line)
-       └─ Left(error) ─────────────────────────► logger.error; continue (log and skip)
+  ├─ readLine() → line     ──→ parse, emit, check for ResultMessage (resultSeen=true)
+  │
+  └─ readLine() == null (EOF)
+       │
+       ├─ resultSeen == true  ──→ normal end (process exited cleanly after turn)
+       │
+       └─ resultSeen == false ──→ alive=false → throw SessionProcessDied(exitCode, stderr)
+
+close()
+  │
+  └─ alive.compareAndSet(true→false)
+       ├─ true  ──→ close stdinWriter, waitFor(5s), close stdoutReader
+       └─ false ──→ log "already closed", return
 ```
 
-### Error propagation — effectful API
+### Effectful API: Error Propagation via Refs
 
 ```
-SessionImpl.send(prompt)
-  │
-  ├─ aliveRef.get == false ──► IO.raiseError(pendingError or SessionProcessDied(None,...))
-  └─ offer SDKUserMessage to stdinQueue
+SessionProcess Resource contains:
+  aliveRef:       Ref[IO, Boolean]           (true while process is running)
+  pendingErrorRef: Ref[IO, Option[CLIError]] (set by stdout reader on bad exit)
+  messageQueue:   Queue[IO, Option[Message]] (None = EOF sentinel)
 
-startStdoutReader (background fiber)
-  │
-  └─ stdout lines stream
-       ├─ Left(err) [malformed JSON] ─────► logger.warn; as(None) ─► filtered out (FIXED)
-       ├─ Right(Some(ResultMessage)) ─────► sessionIdRef.set; offer Some(msg)
-       ├─ Right(Some(msg)) ───────────────► offer Some(msg)
-       └─ stdout EOF (stream complete)
-            └─ exitValue attempt
-                 ├─ non-zero ─────────────► aliveRef.set(false);
-                 │                          pendingErrorRef.set(Some(SessionProcessDied))
-                 └─ zero / error ──────────► no-op
-            └─ guarantee: messageQueue.offer(None)  [EOF sentinel]
+startStdoutReader (background fiber):
+  ┌──────────────────────────────────────────────────────┐
+  │ for each stdout line:                                │
+  │   Left(parseError) ──→ log.warn + skip (was raiseError, now fixed) │
+  │   Right(Some(msg)) ──→ queue.offer(Some(msg))        │
+  │   Right(None)      ──→ discard                       │
+  │                                                      │
+  │ on stream complete (.flatMap after .drain):          │
+  │   aliveRef.set(false)                                │
+  │   exitValue.attempt:                                 │
+  │     Right(code != 0) ──→ pendingErrorRef.set(Some(SessionProcessDied(code,""))) │
+  │     _               ──→ IO.unit                     │
+  │                                                      │
+  │ .guarantee: queue.offer(None)  ← always signals EOF │
+  └──────────────────────────────────────────────────────┘
 
-SessionImpl.stream
-  │
-  └─ fromQueueNoneTerminated(messageQueue)
-       ├─ takeThrough(!_.isInstanceOf[ResultMessage])
-       └─ onFinalize:
-            └─ resultSeenRef.get == false
-                 └─ pendingErrorRef.get
-                      ├─ Some(err) ──────► IO.raiseError(err)
-                      └─ None ───────────► IO.unit
+SessionImpl.send:
+  aliveRef.get
+    false ──→ pendingErrorRef.get
+               Some(err) ──→ IO.raiseError(err)
+               None      ──→ IO.raiseError(SessionProcessDied(None, ""))
+    true  ──→ offer to stdinQueue (normal path)
+
+SessionImpl.stream:
+  resultSeenRef = Ref(false)
+  fromQueueNoneTerminated(messageQueue)
+    .evalTap { ResultMessage ──→ resultSeenRef.set(true) }
+    .takeThrough(!_.isResultMessage)
+    .onFinalize:
+      resultSeenRef.get
+        true  ──→ IO.unit (normal completion)
+        false ──→ pendingErrorRef.get
+                   Some(err) ──→ IO.raiseError(err)
+                   None      ──→ IO.unit
 ```
-
-### `pendingErrorRef` — bridge between stdout reader fiber and stream consumer
-
-The stdout reader fiber writes a `CLIError` into `pendingErrorRef` when the process exits with a non-zero code. The `stream` consumer reads it in the `onFinalize` hook when no `ResultMessage` was seen before the EOF sentinel. This avoids changing the queue element type (keeping `Queue[IO, Option[Message]]`) while still surfacing process-death errors to the caller.
 
 ## Test Summary
 
-### Unit tests — Direct (`SessionErrorTest`)
+### New Tests
 
-| # | Test | Type |
-|---|------|------|
-| E1 | `send after close() throws SessionClosedError` | Unit |
-| E2 | `close() is idempotent - calling it twice does not throw` | Unit |
-| E3 | `send to a dead process throws SessionProcessDied` | Unit |
-| E4 | `stream raises SessionProcessDied when process exits mid-turn` | Unit |
-| E5 | `malformed JSON line mid-turn is skipped and stream completes normally` | Unit |
-| E6 | `session remains functional after a malformed JSON line` | Unit |
+| Test File | Type | Scenarios Covered |
+|-----------|------|-------------------|
+| `direct/test/.../SessionErrorTest.scala` | Unit | `send` after `close()` → `SessionClosedError`; idempotent `close()`; `send` to dead process; `stream` mid-turn crash; malformed JSON skipped; session functional after bad JSON |
+| `direct/test/.../SessionErrorIntegrationTest.scala` | Integration | crash mid-turn with exit code 42 (verified in error); crash between turns; malformed JSON recovery; multiple bad JSON lines |
+| `effectful/test/.../SessionErrorTest.scala` | Unit | `send` to dead process; `stream` mid-turn crash; malformed JSON skipped; dead-process with exit code 0 (pendingError=None branch) |
+| `effectful/test/.../SessionErrorIntegrationTest.scala` | Integration | crash mid-turn; crash between turns with exit code; malformed JSON recovery; Resource cleanup without hanging |
 
-### Integration tests — Direct (`SessionErrorIntegrationTest`)
+### Mock Script Builders Added
 
-| # | Test | Type |
-|---|------|------|
-| I1 | `process crash mid-turn: stream() raises SessionProcessDied with exit code` | Integration |
-| I2 | `process crash between turns: second send raises SessionProcessDied` | Integration |
-| I3 | `malformed JSON recovery: bad JSON line followed by valid messages; valid messages arrive` | Integration |
-| I4 | `multiple malformed JSON lines do not accumulate errors; all valid messages arrive` | Integration |
+| Builder | Simulates |
+|---------|-----------|
+| `createImmediateExitScript(exitCode)` | Process exits before reading any stdin |
+| `createCrashMidTurnScript(exitCode)` | Reads one stdin line, emits partial assistant message, exits without `ResultMessage` |
+| `createCrashBetweenTurnsScript(exitCode)` | Completes turn 1 with `ResultMessage`, exits before turn 2 |
+| `createMalformedJsonMidTurnScript()` | Valid assistant message, then `{bad json: not valid}`, then valid `ResultMessage` |
 
-### Unit tests — Effectful (`SessionErrorTest`)
+### Existing Tests
 
-| # | Test | Type |
-|---|------|------|
-| E1 | `send to a dead process raises SessionProcessDied in IO` | Unit |
-| E2 | `stream raises SessionProcessDied when process exits mid-turn` | Unit |
-| E3 | `malformed JSON line is logged and skipped; valid messages arrive` | Unit |
-| E4 | `session remains functional after a malformed JSON line - ResultMessage arrives` | Unit |
+The existing `SessionTest.scala` was updated to narrow the caught exception type
+from `Exception` to `SessionClosedError` in the post-`close()` test, confirming
+the typed error replaces the previous untyped exception.
 
-### Integration tests — Effectful (`SessionErrorIntegrationTest`)
-
-| # | Test | Type |
-|---|------|------|
-| I1 | `process crash mid-turn: stream raises SessionProcessDied` | Integration |
-| I2 | `process crash between turns: second send raises SessionProcessDied` | Integration |
-| I3 | `malformed JSON recovery: bad JSON line followed by valid messages; valid messages arrive` | Integration |
-| I4 | `Resource cleanup completes without hanging after process dies` | Integration |
-
-### Existing tests (regression coverage)
-
-`SessionTest` (direct) exercises the full happy-path session lifecycle including multi-turn conversation and session ID propagation; these tests continue to pass with no changes to the test file beyond minor cleanup.
+No other existing tests were modified. All query-mode and session-mode tests are
+expected to continue passing.
 
 ## Files Changed
 
 | File | Change |
 |------|--------|
-| `core/src/works/iterative/claude/core/CLIError.scala` | Added `SessionProcessDied(exitCode: Option[Int], stderr: String)` and `SessionClosedError(sessionId: String)` to the sealed `CLIError` hierarchy |
-| `direct/src/works/iterative/claude/direct/internal/cli/SessionProcess.scala` | Added `alive: AtomicBoolean`; `send()` checks both `alive` flag and `process.isAlive`, wraps `IOException` as `SessionProcessDied`; `stream()` tracks `resultSeen` and throws `SessionProcessDied` on unexpected EOF; `close()` made idempotent via `compareAndSet`; added `captureRemainingStderr()` helper |
-| `effectful/src/works/iterative/claude/effectful/internal/cli/SessionProcess.scala` | Added `aliveRef: Ref[IO, Boolean]` and `pendingErrorRef: Ref[IO, Option[CLIError]]`; `startStdoutReader` changed from `IO.raiseError` on parse error to log-and-skip; stdout completion checks exit code and writes to `pendingErrorRef`; `SessionImpl.send` checks `aliveRef` before enqueuing; `SessionImpl.stream` checks `pendingErrorRef` in `onFinalize` when no `ResultMessage` was seen |
-| `direct/test/src/works/iterative/claude/direct/internal/testing/SessionMockCliScript.scala` | Added `createImmediateExitScript`, `createCrashMidTurnScript`, `createCrashBetweenTurnsScript`, `createMalformedJsonMidTurnScript`; added private helpers `generateCrashMidTurnScript` and `generateCrashBetweenTurnsScript` |
-| `direct/test/src/works/iterative/claude/direct/SessionErrorTest.scala` | New file: 6 unit tests for direct API error scenarios |
-| `direct/test/src/works/iterative/claude/direct/SessionErrorIntegrationTest.scala` | New file: 4 integration tests for direct API error scenarios |
-| `direct/test/src/works/iterative/claude/direct/SessionTest.scala` | Minor cleanup only (no logic changes) |
-| `effectful/test/src/works/iterative/claude/effectful/SessionErrorTest.scala` | New file: 4 unit tests for effectful API error scenarios |
-| `effectful/test/src/works/iterative/claude/effectful/SessionErrorIntegrationTest.scala` | New file: 4 integration tests for effectful API error scenarios |
+| `core/src/works/iterative/claude/core/CLIError.scala` | Added `SessionProcessDied` and `SessionClosedError` case classes |
+| `direct/src/works/iterative/claude/direct/internal/cli/SessionProcess.scala` | Liveness flag, guarded `send`/`close`, mid-turn EOF detection in `stream`, `captureRemainingStderr`, `underlyingProcess` accessor for tests |
+| `effectful/src/works/iterative/claude/effectful/internal/cli/SessionProcess.scala` | `aliveRef`, `pendingErrorRef`, malformed JSON fix in `startStdoutReader`, liveness check in `send`, error check in `stream.onFinalize` |
+| `direct/test/src/works/iterative/claude/direct/internal/testing/SessionMockCliScript.scala` | Four new script builders for error scenarios |
+| `direct/test/src/works/iterative/claude/direct/SessionErrorTest.scala` | New — direct unit tests |
+| `direct/test/src/works/iterative/claude/direct/SessionErrorIntegrationTest.scala` | New — direct integration tests |
+| `direct/test/src/works/iterative/claude/direct/SessionTest.scala` | Narrowed caught exception type in post-close test |
+| `effectful/test/src/works/iterative/claude/effectful/SessionErrorTest.scala` | New — effectful unit tests |
+| `effectful/test/src/works/iterative/claude/effectful/SessionErrorIntegrationTest.scala` | New — effectful integration tests |
+| `project-management/issues/CC-15/phase-06-tasks.md` | All tasks marked complete |
+| `project-management/issues/CC-15/review-state.json` | Updated |
