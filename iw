@@ -85,16 +85,7 @@ main() {
             echo "Error: IW_HOME set but $iw_run not found" >&2
             exit 1
         fi
-        # Detect directory structure: dev (.iw/commands/) vs release (commands/)
-        local commands_dir core_dir
-        if [ -d "$IW_HOME/.iw/commands" ]; then
-            commands_dir="$IW_HOME/.iw/commands"
-            core_dir="$IW_HOME/.iw/core"
-        else
-            commands_dir="$IW_HOME/commands"
-            core_dir="$IW_HOME/core"
-        fi
-        IW_PROJECT_DIR="$SCRIPT_DIR" IW_COMMANDS_DIR="$commands_dir" IW_CORE_DIR="$core_dir" exec "$iw_run" "$@"
+        IW_PROJECT_DIR="$SCRIPT_DIR" exec "$iw_run" "$@"
     fi
 
     # Handle update command before delegation
