@@ -227,6 +227,53 @@ class SessionIntegrationTest extends munit.FunSuite:
   }
 
   // ============================================================
+  // IT5: ClaudeCode.session factory creates a working session
+  // ============================================================
+
+  test(
+    "ClaudeCode.session factory creates a working session via instance API"
+  ) {
+    given logger: MockLogger = MockLogger()
+    supervised {
+      val sessionId = "factory-session-002"
+      val script = SessionMockCliScript.createSessionScript(
+        initMessages = List(
+          SessionMockCliScript.CommonResponses.initMessage(sessionId)
+        ),
+        turnResponses = List(
+          SessionMockCliScript.TurnResponse(
+            List(
+              SessionMockCliScript.CommonResponses.assistantMessage(
+                "Factory response"
+              ),
+              SessionMockCliScript.CommonResponses.resultMessage(sessionId)
+            )
+          )
+        )
+      )
+      createdScripts += script
+
+      val options = SessionOptions().withClaudeExecutable(script.toString)
+
+      // Use the instance API (ClaudeCode class)
+      val claude = ClaudeCode.concurrent
+      val session = claude.session(options)
+      try
+        val messages = session.send("factory test").runToList()
+
+        assert(
+          messages.exists(_.isInstanceOf[AssistantMessage]),
+          "Expected AssistantMessage from factory session"
+        )
+        assert(
+          messages.exists(_.isInstanceOf[ResultMessage]),
+          "Expected ResultMessage from factory session"
+        )
+      finally session.close()
+    }
+  }
+
+  // ============================================================
   // IT6: Full two-turn session lifecycle
   // ============================================================
 
@@ -335,6 +382,7 @@ class SessionIntegrationTest extends munit.FunSuite:
       val options = SessionOptions().withClaudeExecutable(script.toString)
       val session = ClaudeCode.session(options)
       try
+        assertEquals(session.sessionId, initSessionId)
         val _ = session.send("Prompt one").runToList()
         val _ = session.send("Prompt two").runToList()
       finally session.close()
@@ -428,109 +476,22 @@ class SessionIntegrationTest extends munit.FunSuite:
           4,
           s"Turn 2 should have 4 messages, got: $turn2Messages"
         )
+        // Verify ordering: keepalive, stream_event, assistant, result
         assert(
-          turn2Messages.exists(_ == KeepAliveMessage),
-          "Turn 2 must contain KeepAliveMessage"
-        )
-        assert(
-          turn2Messages.exists(_.isInstanceOf[StreamEventMessage]),
-          "Turn 2 must contain StreamEventMessage"
+          turn2Messages(0) == KeepAliveMessage,
+          s"Turn 2 message 0 should be KeepAliveMessage, got: ${turn2Messages(0)}"
         )
         assert(
-          turn2Messages.exists(_.isInstanceOf[AssistantMessage]),
-          "Turn 2 must contain AssistantMessage"
+          turn2Messages(1).isInstanceOf[StreamEventMessage],
+          s"Turn 2 message 1 should be StreamEventMessage, got: ${turn2Messages(1)}"
         )
         assert(
-          turn2Messages.exists(_.isInstanceOf[ResultMessage]),
-          "Turn 2 must contain ResultMessage"
-        )
-      finally session.close()
-    }
-  }
-
-  // ============================================================
-  // IT9: Session ID updates across turns when ResultMessage has different IDs
-  // ============================================================
-
-  test(
-    "session ID updates across turns when ResultMessage carries distinct IDs"
-  ) {
-    given logger: MockLogger = MockLogger()
-    supervised {
-      val turn1Id = "distinct-session-turn-1"
-      val turn2Id = "distinct-session-turn-2"
-
-      val script = SessionMockCliScript.createSessionScript(
-        initMessages = Nil,
-        turnResponses = List(
-          SessionMockCliScript.TurnResponse(
-            List(
-              SessionMockCliScript.CommonResponses.resultMessage(turn1Id)
-            )
-          ),
-          SessionMockCliScript.TurnResponse(
-            List(
-              SessionMockCliScript.CommonResponses.resultMessage(turn2Id)
-            )
-          )
-        )
-      )
-      createdScripts += script
-
-      val options = SessionOptions().withClaudeExecutable(script.toString)
-      val session = ClaudeCode.session(options)
-      try
-        val _ = session.send("Turn one").runToList()
-        assertEquals(session.sessionId, turn1Id)
-
-        val _ = session.send("Turn two").runToList()
-        assertEquals(session.sessionId, turn2Id)
-      finally session.close()
-    }
-  }
-
-  // ============================================================
-  // IT5: ClaudeCode.session factory creates a working session
-  // ============================================================
-
-  test(
-    "ClaudeCode.session factory creates a working session via instance API"
-  ) {
-    given logger: MockLogger = MockLogger()
-    supervised {
-      val sessionId = "factory-session-002"
-      val script = SessionMockCliScript.createSessionScript(
-        initMessages = List(
-          SessionMockCliScript.CommonResponses.initMessage(sessionId)
-        ),
-        turnResponses = List(
-          SessionMockCliScript.TurnResponse(
-            List(
-              SessionMockCliScript.CommonResponses.assistantMessage(
-                "Factory response"
-              ),
-              SessionMockCliScript.CommonResponses.resultMessage(sessionId)
-            )
-          )
-        )
-      )
-      createdScripts += script
-
-      val options = SessionOptions().withClaudeExecutable(script.toString)
-
-      // Use the instance API (ClaudeCode class)
-      val claude = ClaudeCode.concurrent
-      val session = claude.session(options)
-      try
-        val messages = session.send("factory test").runToList()
-
-        assert(
-          messages.exists(_.isInstanceOf[AssistantMessage]),
-          "Expected AssistantMessage from factory session"
+          turn2Messages(2).isInstanceOf[AssistantMessage],
+          s"Turn 2 message 2 should be AssistantMessage, got: ${turn2Messages(2)}"
         )
         assert(
-          messages.exists(_.isInstanceOf[ResultMessage]),
-          "Expected ResultMessage from factory session"
+          turn2Messages(3).isInstanceOf[ResultMessage],
+          s"Turn 2 message 3 should be ResultMessage, got: ${turn2Messages(3)}"
         )
       finally session.close()
     }

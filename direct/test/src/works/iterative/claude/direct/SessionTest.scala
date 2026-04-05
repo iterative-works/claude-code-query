@@ -11,19 +11,22 @@ import works.iterative.claude.direct.internal.testing.{
 }
 import io.circe.syntax.*
 import io.circe.parser
-import java.nio.file.Path
+import java.nio.file.{Files, Path}
 
 class SessionTest extends munit.FunSuite:
 
   // Track created mock scripts for cleanup
   private val createdScripts = scala.collection.mutable.ListBuffer[Path]()
+  private val createdFiles = scala.collection.mutable.ListBuffer[Path]()
 
   override def afterEach(context: AfterEach): Unit =
     createdScripts.foreach { path =>
       val _ = MockCliScript.cleanup(path)
       val _ = SessionMockCliScript.cleanup(path)
     }
+    createdFiles.foreach(p => if Files.exists(p) then Files.delete(p))
     createdScripts.clear()
+    createdFiles.clear()
     super.afterEach(context)
 
   // ============================================================
@@ -274,8 +277,8 @@ class SessionTest extends munit.FunSuite:
     supervised {
       val firstTurnSessionId = "session-after-turn-1"
       val captureFile =
-        java.nio.file.Files.createTempFile("stdin-capture-unit-", ".jsonl")
-      createdScripts += captureFile // reuse cleanup list
+        Files.createTempFile("stdin-capture-unit-", ".jsonl")
+      createdFiles += captureFile
 
       val turn1Result =
         s"""{"type":"result","subtype":"conversation_result","duration_ms":100,"duration_api_ms":50,"is_error":false,"num_turns":1,"session_id":"$firstTurnSessionId"}"""
@@ -304,13 +307,12 @@ class SessionTest extends munit.FunSuite:
       finally session.close()
 
       // Verify the second SDKUserMessage sent to stdin contained the first turn's session ID
-      val lines = java.nio.file.Files.readAllLines(captureFile)
+      val lines = Files.readAllLines(captureFile)
       assert(
         lines.size >= 2,
         s"Expected at least 2 stdin lines, got ${lines.size}"
       )
 
-      import io.circe.parser
       val secondLine = lines.get(1)
       val secondJson = parser
         .parse(secondLine)
@@ -389,18 +391,27 @@ class SessionTest extends munit.FunSuite:
         val results = (1 to 3).map { i =>
           val messages = session.send(s"Prompt $i").runToList()
           // Each turn must end with its own ResultMessage
-          val resultMsg = messages.collectFirst { case r: ResultMessage => r }
-          assert(resultMsg.isDefined, s"Turn $i: expected ResultMessage")
+          val resultMsg = messages
+            .collectFirst { case r: ResultMessage => r }
+            .getOrElse(fail(s"Turn $i: expected ResultMessage"))
           assertEquals(
-            resultMsg.get.sessionId,
+            resultMsg.sessionId,
             s"session-turn-$i",
             s"Turn $i: wrong session ID in ResultMessage"
           )
-          // Each turn must have exactly 2 messages (assistant + result)
+          // Each turn must have exactly 2 messages in order: assistant, then result
           assertEquals(
             messages.length,
             2,
             s"Turn $i: expected 2 messages, got ${messages.length}"
+          )
+          assert(
+            messages.head.isInstanceOf[AssistantMessage],
+            s"Turn $i: first message should be AssistantMessage, got ${messages.head}"
+          )
+          assert(
+            messages.last.isInstanceOf[ResultMessage],
+            s"Turn $i: last message should be ResultMessage, got ${messages.last}"
           )
           messages
         }

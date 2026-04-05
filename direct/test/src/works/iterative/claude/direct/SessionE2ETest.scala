@@ -29,15 +29,18 @@ class SessionE2ETest extends munit.FunSuite:
     }
     hasApiKey || hasCredentials
 
+  private def assumeClaudeAvailable(): Unit =
+    assume(isClaudeCliInstalled(), "Test requires Claude CLI to be installed")
+    assume(isNodeJsAvailable(), "Test requires Node.js to be available")
+    assume(
+      hasApiKeyOrCredentials(),
+      "Test requires API key or credentials file"
+    )
+
   test("E2E: real CLI session completes a single turn") {
     given logger: MockLogger = MockLogger()
     supervised {
-      assume(isClaudeCliInstalled(), "Test requires Claude CLI to be installed")
-      assume(isNodeJsAvailable(), "Test requires Node.js to be available")
-      assume(
-        hasApiKeyOrCredentials(),
-        "Test requires API key or credentials file"
-      )
+      assumeClaudeAvailable()
 
       val options = SessionOptions()
       val session = ClaudeCode.session(options)
@@ -61,12 +64,7 @@ class SessionE2ETest extends munit.FunSuite:
   test("E2E: two-turn conversation preserves context across turns") {
     given logger: MockLogger = MockLogger()
     supervised {
-      assume(isClaudeCliInstalled(), "Test requires Claude CLI to be installed")
-      assume(isNodeJsAvailable(), "Test requires Node.js to be available")
-      assume(
-        hasApiKeyOrCredentials(),
-        "Test requires API key or credentials file"
-      )
+      assumeClaudeAvailable()
 
       val options = SessionOptions()
       val session = ClaudeCode.session(options)
@@ -104,12 +102,7 @@ class SessionE2ETest extends munit.FunSuite:
   test("E2E: session ID is a valid non-pending value after first turn") {
     given logger: MockLogger = MockLogger()
     supervised {
-      assume(isClaudeCliInstalled(), "Test requires Claude CLI to be installed")
-      assume(isNodeJsAvailable(), "Test requires Node.js to be available")
-      assume(
-        hasApiKeyOrCredentials(),
-        "Test requires API key or credentials file"
-      )
+      assumeClaudeAvailable()
 
       val options = SessionOptions()
       val session = ClaudeCode.session(options)
@@ -134,12 +127,7 @@ class SessionE2ETest extends munit.FunSuite:
   ) {
     given logger: MockLogger = MockLogger()
     supervised {
-      assume(isClaudeCliInstalled(), "Test requires Claude CLI to be installed")
-      assume(isNodeJsAvailable(), "Test requires Node.js to be available")
-      assume(
-        hasApiKeyOrCredentials(),
-        "Test requires API key or credentials file"
-      )
+      assumeClaudeAvailable()
 
       val options = SessionOptions()
       val session = ClaudeCode.session(options)
@@ -167,6 +155,11 @@ class SessionE2ETest extends munit.FunSuite:
         assert(
           afterSecondTurn.nonEmpty,
           "Session ID should not be empty after second turn"
+        )
+        assertEquals(
+          afterFirstTurn,
+          afterSecondTurn,
+          "Session ID should remain stable across turns in the same session"
         )
       finally session.close()
     }
