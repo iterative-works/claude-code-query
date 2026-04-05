@@ -6,7 +6,7 @@
 
 ## Goals
 
-1. Expose an effectful `Session` trait where `send` returns `Stream[IO, Message]` and the session is acquired as `Resource[IO, Session]`
+1. Expose an effectful `Session` trait with `send(prompt): IO[Unit]` (command) and `stream: Stream[IO, Message]` (query), acquired as `Resource[IO, Session]`
 2. Implement session process management using `fs2.io.process.ProcessBuilder.spawn` with Resource-based cleanup
 3. Add `ClaudeCode.session(SessionOptions): Resource[IO, Session]` factory to the effectful API
 4. Re-export `SessionOptions` in the effectful package object
@@ -17,7 +17,7 @@
 
 ### In scope
 
-- `Session` trait in `effectful` package with `send(prompt: String): Stream[IO, Message]` and `sessionId: IO[String]`
+- `Session` trait in `effectful` package with `send(prompt: String): IO[Unit]`, `stream: Stream[IO, Message]`, and `sessionId: IO[String]`
 - Internal `SessionProcess` implementation using `fs2.io.process.Process[IO]` from `ProcessBuilder.spawn`
 - `Resource[IO, Session]` lifecycle: process start in acquire, process kill + stdin close in release
 - Stdin writing via `process.stdin` pipe (write SDKUserMessage JSON, flush)
@@ -61,14 +61,18 @@ Define `Session` in `effectful/src/works/iterative/claude/effectful/Session.scal
 
 ```scala
 trait Session:
-  def send(prompt: String): Stream[IO, Message]
+  def send(prompt: String): IO[Unit]
+  def stream: Stream[IO, Message]
   def sessionId: IO[String]
 ```
 
 Key differences from the direct `Session`:
-- `send` returns `Stream[IO, Message]` instead of `Flow[Message]`
+- `send` returns `IO[Unit]` instead of `Unit` (effectful command)
+- `stream` returns `Stream[IO, Message]` instead of `Flow[Message]`
 - `sessionId` returns `IO[String]` instead of `String` (since reading a `Ref` is an effect)
 - No `close()` method -- cleanup is handled by the `Resource` finalizer
+
+Note: The direct `Session` trait is being refactored as part of R1 (see Refactoring Decisions) to match this same send/stream separation pattern.
 
 ### 2. Implement SessionProcess
 
@@ -182,7 +186,7 @@ Follow the test patterns established in Phases 3-4, adapted for cats-effect and 
 
 ## Acceptance Criteria
 
-1. `Session` trait exists in `effectful` package with `send(prompt: String): Stream[IO, Message]` and `sessionId: IO[String]`
+1. `Session` trait exists in `effectful` package with `send(prompt: String): IO[Unit]`, `stream: Stream[IO, Message]`, and `sessionId: IO[String]`
 2. `ClaudeCode.session(SessionOptions)(using Logger[IO]): Resource[IO, Session]` factory method works
 3. Resource acquire starts the CLI process; Resource release terminates it
 4. Process cleanup happens on both normal exit and error (Resource finalizer)
@@ -194,3 +198,19 @@ Follow the test patterns established in Phases 3-4, adapted for cats-effect and 
 10. All unit, integration, and E2E tests pass with no compilation warnings
 11. All existing effectful query tests continue to pass (no regressions)
 12. All existing direct session tests continue to pass (no regressions)
+
+## Refactoring Decisions
+
+### R1: Split Session.send into send + stream (CQS) (2026-04-05)
+
+**Trigger:** Comparison with the V2 Claude Agent SDK revealed our `send()` combines a command (write prompt to stdin) and a query (read response stream) in one method, violating command-query separation. The V2 SDK separates these as `send()` → `Promise<void>` and `stream()` → `AsyncGenerator<SDKMessage>`.
+**Decision:** Split `Session.send(prompt): Flow[Message]` into two methods:
+- `send(prompt: String): Unit` — command: writes SDKUserMessage JSON to stdin
+- `stream(): Flow[Message]` — query: reads stdout until ResultMessage
+
+This applies to both the direct Session (refactoring existing code) and the effectful Session (new code, designed this way from the start).
+**Scope:**
+- Files affected: `Session.scala` (trait), `SessionProcess.scala` (impl), `SessionTest.scala`, `SessionIntegrationTest.scala`, `SessionE2ETest.scala`
+- Components: direct Session trait, SessionProcess implementation, all session tests
+- Boundaries: do NOT touch core model types, CLIArgumentBuilder, effectful module, ClaudeCode factory methods
+**Approach:** Mechanical split — extract stdin-write from `send` into a void method, create `stream()` from the stdout-reading portion, update all test call sites from `session.send(x).forEach(...)` to `session.send(x); session.stream().forEach(...)`
