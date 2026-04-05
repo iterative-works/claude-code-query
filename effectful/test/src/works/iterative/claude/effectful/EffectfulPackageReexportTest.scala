@@ -12,6 +12,10 @@ class EffectfulPackageReexportTest extends CatsEffectSuite:
     val opts = QueryOptions.simple("hello")
     assertEquals(opts.prompt, "hello")
 
+  test("effectful.* re-exports SessionOptions"):
+    val opts = SessionOptions.defaults
+    assertEquals(opts.cwd, None)
+
   test("effectful.* re-exports UserMessage"):
     val msg: Message = UserMessage("hello")
     assert(msg.isInstanceOf[UserMessage])

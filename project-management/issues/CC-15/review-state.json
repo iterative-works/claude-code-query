@@ -1,0 +1,61 @@
+{
+  "version": 2,
+  "issue_id": "CC-15",
+  "artifacts": [
+    {
+      "label": "Analysis",
+      "path": "project-management/issues/CC-15/analysis.md",
+      "category": "input"
+    },
+    {
+      "label": "Tasks",
+      "path": "project-management/issues/CC-15/tasks.md",
+      "category": "output"
+    },
+    {
+      "label": "Implementation Log",
+      "path": "project-management/issues/CC-15/implementation-log.md"
+    },
+    {
+      "label": "Release Notes",
+      "path": "project-management/issues/CC-15/release-notes.md"
+    },
+    {
+      "label": "Review Packet",
+      "path": "project-management/issues/CC-15/review-packet.md"
+    }
+  ],
+  "last_updated": "2026-04-05T17:09:32.020167486Z",
+  "status": "all_complete",
+  "display": {
+    "text": "Ready for Final Review",
+    "type": "success"
+  },
+  "badges": [
+    {
+      "label": "Feature",
+      "type": "info"
+    },
+    {
+      "label": "All Phases Complete",
+      "type": "success"
+    }
+  ],
+  "message": "All phases complete - final PR created",
+  "available_actions": [
+    {
+      "id": "view-pr",
+      "label": "View Pull Request",
+      "skill": "external-link"
+    }
+  ],
+  "pr_url": "https://github.com/iterative-works/claude-code-query/pull/29",
+  "git_sha": "d48b24b",
+  "phase_checkpoints": {
+    "6": {
+      "context_sha": "context_sha=8dec061ed906fd118124affbd3a634544ebe3915"
+    }
+  },
+  "needs_attention": true,
+  "activity": "waiting"
+}

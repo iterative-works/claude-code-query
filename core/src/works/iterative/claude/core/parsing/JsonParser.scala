@@ -22,11 +22,13 @@ object JsonParser:
       .get[String]("type")
       .toOption
       .flatMap:
-        case "user"      => parseUserMessage(cursor)
-        case "assistant" => parseAssistantMessage(cursor)
-        case "system"    => parseSystemMessage(json, cursor)
-        case "result"    => parseResultMessage(cursor)
-        case _           => None
+        case "user"         => parseUserMessage(cursor)
+        case "assistant"    => parseAssistantMessage(cursor)
+        case "system"       => parseSystemMessage(json, cursor)
+        case "result"       => parseResultMessage(cursor)
+        case "keep_alive"   => Some(KeepAliveMessage)
+        case "stream_event" => parseStreamEventMessage(json)
+        case _              => None
 
   // Message type parsers - handle specific message formats
   private def parseUserMessage(cursor: io.circe.HCursor): Option[UserMessage] =
@@ -52,6 +54,14 @@ object JsonParser:
       jsonObj <- json.asObject
       data = extractSystemMessageData(jsonObj)
     yield SystemMessage(subtype, data)
+
+  private def parseStreamEventMessage(json: Json): Option[StreamEventMessage] =
+    json.asObject.map { jsonObj =>
+      val data = jsonObj.toMap
+        .filter { case (key, _) => key != "type" }
+        .map { case (key, value) => key -> extractJsonValue(value) }
+      StreamEventMessage(data)
+    }
 
   // Data extraction utilities - low-level JSON value extraction
   private def extractSystemMessageData(
