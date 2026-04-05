@@ -66,14 +66,18 @@
     {
       "label": "Phase 6 Context",
       "path": "project-management/issues/CC-15/phase-06-context.md"
+    },
+    {
+      "label": "Phase 6 Tasks",
+      "path": "project-management/issues/CC-15/phase-06-tasks.md"
     }
   ],
-  "last_updated": "2026-04-05T14:05:09.383526851Z",
-  "status": "context_ready",
+  "last_updated": "2026-04-05T14:06:36.655289737Z",
+  "status": "tasks_ready",
   "display": {
-    "text": "Phase 6: Context Ready",
+    "text": "Phase 6: Tasks Ready",
     "subtext": "Error handling - process crash and malformed JSON",
-    "type": "info"
+    "type": "success"
   },
   "badges": [
     {
@@ -85,12 +89,17 @@
       "type": "warning"
     }
   ],
-  "message": "Phase 6 context ready for review",
+  "message": "Phase 6 tasks ready",
   "available_actions": [
     {
       "id": "view-pr",
       "label": "View Pull Request",
       "skill": "external-link"
+    },
+    {
+      "id": "implement",
+      "label": "Continue",
+      "skill": "ag-implement"
     }
   ],
   "pr_url": "https://github.com/iterative-works/claude-code-query/pull/27",
@@ -101,5 +110,5 @@
     }
   },
   "needs_attention": true,
-  "activity": "working"
+  "activity": "waiting"
 }
