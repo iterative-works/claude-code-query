@@ -4,24 +4,13 @@ package works.iterative.claude.direct
 
 import ox.*
 import works.iterative.claude.core.model.*
-import works.iterative.claude.direct.Logger
-import works.iterative.claude.direct.internal.testing.SessionMockCliScript
+import works.iterative.claude.direct.internal.testing.{
+  MockLogger,
+  SessionMockCliScript
+}
 import java.nio.file.{Files, Path}
 
 class SessionIntegrationTest extends munit.FunSuite:
-
-  class MockLogger extends Logger:
-    var debugMessages: List[String] = List.empty
-    var infoMessages: List[String] = List.empty
-    var warnMessages: List[String] = List.empty
-    var errorMessages: List[String] = List.empty
-
-    def debug(msg: => String): Unit = debugMessages = msg :: debugMessages
-    def info(msg: => String): Unit = infoMessages = msg :: infoMessages
-    def warn(msg: => String): Unit = warnMessages = msg :: warnMessages
-    def error(msg: => String): Unit = errorMessages = msg :: errorMessages
-    def error(msg: => String, exception: Throwable): Unit = errorMessages =
-      s"$msg: ${exception.getMessage}" :: errorMessages
 
   private val createdScripts = scala.collection.mutable.ListBuffer[Path]()
   private val createdFiles = scala.collection.mutable.ListBuffer[Path]()
@@ -120,9 +109,6 @@ class SessionIntegrationTest extends munit.FunSuite:
       try
         val _ = session.send("Hello from test").runToList()
       finally session.close()
-
-      // Give a moment for the file to be flushed
-      Thread.sleep(50)
 
       val capturedLines = Files.readAllLines(captureFile)
       assert(

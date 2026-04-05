@@ -4,9 +4,9 @@ package works.iterative.claude.direct
 
 import ox.*
 import works.iterative.claude.core.model.*
-import works.iterative.claude.direct.Logger
 import works.iterative.claude.direct.internal.testing.{
   MockCliScript,
+  MockLogger,
   SessionMockCliScript
 }
 import io.circe.syntax.*
@@ -14,20 +14,6 @@ import io.circe.parser
 import java.nio.file.Path
 
 class SessionTest extends munit.FunSuite:
-
-  // Mock Logger for testing
-  class MockLogger extends Logger:
-    var debugMessages: List[String] = List.empty
-    var infoMessages: List[String] = List.empty
-    var warnMessages: List[String] = List.empty
-    var errorMessages: List[String] = List.empty
-
-    def debug(msg: => String): Unit = debugMessages = msg :: debugMessages
-    def info(msg: => String): Unit = infoMessages = msg :: infoMessages
-    def warn(msg: => String): Unit = warnMessages = msg :: warnMessages
-    def error(msg: => String): Unit = errorMessages = msg :: errorMessages
-    def error(msg: => String, exception: Throwable): Unit = errorMessages =
-      s"$msg: ${exception.getMessage}" :: errorMessages
 
   // Track created mock scripts for cleanup
   private val createdScripts = scala.collection.mutable.ListBuffer[Path]()
@@ -39,21 +25,6 @@ class SessionTest extends munit.FunSuite:
     }
     createdScripts.clear()
     super.afterEach(context)
-
-  // ============================================================
-  // T1: Session trait compilation test
-  // Verifies the trait compiles with expected method signatures
-  // ============================================================
-
-  test("Session trait compiles with expected method signatures") {
-    // Compile-time check: if Session has the wrong signatures, the type
-    // ascriptions below will cause a compile error.
-    val sendType = classOf[ox.flow.Flow[?]]
-    val closeType = classOf[Unit]
-    val sessionIdType = classOf[String]
-    // Runtime check just confirms we reached this point
-    assert(sendType != null && closeType != null && sessionIdType != null)
-  }
 
   // ============================================================
   // T2: SDKUserMessage stdin encoding test
@@ -233,12 +204,11 @@ class SessionTest extends munit.FunSuite:
   test("close() terminates the underlying process") {
     given logger: MockLogger = MockLogger()
     supervised {
-      // Use a script that sleeps forever (would hang without close)
-      val hangingScript = MockCliScript.createSimpleScript(
-        List(
-          s"""{"type":"result","subtype":"conversation_result","duration_ms":100,"duration_api_ms":50,"is_error":false,"num_turns":1,"session_id":"sess-close-test"}"""
-        ),
-        delayMs = 0
+      // Create a session script that stays alive waiting for stdin (no turnResponses
+      // means it just reads until EOF, simulating a long-lived process)
+      val hangingScript = SessionMockCliScript.createSessionScript(
+        initMessages = Nil,
+        turnResponses = Nil
       )
       createdScripts += hangingScript
 
@@ -246,10 +216,19 @@ class SessionTest extends munit.FunSuite:
         SessionOptions().withClaudeExecutable(hangingScript.toString)
       val session = ClaudeCode.session(options)
 
-      // Close should terminate without hanging
+      // The session wraps a Process — extract it to verify it's terminated after close
+      // We know SessionProcess holds the process, so we verify indirectly:
+      // after close(), sending should fail because stdin is closed
       session.close()
 
-      // If we get here without hanging, close worked
-      assert(true)
+      // Verify the session is no longer usable — send should throw because
+      // the underlying stdin writer is closed
+      val caught = intercept[Exception] {
+        session.send("should fail").runToList()
+      }
+      assert(
+        caught != null,
+        "Expected an exception when sending to a closed session"
+      )
     }
   }

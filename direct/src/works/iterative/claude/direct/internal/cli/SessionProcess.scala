@@ -123,9 +123,8 @@ object SessionProcess:
       new InputStreamReader(process.getInputStream)
     )
 
-    val stderrBuffer = new StringBuilder
     val _ = fork {
-      captureStderr(process, stderrBuffer)
+      captureStderr(process)
     }
 
     val session = new SessionProcess(process, stdinWriter, stdoutReader)
@@ -134,7 +133,9 @@ object SessionProcess:
     // If the process is a long-lived session process, it will emit the init
     // message before waiting for stdin. If no init message arrives (or the
     // process exits quickly), session ID stays "pending".
-    readInitMessages(process, stdoutReader, session)
+    readInitMessages(process, stdoutReader).foreach { id =>
+      session.currentSessionId.set(id)
+    }
 
     session
 
@@ -152,14 +153,20 @@ object SessionProcess:
     * If no init message is found, the session ID remains "pending" and will be
     * updated from the first ResultMessage when `send` is called.
     */
+  /** Reads from stdout to find the session_id in the CLI's init message.
+    *
+    * Returns the extracted session ID if an init message is found within the
+    * timeout, or None if the timeout expires, the process exits, or a non-init
+    * message is encountered first.
+    */
   private def readInitMessages(
       process: Process,
-      reader: BufferedReader,
-      session: SessionProcess
-  )(using logger: Logger): Unit =
+      reader: BufferedReader
+  )(using logger: Logger): Option[String] =
     val deadline = System.currentTimeMillis() + InitReadTimeoutMs
     var linesRead = 0
     var done = false
+    var result: Option[String] = None
     while !done && linesRead < MaxInitLines && System
         .currentTimeMillis() < deadline
     do
@@ -169,9 +176,9 @@ object SessionProcess:
           linesRead += 1
           JsonParser.parseJsonLineWithContext(line, linesRead) match
             case Right(Some(SystemMessage("init", data))) =>
-              data.get("session_id").map(_.toString).foreach { id =>
+              result = data.get("session_id").map(_.toString)
+              result.foreach { id =>
                 logger.info(s"Session ID extracted from init message: $id")
-                session.currentSessionId.set(id)
               }
               done = true
             case Right(Some(_)) =>
@@ -183,6 +190,7 @@ object SessionProcess:
       else if !process.isAlive() then
         done = true // Process already exited — don't wait for init
       else Thread.sleep(InitReadRetryDelayMs) // Wait briefly for init message
+    result
 
   private def configureSessionProcess(
       executablePath: String,
@@ -202,7 +210,7 @@ object SessionProcess:
     }
     pb
 
-  private def captureStderr(process: Process, buffer: StringBuilder)(using
+  private def captureStderr(process: Process)(using
       logger: Logger
   ): Unit =
     val reader =
@@ -211,10 +219,6 @@ object SessionProcess:
       var line: String = null
       while { line = reader.readLine(); line != null } do
         logger.debug(s"session stderr: $line")
-        buffer.synchronized {
-          if buffer.nonEmpty then buffer.append('\n'): Unit
-          buffer.append(line): Unit
-        }
     catch
       case _: InterruptedException =>
         // Interrupted by scope cancellation — kill the process to release the pipe

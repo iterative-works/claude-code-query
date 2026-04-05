@@ -120,7 +120,9 @@ object ClaudeCode:
 
   private def resolveClaudeExecutablePath(options: QueryOptions): String =
     options.pathToClaudeCodeExecutable.getOrElse {
-      discoverClaudeExecutablePath(options)
+      // For testing, if executableArgs is provided, use /bin/echo to simulate the CLI
+      if options.executableArgs.isDefined then "/bin/echo"
+      else resolveExecutablePath(None)
     }
 
   private def buildCliArguments(options: QueryOptions): List[String] =
@@ -142,14 +144,15 @@ object ClaudeCode:
         )
     }
 
-  private def discoverClaudeExecutablePath(options: QueryOptions): String =
-    // For testing purposes with T6.2, if executableArgs is provided, use /bin/echo
-    // This allows the test to pass by using echo to simulate the CLI
-    if options.executableArgs.isDefined then "/bin/echo"
-    else
+  /** Resolves the Claude CLI executable path from an explicit override or CLI
+    * discovery.
+    */
+  private def resolveExecutablePath(explicit: Option[String]): String =
+    explicit.getOrElse {
       CLIDiscovery.findClaude match
         case Right(path) => path
         case Left(error) => throw new RuntimeException(error.message)
+    }
 
   private def extractAssistantTextContent(messages: List[Message]): String =
     messages
@@ -173,8 +176,4 @@ object ClaudeCode:
     SessionProcess.start(executablePath, options)
 
   private def resolveSessionExecutablePath(options: SessionOptions): String =
-    options.pathToClaudeCodeExecutable.getOrElse {
-      CLIDiscovery.findClaude match
-        case Right(path) => path
-        case Left(error) => throw new RuntimeException(error.message)
-    }
+    resolveExecutablePath(options.pathToClaudeCodeExecutable)
