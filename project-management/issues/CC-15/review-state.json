@@ -72,12 +72,12 @@
       "path": "project-management/issues/CC-15/phase-06-tasks.md"
     }
   ],
-  "last_updated": "2026-04-05T14:06:36.655289737Z",
-  "status": "tasks_ready",
+  "last_updated": "2026-04-05T16:36:43.675517045Z",
+  "status": "awaiting_review",
   "display": {
-    "text": "Phase 6: Tasks Ready",
+    "text": "Phase 06: Awaiting Review",
     "subtext": "Error handling - process crash and malformed JSON",
-    "type": "success"
+    "type": "warning"
   },
   "badges": [
     {
@@ -87,9 +87,17 @@
     {
       "label": "Review Needed",
       "type": "warning"
+    },
+    {
+      "label": "In Progress",
+      "type": "info"
+    },
+    {
+      "label": "Review Needed",
+      "type": "warning"
     }
   ],
-  "message": "Phase 6 tasks ready",
+  "message": "Phase 06 implementation started",
   "available_actions": [
     {
       "id": "view-pr",
@@ -100,9 +108,14 @@
       "id": "implement",
       "label": "Continue",
       "skill": "ag-implement"
+    },
+    {
+      "id": "view-pr",
+      "label": "View Pull Request",
+      "skill": "external-link"
     }
   ],
-  "pr_url": "https://github.com/iterative-works/claude-code-query/pull/27",
+  "pr_url": "https://github.com/iterative-works/claude-code-query/pull/28",
   "git_sha": "5aaabb3",
   "phase_checkpoints": {
     "6": {
