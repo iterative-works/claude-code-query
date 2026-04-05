@@ -1,0 +1,51 @@
+{
+  "version": 2,
+  "issue_id": "CC-23",
+  "workflow_type": "waterfall",
+  "status": "analysis_ready",
+  "activity": "waiting",
+  "phase": 0,
+  "step": "analysis",
+  "branch": "CC-23",
+  "git_sha": "025d94d",
+  "last_updated": "2026-04-05T18:23:42Z",
+  "display": {
+    "text": "Analysis Ready",
+    "subtext": "Architecture analysis complete - 5 layers",
+    "type": "success"
+  },
+  "badges": [
+    {
+      "label": "Refactor",
+      "type": "info"
+    },
+    {
+      "label": "4-8h",
+      "type": "info"
+    }
+  ],
+  "needs_attention": false,
+  "message": "Analysis complete - ready for task generation",
+  "artifacts": [
+    {
+      "label": "Analysis",
+      "path": "project-management/issues/CC-23/analysis.md",
+      "category": "input"
+    }
+  ],
+  "available_actions": [
+    {
+      "id": "create-tasks",
+      "label": "Generate Tasks",
+      "skill": "wf-create-tasks"
+    },
+    {
+      "id": "implement",
+      "label": "Start Implementation",
+      "skill": "wf-implement"
+    }
+  ],
+  "pr_url": null,
+  "phase_checkpoints": {},
+  "batch_mode": false
+}
