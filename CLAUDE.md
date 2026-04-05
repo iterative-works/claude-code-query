@@ -10,7 +10,9 @@ This is an unofficial Scala SDK for Claude Code, designed as a thin wrapper arou
 
 - **Compile**: `./mill __.compile`
 - **Test**: `./mill __.test`
+- **Integration Tests**: `./mill __.itest`
 - **Run Module Tests**: `./mill direct.test` or `./mill effectful.test`
+- **Run Module Integration Tests**: `./mill direct.itest` or `./mill effectful.itest`
 - **Run Single Test**: `./mill direct.test --test-only '*ClassName*'`
 - **Publish to local Maven**: `./mill __.publishLocal`
 
