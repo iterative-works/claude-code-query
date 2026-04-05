@@ -40,3 +40,5 @@
 - [x] [integ] E2E test: real CLI session with single turn (gated on CLI availability)
 - [x] [integ] E2E test: session ID is valid non-pending after first turn
 - [x] [integ] Verify all existing tests still pass (no regressions)
+
+**Phase Status:** Complete
