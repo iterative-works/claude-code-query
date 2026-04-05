@@ -8,6 +8,7 @@ import works.iterative.claude.direct.internal.testing.{
   MockLogger,
   SessionMockCliScript
 }
+import io.circe.parser
 import java.nio.file.{Files, Path}
 
 class SessionIntegrationTest extends munit.FunSuite:
@@ -117,7 +118,6 @@ class SessionIntegrationTest extends munit.FunSuite:
       )
 
       val firstLine = capturedLines.get(0)
-      import io.circe.parser
       val json = parser
         .parse(firstLine)
         .toOption
@@ -222,6 +222,269 @@ class SessionIntegrationTest extends munit.FunSuite:
           messages.exists(_.isInstanceOf[ResultMessage]),
           s"Expected ResultMessage in flow: $messages"
         )
+      finally session.close()
+    }
+  }
+
+  // ============================================================
+  // IT6: Full two-turn session lifecycle
+  // ============================================================
+
+  test("full two-turn session lifecycle with mock CLI") {
+    given logger: MockLogger = MockLogger()
+    supervised {
+      val initSessionId = "two-turn-init-001"
+      val turn1SessionId = "two-turn-result-001"
+      val turn2SessionId = "two-turn-result-002"
+
+      val script = SessionMockCliScript.createSessionScript(
+        initMessages = List(
+          SessionMockCliScript.CommonResponses.initMessage(initSessionId)
+        ),
+        turnResponses = List(
+          SessionMockCliScript.TurnResponse(
+            List(
+              SessionMockCliScript.CommonResponses.assistantMessage(
+                "First turn answer"
+              ),
+              SessionMockCliScript.CommonResponses.resultMessage(turn1SessionId)
+            )
+          ),
+          SessionMockCliScript.TurnResponse(
+            List(
+              SessionMockCliScript.CommonResponses.assistantMessage(
+                "Second turn answer"
+              ),
+              SessionMockCliScript.CommonResponses.resultMessage(turn2SessionId)
+            )
+          )
+        )
+      )
+      createdScripts += script
+
+      val options = SessionOptions().withClaudeExecutable(script.toString)
+      val session = ClaudeCode.session(options)
+      try
+        // Init message is consumed before any send
+        assertEquals(session.sessionId, initSessionId)
+
+        val turn1Messages = session.send("First question").runToList()
+        assertEquals(turn1Messages.length, 2)
+        turn1Messages.head match
+          case AssistantMessage(content) =>
+            val texts = content.collect { case TextBlock(t) => t }
+            assert(texts.exists(_.contains("First turn answer")))
+          case other => fail(s"Expected AssistantMessage, got: $other")
+        turn1Messages.last match
+          case r: ResultMessage => assertEquals(r.sessionId, turn1SessionId)
+          case other            => fail(s"Expected ResultMessage, got: $other")
+
+        assertEquals(session.sessionId, turn1SessionId)
+
+        val turn2Messages = session.send("Second question").runToList()
+        assertEquals(turn2Messages.length, 2)
+        turn2Messages.head match
+          case AssistantMessage(content) =>
+            val texts = content.collect { case TextBlock(t) => t }
+            assert(texts.exists(_.contains("Second turn answer")))
+          case other => fail(s"Expected AssistantMessage, got: $other")
+        turn2Messages.last match
+          case r: ResultMessage => assertEquals(r.sessionId, turn2SessionId)
+          case other            => fail(s"Expected ResultMessage, got: $other")
+
+        assertEquals(session.sessionId, turn2SessionId)
+      finally session.close()
+    }
+  }
+
+  // ============================================================
+  // IT7: Stdin capture shows correct session ID progression
+  // ============================================================
+
+  test("stdin capture shows correct session ID progression across turns") {
+    given logger: MockLogger = MockLogger()
+    supervised {
+      val initSessionId = "progression-init-001"
+      val turn1SessionId = "progression-turn-001"
+
+      val captureFile = Files.createTempFile("stdin-progression-", ".jsonl")
+      createdFiles += captureFile
+
+      val script = SessionMockCliScript.createSessionScript(
+        initMessages = List(
+          SessionMockCliScript.CommonResponses.initMessage(initSessionId)
+        ),
+        turnResponses = List(
+          SessionMockCliScript.TurnResponse(
+            List(
+              SessionMockCliScript.CommonResponses.resultMessage(turn1SessionId)
+            )
+          ),
+          SessionMockCliScript.TurnResponse(
+            List(
+              SessionMockCliScript.CommonResponses.resultMessage(
+                "progression-turn-002"
+              )
+            )
+          )
+        ),
+        captureStdinFile = Some(captureFile)
+      )
+      createdScripts += script
+
+      val options = SessionOptions().withClaudeExecutable(script.toString)
+      val session = ClaudeCode.session(options)
+      try
+        val _ = session.send("Prompt one").runToList()
+        val _ = session.send("Prompt two").runToList()
+      finally session.close()
+
+      val lines = Files.readAllLines(captureFile)
+      assert(
+        lines.size >= 2,
+        s"Expected at least 2 stdin lines, got ${lines.size}"
+      )
+
+      val firstJson = parser
+        .parse(lines.get(0))
+        .toOption
+        .getOrElse(fail(s"First stdin line not valid JSON: ${lines.get(0)}"))
+      assertEquals(
+        firstJson.hcursor.downField("session_id").as[String].toOption,
+        Some(initSessionId),
+        "First send should carry init session ID"
+      )
+
+      val secondJson = parser
+        .parse(lines.get(1))
+        .toOption
+        .getOrElse(fail(s"Second stdin line not valid JSON: ${lines.get(1)}"))
+      assertEquals(
+        secondJson.hcursor.downField("session_id").as[String].toOption,
+        Some(turn1SessionId),
+        "Second send should carry session ID from first turn's ResultMessage"
+      )
+    }
+  }
+
+  // ============================================================
+  // IT8: Turn responses with different message counts
+  // ============================================================
+
+  test("turns with different message counts emit exactly the right messages") {
+    given logger: MockLogger = MockLogger()
+    supervised {
+      val sessionId = "msg-count-session"
+      val script = SessionMockCliScript.createSessionScript(
+        initMessages = List(
+          SessionMockCliScript.CommonResponses.initMessage(sessionId)
+        ),
+        turnResponses = List(
+          // Turn 1: just assistant + result (2 messages)
+          SessionMockCliScript.TurnResponse(
+            List(
+              SessionMockCliScript.CommonResponses.assistantMessage("Short"),
+              SessionMockCliScript.CommonResponses.resultMessage(sessionId)
+            )
+          ),
+          // Turn 2: keepalive + stream_event + assistant + result (4 messages)
+          SessionMockCliScript.TurnResponse(
+            List(
+              SessionMockCliScript.CommonResponses.keepAliveMessage,
+              SessionMockCliScript.CommonResponses.streamEventMessage("start"),
+              SessionMockCliScript.CommonResponses.assistantMessage("Verbose"),
+              SessionMockCliScript.CommonResponses.resultMessage(sessionId)
+            )
+          )
+        )
+      )
+      createdScripts += script
+
+      val options = SessionOptions().withClaudeExecutable(script.toString)
+      val session = ClaudeCode.session(options)
+      try
+        val turn1Messages = session.send("Short turn").runToList()
+        assertEquals(
+          turn1Messages.length,
+          2,
+          s"Turn 1 should have 2 messages, got: $turn1Messages"
+        )
+        assert(
+          turn1Messages.exists(_.isInstanceOf[AssistantMessage]),
+          "Turn 1 must contain AssistantMessage"
+        )
+        assert(
+          turn1Messages.exists(_.isInstanceOf[ResultMessage]),
+          "Turn 1 must contain ResultMessage"
+        )
+        assert(
+          !turn1Messages.exists(_ == KeepAliveMessage),
+          "Turn 1 must not contain KeepAliveMessage"
+        )
+
+        val turn2Messages = session.send("Verbose turn").runToList()
+        assertEquals(
+          turn2Messages.length,
+          4,
+          s"Turn 2 should have 4 messages, got: $turn2Messages"
+        )
+        assert(
+          turn2Messages.exists(_ == KeepAliveMessage),
+          "Turn 2 must contain KeepAliveMessage"
+        )
+        assert(
+          turn2Messages.exists(_.isInstanceOf[StreamEventMessage]),
+          "Turn 2 must contain StreamEventMessage"
+        )
+        assert(
+          turn2Messages.exists(_.isInstanceOf[AssistantMessage]),
+          "Turn 2 must contain AssistantMessage"
+        )
+        assert(
+          turn2Messages.exists(_.isInstanceOf[ResultMessage]),
+          "Turn 2 must contain ResultMessage"
+        )
+      finally session.close()
+    }
+  }
+
+  // ============================================================
+  // IT9: Session ID updates across turns when ResultMessage has different IDs
+  // ============================================================
+
+  test(
+    "session ID updates across turns when ResultMessage carries distinct IDs"
+  ) {
+    given logger: MockLogger = MockLogger()
+    supervised {
+      val turn1Id = "distinct-session-turn-1"
+      val turn2Id = "distinct-session-turn-2"
+
+      val script = SessionMockCliScript.createSessionScript(
+        initMessages = Nil,
+        turnResponses = List(
+          SessionMockCliScript.TurnResponse(
+            List(
+              SessionMockCliScript.CommonResponses.resultMessage(turn1Id)
+            )
+          ),
+          SessionMockCliScript.TurnResponse(
+            List(
+              SessionMockCliScript.CommonResponses.resultMessage(turn2Id)
+            )
+          )
+        )
+      )
+      createdScripts += script
+
+      val options = SessionOptions().withClaudeExecutable(script.toString)
+      val session = ClaudeCode.session(options)
+      try
+        val _ = session.send("Turn one").runToList()
+        assertEquals(session.sessionId, turn1Id)
+
+        val _ = session.send("Turn two").runToList()
+        assertEquals(session.sessionId, turn2Id)
       finally session.close()
     }
   }
