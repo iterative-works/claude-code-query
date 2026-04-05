@@ -54,14 +54,22 @@
     {
       "label": "Phase 5 Tasks",
       "path": "project-management/issues/CC-15/phase-05-tasks.md"
+    },
+    {
+      "label": "Review Packet Phase 5",
+      "path": "project-management/issues/CC-15/review-packet-phase-05.md"
+    },
+    {
+      "label": "Implementation Log",
+      "path": "project-management/issues/CC-15/implementation-log.md"
     }
   ],
-  "last_updated": "2026-04-05T12:45:00.000000000Z",
-  "status": "tasks_ready",
+  "last_updated": "2026-04-05T15:35:00.000000000Z",
+  "status": "awaiting_review",
   "display": {
-    "text": "Phase 5: Tasks Ready",
+    "text": "Phase 5: Awaiting Review",
     "subtext": "Effectful API - Session lifecycle with Resource",
-    "type": "success"
+    "type": "warning"
   },
   "badges": [
     {
@@ -69,19 +77,20 @@
       "type": "info"
     },
     {
-      "label": "In Progress",
-      "type": "info"
+      "label": "Review Needed",
+      "type": "warning"
     }
   ],
-  "message": "Phase 5 tasks ready",
+  "message": "Phase 5 implementation complete - PR awaiting review",
   "available_actions": [
     {
-      "id": "implement",
-      "label": "Continue",
-      "skill": "ag-implement"
+      "id": "view-pr",
+      "label": "View Pull Request",
+      "skill": "external-link"
     }
   ],
-  "git_sha": "5a0ab5c",
+  "pr_url": "https://github.com/iterative-works/claude-code-query/pull/27",
+  "git_sha": "5aaabb3",
   "phase_checkpoints": {
     "4": {
       "context_sha": "context_sha=3d291086f8fee0db86398641a747b6a1eedc6cd0"
@@ -90,6 +99,6 @@
       "context_sha": "879e48a"
     }
   },
-  "needs_attention": false,
+  "needs_attention": true,
   "activity": "waiting"
 }
