@@ -21,11 +21,11 @@
       "path": "project-management/issues/CC-23/phase-01-tasks.md"
     }
   ],
-  "last_updated": "2026-04-05T21:00:59.972480740Z",
-  "status": "implementing",
+  "last_updated": "2026-04-05T21:22:36.392354054Z",
+  "status": "awaiting_review",
   "display": {
-    "text": "Phase 01: Implementing",
-    "type": "progress",
+    "text": "Phase 01: Awaiting Review",
+    "type": "warning",
     "subtext": "Build modules and test file moves"
   },
   "badges": [
@@ -40,6 +40,10 @@
     {
       "label": "In Progress",
       "type": "info"
+    },
+    {
+      "label": "Review Needed",
+      "type": "warning"
     }
   ],
   "message": "Phase 01 implementation started",
@@ -56,6 +60,13 @@
       "id": "implement",
       "label": "Continue",
       "skill": "wf-implement"
+    },
+    {
+      "id": "view-pr",
+      "label": "View Pull Request",
+      "skill": "external-link"
     }
-  ]
+  ],
+  "needs_attention": true,
+  "pr_url": "https://github.com/iterative-works/claude-code-query/pull/30"
 }
