@@ -294,7 +294,7 @@ private class ProcessManagerImpl extends ProcessManager:
       envVars.keys.filter(name => !isValidEnvironmentVariableName(name)).toList
 
     if (invalidNames.nonEmpty)
-      throw EnvironmentValidationError(
+      throw EnvironmentValidationError( // scalafix:ok DisableSyntax.throw
         invalidNames,
         "Environment variable names cannot start with numbers or contain hyphens"
       )

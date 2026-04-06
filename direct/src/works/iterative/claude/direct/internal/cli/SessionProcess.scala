@@ -18,6 +18,7 @@ import java.io.{
 }
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
+import scala.annotation.tailrec
 import scala.jdk.CollectionConverters.*
 
 /** Session implementation backed by a long-lived CLI process.
@@ -47,9 +48,12 @@ private[direct] class SessionProcess(
   def sessionId: String = currentSessionId.get()
 
   def send(prompt: String): Unit =
-    if !alive.get() then throw SessionClosedError(currentSessionId.get())
+    if !alive.get() then
+      // Defect: caller violated session contract
+      throw SessionClosedError(currentSessionId.get())
     if !process.isAlive then
       alive.set(false)
+      // Defect: underlying process crashed
       throw SessionProcessDied(safeExitCode(), captureRemainingStderr())
     val msg =
       SDKUserMessage(content = prompt, sessionId = currentSessionId.get())
@@ -62,39 +66,50 @@ private[direct] class SessionProcess(
     catch
       case e: java.io.IOException =>
         alive.set(false)
-        throw SessionProcessDied(safeExitCode(), e.getMessage)
+        // Defect: I/O failure on process pipe
+        throw SessionProcessDied(
+          safeExitCode(),
+          e.getMessage
+        ) // scalafix:ok DisableSyntax.throw
 
   def stream(): Flow[Message] =
     Flow.usingEmit { emit =>
-      var done = false
-      var lineNumber = 0
-      var resultSeen = false
-      while !done do
-        val line = stdoutReader.readLine()
-        if line == null then
-          logger.debug("stdout EOF reached during stream")
-          done = true
-          if !resultSeen then
-            // Unexpected EOF before ResultMessage — process died mid-turn
-            alive.set(false)
-            throw SessionProcessDied(safeExitCode(), captureRemainingStderr())
-        else
-          lineNumber += 1
-          JsonParser.parseJsonLineWithContextWithLogging(line, lineNumber) match
-            case Right(Some(message)) =>
-              logger.debug(
-                s"Emitting message: ${message.getClass.getSimpleName}"
-              )
-              emit(message)
-              message match
-                case result: ResultMessage =>
-                  currentSessionId.set(result.sessionId)
-                  resultSeen = true
-                  done = true
-                case _ => ()
-            case Right(None) => ()
-            case Left(error) =>
-              logger.error(s"JSON parsing failed: ${error.message}")
+      @tailrec
+      def loop(lineNumber: Int): Boolean =
+        Option(stdoutReader.readLine()) match
+          case None =>
+            logger.debug("stdout EOF reached during stream")
+            false
+          case Some(line) =>
+            val nextLineNumber = lineNumber + 1
+            JsonParser
+              .parseJsonLineWithContextWithLogging(line, nextLineNumber) match
+              case Right(Some(message)) =>
+                logger.debug(
+                  s"Emitting message: ${message.getClass.getSimpleName}"
+                )
+                emit(message)
+                message match
+                  case result: ResultMessage =>
+                    currentSessionId.set(result.sessionId)
+                    true
+                  case _ =>
+                    loop(nextLineNumber)
+              case Right(None) =>
+                loop(nextLineNumber)
+              case Left(error) =>
+                logger.error(s"JSON parsing failed: ${error.message}")
+                loop(nextLineNumber)
+
+      val resultSeen = loop(0)
+      if !resultSeen then
+        // Unexpected EOF before ResultMessage — process died mid-turn
+        alive.set(false)
+        // Defect: process died mid-turn
+        throw SessionProcessDied(
+          safeExitCode(),
+          captureRemainingStderr()
+        ) // scalafix:ok DisableSyntax.throw
     }
 
   def close(): Unit =
@@ -121,14 +136,12 @@ private[direct] class SessionProcess(
     val stderrReader =
       new BufferedReader(new InputStreamReader(process.getErrorStream))
     try
-      val sb = new StringBuilder
-      var line: String = null
-      while stderrReader.ready() && {
-          line = stderrReader.readLine(); line != null
-        }
-      do
-        val _ = sb.append(line).append("\n")
-      sb.toString().trim
+      Iterator
+        .continually(stderrReader)
+        .takeWhile(_.ready())
+        .flatMap(r => Option(r.readLine()))
+        .mkString("\n")
+        .trim
     catch case _: Exception => ""
     finally
       try stderrReader.close()
@@ -200,33 +213,36 @@ object SessionProcess:
       reader: BufferedReader
   )(using logger: Logger): Option[String] =
     val deadline = System.currentTimeMillis() + InitReadTimeoutMs
-    var linesRead = 0
-    var done = false
-    var result: Option[String] = None
-    while !done && linesRead < MaxInitLines && System
-        .currentTimeMillis() < deadline
-    do
-      if reader.ready() then
-        val line = reader.readLine()
-        if line != null then
-          linesRead += 1
-          JsonParser.parseJsonLineWithContext(line, linesRead) match
-            case Right(Some(SystemMessage("init", data))) =>
-              result = data.get("session_id").map(_.toString)
-              result.foreach { id =>
-                logger.info(s"Session ID extracted from init message: $id")
-              }
-              done = true
-            case Right(Some(_)) =>
-              // Non-init message found before init — stop (init won't come later)
-              done = true
-            case _ =>
-              () // Empty/unparseable line — continue reading
-        else done = true // EOF — process exited
+
+    @tailrec
+    def loop(linesRead: Int): Option[String] =
+      if linesRead >= MaxInitLines || System.currentTimeMillis() >= deadline
+      then None
+      else if reader.ready() then
+        Option(reader.readLine()) match
+          case None       => None // EOF — process exited
+          case Some(line) =>
+            val lineNumber = linesRead + 1
+            JsonParser.parseJsonLineWithContext(line, lineNumber) match
+              case Right(Some(SystemMessage("init", data))) =>
+                val sessionId = data.get("session_id").map(_.toString)
+                sessionId.foreach { id =>
+                  logger.info(s"Session ID extracted from init message: $id")
+                }
+                sessionId
+              case Right(Some(_)) =>
+                // Non-init message found before init — stop (init won't come later)
+                None
+              case _ =>
+                // Empty/unparseable line — continue reading
+                loop(lineNumber)
       else if !process.isAlive() then
-        done = true // Process already exited — don't wait for init
-      else Thread.sleep(InitReadRetryDelayMs) // Wait briefly for init message
-    result
+        None // Process already exited — don't wait for init
+      else
+        Thread.sleep(InitReadRetryDelayMs) // Wait briefly for init message
+        loop(linesRead)
+
+    loop(0)
 
   private def configureSessionProcess(
       executablePath: String,
@@ -252,9 +268,10 @@ object SessionProcess:
     val reader =
       new BufferedReader(new InputStreamReader(process.getErrorStream))
     try
-      var line: String = null
-      while { line = reader.readLine(); line != null } do
-        logger.debug(s"session stderr: $line")
+      Iterator
+        .continually(reader.readLine())
+        .takeWhile(_ != null) // scalafix:ok DisableSyntax.null
+        .foreach(line => logger.debug(s"session stderr: $line"))
     catch
       case _: InterruptedException =>
         // Interrupted by scope cancellation — kill the process to release the pipe

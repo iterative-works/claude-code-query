@@ -168,7 +168,7 @@ object ConversationLogParser:
 
   private def extractJsonValue(json: Json): Any =
     json.fold(
-      jsonNull = null,
+      jsonNull = None,
       jsonBoolean = identity,
       jsonNumber = num => num.toInt.orElse(num.toLong).getOrElse(num.toDouble),
       jsonString = identity,
