@@ -8,7 +8,7 @@ import works.iterative.mill._
 
 trait SharedModule extends IWScalaModule with PublishModule {
   override def scalaVersion = IWScalaVersions.scala3LTSVersion
-  def publishVersion = "0.2.0"
+  def publishVersion = "0.3.0-SNAPSHOT"
   override def artifactName = "claude-code-query-" + super.artifactName()
   def pomSettings = PomSettings(
     description = "Scala SDK for Claude Code CLI",
