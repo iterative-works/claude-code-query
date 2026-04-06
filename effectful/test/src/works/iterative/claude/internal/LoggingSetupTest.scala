@@ -2,7 +2,6 @@ package works.iterative.claude.internal
 
 import cats.effect.IO
 import munit.CatsEffectSuite
-import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 
 class LoggingSetupTest extends CatsEffectSuite {

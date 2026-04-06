@@ -3,7 +3,6 @@
 package works.iterative.claude.direct.internal.cli
 
 import works.iterative.claude.core.{
-  CLIError,
   CLINotFoundError,
   NodeJSNotFoundError
 }
@@ -202,7 +201,7 @@ class CLIDiscoveryTest extends munit.FunSuite:
     val mockLogger2 = MockLogger()
 
     // Execute: Call findClaude with PATH failure
-    val result2 = CLIDiscovery.findClaude(mockFs2, mockLogger2)
+    val _ = CLIDiscovery.findClaude(mockFs2, mockLogger2)
 
     // Verify: Should log PATH search failure
     assert(

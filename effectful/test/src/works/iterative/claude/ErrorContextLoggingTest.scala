@@ -4,7 +4,6 @@ import cats.effect.IO
 import munit.CatsEffectSuite
 import org.typelevel.log4cats.Logger
 import works.iterative.claude.core.{
-  ConfigurationError,
   ProcessExecutionError,
   JsonParsingError
 }
@@ -40,7 +39,7 @@ class ErrorContextLoggingTest extends CatsEffectSuite:
 
     ClaudeCode
       .logConfigurationError(mockLogger, invalidOptions)
-      .map: result =>
+      .map: _ =>
         // Should log configuration validation error
         assert(errorMessages.nonEmpty)
         assert(
@@ -76,7 +75,7 @@ class ErrorContextLoggingTest extends CatsEffectSuite:
 
     ClaudeCode
       .logProcessExecutionError(mockLogger, processError)
-      .map: result =>
+      .map: _ =>
         // Should log enhanced process execution error context
         assert(errorMessages.nonEmpty)
         assert(errorMessages.exists(_.contains("Process execution failed")))
@@ -109,7 +108,7 @@ class ErrorContextLoggingTest extends CatsEffectSuite:
 
     ClaudeCode
       .logJsonParsingError(mockLogger, jsonError)
-      .map: result =>
+      .map: _ =>
         // Should log enhanced JSON parsing error context
         assert(errorMessages.nonEmpty)
         assert(errorMessages.exists(_.contains("JSON parsing failed")))

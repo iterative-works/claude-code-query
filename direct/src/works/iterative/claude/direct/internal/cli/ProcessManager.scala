@@ -13,6 +13,7 @@ import works.iterative.claude.core.{
 import works.iterative.claude.direct.internal.parsing.JsonParser
 import works.iterative.claude.direct.Logger
 import java.io.{BufferedReader, InputStreamReader}
+import scala.annotation.tailrec
 import scala.jdk.CollectionConverters.*
 
 object ProcessManager:
@@ -154,7 +155,10 @@ object ProcessManager:
       // Normal completion - do nothing
       case "TIMEOUT_REACHED" =>
         // Process already destroyed in timeout branch - just throw error
-        throw ProcessTimeoutError(finiteDuration, command)
+        throw ProcessTimeoutError(
+          finiteDuration,
+          command
+        ) // scalafix:ok DisableSyntax.throw
     }
 
   private def startProcessMonitoringForStreaming(
@@ -192,31 +196,27 @@ object ProcessManager:
     val stderrReader = new BufferedReader(
       new InputStreamReader(process.getErrorStream)
     )
-    try {
-      var stderrLine: String = null
-      while ({
-        stderrLine = stderrReader.readLine(); stderrLine != null
-      }) {
-        logger.debug(s"stderr: $stderrLine")
-        buffer.synchronized {
-          if buffer.nonEmpty then buffer.append('\n')
-          buffer.append(stderrLine)
+    try
+      Iterator
+        .continually(stderrReader.readLine())
+        .takeWhile(_ != null) // scalafix:ok DisableSyntax.null
+        .foreach { stderrLine =>
+          logger.debug(s"stderr: $stderrLine")
+          buffer.synchronized {
+            if buffer.nonEmpty then buffer.append('\n')
+            buffer.append(stderrLine)
+          }
         }
-      }
-    } catch {
+    catch
       case _: InterruptedException =>
         // Interrupted by timeout - clean up and exit
         logger.debug("Stderr capture interrupted by timeout")
       case _: Exception =>
         // Stream closed or process terminated
         logger.debug("Stderr stream closed")
-    } finally {
-      try {
-        stderrReader.close()
-      } catch {
-        case _: Exception => // Ignore close errors
-      }
-    }
+    finally
+      try stderrReader.close()
+      catch case _: Exception => () // Ignore close errors
 
   private def processStdoutStream(
       process: Process,
@@ -225,38 +225,36 @@ object ProcessManager:
     val reader = new BufferedReader(
       new InputStreamReader(process.getInputStream)
     )
-    var stdoutEndedNaturally = false
-    try {
-      var lineNumber = 0
-      var line: String = null
-      while ({ line = reader.readLine(); line != null }) {
-        lineNumber += 1
-        parseJsonLineToMessage(line, lineNumber) match {
-          case Some(message) =>
-            logger.debug(
-              s"Emitting message: ${message.getClass.getSimpleName}"
-            )
-            emit(message)
-          case None => // Skip empty or invalid lines
-        }
-      }
-      stdoutEndedNaturally = true
-      logger.debug("Stdout stream ended naturally")
-    } catch {
+    try
+      @tailrec
+      def loop(lineNumber: Int): Boolean =
+        Option(reader.readLine()) match
+          case None =>
+            logger.debug("Stdout stream ended naturally")
+            true
+          case Some(line) =>
+            val nextLineNumber = lineNumber + 1
+            parseJsonLineToMessage(line, nextLineNumber).foreach { message =>
+              logger.debug(
+                s"Emitting message: ${message.getClass.getSimpleName}"
+              )
+              emit(message)
+            }
+            loop(nextLineNumber)
+
+      loop(0)
+    catch
       case _: InterruptedException =>
         // Interrupted by timeout - clean up and exit
         logger.debug("Stdout reading interrupted by timeout")
+        false
       case _: Exception =>
         // Stream was closed (likely due to process termination or Flow cancellation)
         logger.debug("Stdout stream reading interrupted or closed")
-    } finally {
-      try {
-        reader.close()
-      } catch {
-        case _: Exception => // Ignore close errors
-      }
-    }
-    stdoutEndedNaturally
+        false
+    finally
+      try reader.close()
+      catch case _: Exception => () // Ignore close errors
 
   private def handleStreamingCleanup(
       processErrorFork: Fork[Option[CLIError]],
@@ -264,7 +262,7 @@ object ProcessManager:
   )(using logger: Logger): Unit =
     if (stdoutEndedNaturally) {
       processErrorFork.join() match {
-        case Some(error) => throw error
+        case Some(error) => throw error // scalafix:ok DisableSyntax.throw
         case None        => // Process completed successfully
       }
     } else {

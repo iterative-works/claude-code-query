@@ -137,7 +137,7 @@ object ClaudeCode:
   private def validateWorkingDirectory(cwd: Option[String]): Unit =
     cwd.foreach { dir =>
       if !FileSystemOps.exists(dir) then
-        throw ConfigurationError(
+        throw ConfigurationError( // scalafix:ok DisableSyntax.throw
           parameter = "cwd",
           value = dir,
           reason = "working directory does not exist"
@@ -151,7 +151,10 @@ object ClaudeCode:
     explicit.getOrElse {
       CLIDiscovery.findClaude match
         case Right(path) => path
-        case Left(error) => throw new RuntimeException(error.message)
+        case Left(error) =>
+          throw new RuntimeException(
+            error.message
+          ) // scalafix:ok DisableSyntax.throw
     }
 
   private def extractAssistantTextContent(messages: List[Message]): String =

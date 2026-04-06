@@ -61,7 +61,7 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
           ) =>
         val optionalFields = List(
           totalCostUsd.map(cost => s""""total_cost_usd":$cost"""),
-          usage.map(u => s""""usage":{}"""), // Simplified usage serialization
+          usage.map(_ => s""""usage":{}"""), // Simplified usage serialization
           result.map(r => s""""result":${escapeJsonString(r)}""")
         ).flatten
         val allFields = List(

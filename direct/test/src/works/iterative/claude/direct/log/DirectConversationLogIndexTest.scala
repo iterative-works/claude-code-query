@@ -4,7 +4,6 @@
 package works.iterative.claude.direct.log
 
 import munit.FunSuite
-import java.time.Instant
 import works.iterative.claude.core.log.model.LogFileMetadata
 
 class DirectConversationLogIndexTest extends FunSuite:

@@ -6,17 +6,10 @@ import ox.*
 import works.iterative.claude.core.model.*
 import works.iterative.claude.core.{
   ProcessExecutionError,
-  ProcessTimeoutError,
-  JsonParsingError,
   ConfigurationError
 }
-import works.iterative.claude.direct.internal.testing.{
-  MockCliScript,
-  TestConstants
-}
+import works.iterative.claude.direct.internal.testing.MockCliScript
 import java.nio.file.Path
-import scala.util.{Try, Using}
-import scala.concurrent.duration.Duration
 
 class ClaudeCodeTest extends munit.FunSuite:
 

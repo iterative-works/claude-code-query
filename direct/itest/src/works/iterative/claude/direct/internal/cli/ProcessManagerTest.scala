@@ -6,8 +6,7 @@ import ox.*
 import works.iterative.claude.core.model.*
 import works.iterative.claude.core.{
   ProcessExecutionError,
-  ProcessTimeoutError,
-  JsonParsingError
+  ProcessTimeoutError
 }
 import works.iterative.claude.direct.internal.cli.ProcessManager
 import works.iterative.claude.direct.Logger
@@ -17,18 +16,12 @@ import works.iterative.claude.direct.internal.testing.{
   TestConstants
 }
 import java.util.concurrent.{CountDownLatch, TimeUnit, ConcurrentLinkedQueue}
-import scala.collection.concurrent.TrieMap
-import java.util.concurrent.atomic.AtomicInteger
 import scala.jdk.CollectionConverters.*
-import java.lang.management.ManagementFactory
-import scala.util.{Try, Success, Failure}
+import scala.util.Try
 import scala.concurrent.duration.*
 import java.nio.file.Path
-import org.scalacheck.*
-import org.scalacheck.Prop.*
-import munit.ScalaCheckSuite
 
-class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
+class ProcessManagerTest extends munit.FunSuite:
 
   // Track created mock scripts for cleanup
   private val createdScripts = scala.collection.mutable.ListBuffer[Path]()
@@ -38,28 +31,6 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
     createdScripts.foreach(MockCliScript.cleanup)
     createdScripts.clear()
     super.afterEach(context)
-
-  // Process resource tracking utilities for cleanup verification
-  private def countRunningProcesses(): Int =
-    Try {
-      val processBuilder =
-        new ProcessBuilder("ps", "-eo", "pid,ppid,comm", "--no-headers")
-      val process = processBuilder.start()
-      val reader = new java.io.BufferedReader(
-        new java.io.InputStreamReader(process.getInputStream)
-      )
-      var count = 0
-      var line: String = null
-      while { line = reader.readLine(); line != null } do
-        // Count processes related to our tests (sh, echo, sleep, etc.)
-        if line.contains("sh") || line.contains("echo") || line.contains(
-            "sleep"
-          )
-        then count += 1
-      reader.close()
-      process.waitFor()
-      count
-    }.getOrElse(0)
 
   // Check for zombie processes specifically
   private def countZombieProcesses(): Int =
@@ -123,10 +94,10 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
       if message.contains("Process completed") then
         processCompletionLatch.countDown()
 
-    def warn(msg: => String): Unit = warnMessages.add(msg)
-    def error(msg: => String): Unit = errorMessages.add(msg)
+    def warn(msg: => String): Unit = { val _ = warnMessages.add(msg) }
+    def error(msg: => String): Unit = { val _ = errorMessages.add(msg) }
     def error(msg: => String, exception: Throwable): Unit =
-      errorMessages.add(s"$msg: ${exception.getMessage}")
+      val _ = errorMessages.add(s"$msg: ${exception.getMessage}")
 
     // Thread-safe accessors that return immutable collections
     def getDebugMessages: List[String] = debugMessages.asScala.toList
@@ -312,8 +283,6 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
 
   test("should set working directory when provided in process configuration") {
     // Setup: QueryOptions with cwd specified
-    given MockLogger = MockLogger()
-
     val testCwd = "/tmp"
     val options = QueryOptions(
       prompt = "test prompt",
@@ -349,8 +318,6 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
     "should handle missing working directory gracefully in process configuration"
   ) {
     // Setup: QueryOptions with None for cwd
-    given MockLogger = MockLogger()
-
     val options = QueryOptions(
       prompt = "test prompt",
       cwd = None, // No working directory specified
@@ -385,8 +352,6 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
     "should set custom environment variables when specified in process configuration"
   ) {
     // Setup: QueryOptions with custom environment variables
-    given MockLogger = MockLogger()
-
     val customEnvVars =
       Map("TEST_VAR" -> "test_value", "ANOTHER_VAR" -> "another_value")
     val options = QueryOptions(
@@ -425,8 +390,6 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
     "should inherit parent environment when inheritEnvironment is true"
   ) {
     // Setup: QueryOptions with inheritEnvironment=true
-    given MockLogger = MockLogger()
-
     val options = QueryOptions(
       prompt = "test prompt",
       cwd = None,
@@ -465,8 +428,6 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
     "should isolate environment when inheritEnvironment is false"
   ) {
     // Setup: QueryOptions with inheritEnvironment=false
-    given MockLogger = MockLogger()
-
     val options = QueryOptions(
       prompt = "test prompt",
       cwd = None,
@@ -1461,7 +1422,7 @@ class ProcessManagerTest extends munit.FunSuite with ScalaCheckSuite:
       // Run multiple iterations to verify consistency
       val durations =
         (1 to TestConstants.TestParameters.CONSISTENCY_TEST_ITERATIONS).map {
-          iteration =>
+          _ =>
             val (exception, duration, _) = executeTimeoutTest(config)
 
             // Verify each exception is correct

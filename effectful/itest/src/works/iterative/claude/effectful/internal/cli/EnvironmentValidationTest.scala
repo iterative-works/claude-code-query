@@ -4,7 +4,6 @@
 package works.iterative.claude.effectful.internal.cli
 
 import cats.effect.IO
-import cats.effect.unsafe.implicits.global
 import works.iterative.claude.core.model.QueryOptions
 import works.iterative.claude.core.EnvironmentValidationError
 import works.iterative.claude.effectful.internal.cli.ProcessManager
