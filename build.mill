@@ -1,13 +1,16 @@
-//| mvnDeps: ["works.iterative::mill-iw-support::0.1.3"]
+//| mvnDeps: ["works.iterative::mill-iw-support::0.1.3", "com.goyeau::mill-scalafix::0.6.0"]
 // PURPOSE: Mill build definition for the claude-code-query Scala SDK.
 // PURPOSE: Defines three modules: core (shared types/parsing), direct (Ox-based sync API), effectful (cats-effect/fs2 async API).
 package build
 
 import mill._, scalalib._, publish._
 import works.iterative.mill._
+import com.goyeau.mill.scalafix.ScalafixModule
 
-trait SharedModule extends IWScalaModule with PublishModule {
+trait SharedModule extends IWScalaModule with PublishModule with ScalafixModule {
   override def scalaVersion = IWScalaVersions.scala3LTSVersion
+  // ScalafixModule handles -Xsemanticdb, so disable IWScalaModule's duplicate
+  override def semanticDbOptions = Task { Seq.empty }
   def publishVersion = "0.3.0-SNAPSHOT"
   override def artifactName = "claude-code-query-" + super.artifactName()
   def pomSettings = PomSettings(
