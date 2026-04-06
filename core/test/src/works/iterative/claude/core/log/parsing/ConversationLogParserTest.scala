@@ -4,7 +4,7 @@ package works.iterative.claude.core.log.parsing
 // PURPOSE: Verifies correct parsing of all log entry types, envelope metadata, and error handling
 
 import munit.FunSuite
-import io.circe.{Json, parser}
+import io.circe.parser
 import java.time.Instant
 import works.iterative.claude.core.log.model.*
 import works.iterative.claude.core.model.*

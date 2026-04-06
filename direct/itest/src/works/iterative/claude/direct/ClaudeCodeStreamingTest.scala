@@ -6,10 +6,8 @@ import ox.*
 import works.iterative.claude.core.model.*
 import works.iterative.claude.direct.internal.testing.MockCliScript
 import works.iterative.claude.direct.internal.testing.MockCliScript.MockBehavior
-import works.iterative.claude.direct.internal.testing.TestConstants
 import java.nio.file.Path
 import scala.concurrent.duration.*
-import scala.util.Try
 
 class ClaudeCodeStreamingTest extends munit.FunSuite:
 
@@ -109,8 +107,6 @@ class ClaudeCodeStreamingTest extends munit.FunSuite:
         }
       }
 
-      val totalTime = System.currentTimeMillis() - startTime
-
       // Verify: All messages eventually received
       assertEquals(messages.length, 3)
 
@@ -163,11 +159,9 @@ class ClaudeCodeStreamingTest extends munit.FunSuite:
 
       val startTime = System.currentTimeMillis()
       var firstMessageReceived = false
-      var processStillRunning = true
-
       messageFlow
         .take(1) // Only take first message to prove early access
-        .runForeach { message =>
+        .runForeach { _ =>
           val elapsed = System.currentTimeMillis() - startTime
           firstMessageReceived = true
 

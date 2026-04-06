@@ -5,7 +5,6 @@ package works.iterative.claude.core.model
 
 import munit.FunSuite
 import io.circe.syntax.*
-import io.circe.Json
 
 class SDKUserMessageTest extends FunSuite:
 

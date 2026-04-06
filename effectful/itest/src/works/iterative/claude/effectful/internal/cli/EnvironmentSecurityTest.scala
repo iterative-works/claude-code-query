@@ -98,10 +98,6 @@ class EnvironmentSecurityTest extends CatsEffectSuite:
   test("ProcessExecutionError only contains command and args, not environment"):
     // Verify that ProcessExecutionError structure is secure
     val secretValue = "secret_structure_key_99999"
-    val options = QueryOptions(
-      prompt = "test",
-      environmentVariables = Some(Map("STRUCTURE_KEY" -> secretValue))
-    )
 
     // Create a ProcessExecutionError directly to test its structure
     val error = ProcessExecutionError(

@@ -4,18 +4,13 @@
 package works.iterative.claude.direct.internal.cli
 
 import ox.*
-import works.iterative.claude.core.model.*
 import works.iterative.claude.core.model.QueryOptions
 import works.iterative.claude.core.ProcessExecutionError
 import works.iterative.claude.direct.internal.cli.ProcessManager
 import works.iterative.claude.direct.Logger
 import works.iterative.claude.direct.internal.testing.TestConstants
 import works.iterative.claude.direct.internal.testing.TestAssumptions.*
-import org.scalacheck.*
-import org.scalacheck.Prop.*
-import munit.ScalaCheckSuite
-
-class EnvironmentTest extends munit.FunSuite with ScalaCheckSuite:
+class EnvironmentTest extends munit.FunSuite:
 
   // Mock Logger for testing
   class MockLogger extends Logger:
@@ -336,7 +331,7 @@ class EnvironmentTest extends munit.FunSuite with ScalaCheckSuite:
         // Execute the failing scenario and capture any exceptions
         val caughtException =
           try {
-            ProcessManager.executeProcess(command, args, options)
+            val _ = ProcessManager.executeProcess(command, args, options)
             None // If no exception, this is unexpected for our failure scenarios
           } catch {
             case ex: Throwable => Some(ex)
@@ -410,65 +405,6 @@ class EnvironmentTest extends munit.FunSuite with ScalaCheckSuite:
       }
     }
   }
-
-  // ScalaCheck generators for environment variable property tests
-
-  /** Generate valid environment variable names (uppercase letters, numbers,
-    * underscores)
-    */
-  // Use predefined valid names to avoid shrinking issues with ScalaCheck
-  private val validEnvNameGen: Gen[String] = Gen.oneOf(
-    "TEST_VAR_A",
-    "TEST_VAR_B",
-    "TEST_VAR_C",
-    "TEST_VAR_D",
-    "TEST_VAR_E",
-    "MY_CUSTOM_VAR",
-    "API_CONFIG",
-    "DATABASE_HOST",
-    "SERVICE_PORT",
-    "DEBUG_MODE",
-    "BUILD_NUMBER",
-    "VERSION_TAG",
-    "ENVIRONMENT",
-    "LOG_LEVEL",
-    "TIMEOUT_VALUE",
-    "BATCH_SIZE",
-    "WORKER_COUNT",
-    "CACHE_SIZE",
-    "MAX_CONNECTIONS",
-    "RETRY_COUNT"
-  )
-
-  /** Generate environment variable values with various character patterns */
-  private val envValueGen: Gen[String] = Gen.oneOf(
-    Gen.alphaNumStr, // Simple alphanumeric
-    Gen.asciiPrintableStr.suchThat(_.length <= 200), // Printable ASCII chars
-    Gen.const(""), // Empty values
-    Gen.oneOf( // Common realistic patterns
-      "simple-value",
-      "value with spaces",
-      "/path/to/something",
-      "key=nested_value",
-      "user:password@host:1234",
-      "https://api.example.com/v1",
-      "sk-1234567890abcdef",
-      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
-    ),
-    // Special characters that could cause issues
-    Gen.oneOf("!@#$%^&*()_+-={}[]|\\:;\"'<>?,./~`", "unicode: 🚀 αβγ δεζ")
-  )
-
-  /** Generate maps of environment variables with different sizes */
-  private val envMapGen: Gen[Map[String, String]] = for {
-    size <- Gen.choose(
-      1,
-      10
-    ) // Reduce size to make tests faster and more focused
-    pairs <- Gen.listOfN(size, Gen.zip(validEnvNameGen, envValueGen))
-    // Filter out any pairs with empty names (shouldn't happen but be safe)
-    validPairs = pairs.filter { case (name, _) => name.nonEmpty }
-  } yield validPairs.toMap.view.filterKeys(_.nonEmpty).toMap
 
   /** Common system environment variables that should NOT appear when
     * inheritEnvironment=false

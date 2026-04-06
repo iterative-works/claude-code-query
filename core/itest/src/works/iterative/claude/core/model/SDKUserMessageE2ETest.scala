@@ -42,8 +42,7 @@ class SDKUserMessageE2ETest extends FunSuite:
     val exitCode = process.waitFor()
     val stderr =
       scala.io.Source.fromInputStream(process.getErrorStream).mkString
-    val stdout =
-      scala.io.Source.fromInputStream(process.getInputStream).mkString
+    val _ = scala.io.Source.fromInputStream(process.getInputStream).mkString
 
     // The CLI should not crash with a format error
     assert(

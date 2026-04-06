@@ -8,11 +8,7 @@ import fs2.Stream
 import fs2.io.process.ProcessBuilder
 import fs2.io.file.Path
 import works.iterative.claude.core.model.QueryOptions
-import works.iterative.claude.core.model.{
-  Message,
-  AssistantMessage,
-  ResultMessage
-}
+import works.iterative.claude.core.model.Message
 import works.iterative.claude.effectful.internal.parsing.JsonParser
 import works.iterative.claude.core.{
   ProcessExecutionError,
@@ -227,28 +223,6 @@ private class ProcessManagerImpl extends ProcessManager:
         )
     else IO.unit
 
-  private def applyTimeoutIfSpecified(
-      processIO: IO[List[Message]],
-      options: QueryOptions,
-      executablePath: String,
-      args: List[String]
-  )(using logger: Logger[IO]): IO[List[Message]] =
-    options.timeout match
-      case Some(timeout) =>
-        processIO.timeoutTo(
-          timeout,
-          logger.error(
-            s"Process timed out after ${timeout.toSeconds} seconds"
-          ) *>
-            IO.raiseError(
-              ProcessTimeoutError(
-                timeout,
-                executablePath :: args
-              )
-            )
-        )
-      case None => processIO
-
   private def applyTimeoutIfSpecifiedStream(
       processStream: Stream[IO, Message],
       options: QueryOptions,
@@ -257,7 +231,7 @@ private class ProcessManagerImpl extends ProcessManager:
   )(using logger: Logger[IO]): Stream[IO, Message] =
     options.timeout match
       case Some(timeout) =>
-        processStream.timeout(timeout).handleErrorWith { throwable =>
+        processStream.timeout(timeout).handleErrorWith { _ =>
           Stream
             .eval(
               logger.error(

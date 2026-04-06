@@ -2,8 +2,8 @@
 // PURPOSE: Replaces echo-based mocking with realistic CLI behavior including delays and streaming
 package works.iterative.claude.direct.internal.testing
 
-import java.io.{File, FileWriter, PrintWriter}
-import java.nio.file.{Files, Path, Paths}
+import java.io.{FileWriter, PrintWriter}
+import java.nio.file.{Files, Path}
 import java.nio.file.attribute.PosixFilePermissions
 import scala.util.{Try, Using}
 import scala.concurrent.duration.Duration

@@ -4,12 +4,10 @@
 package works.iterative.claude
 
 import cats.effect.IO
-import fs2.Stream
 import munit.CatsEffectSuite
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.testing.TestingLogger
 import works.iterative.claude.core.{
-  CLIError,
   ProcessExecutionError,
   JsonParsingError,
   ProcessTimeoutError,

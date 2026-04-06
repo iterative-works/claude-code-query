@@ -4,7 +4,6 @@
 package works.iterative.claude.direct
 
 import ox.*
-import scala.concurrent.duration.*
 import works.iterative.claude.core.model.*
 import works.iterative.claude.core.model.QueryOptions
 import works.iterative.claude.direct.Logger
