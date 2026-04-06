@@ -420,6 +420,15 @@ Technology stack:
 - **Scala 3**: Modern language features and type safety
 - **log4cats + SLF4J**: Flexible logging with both given-based and effectful approaches
 
+### Build Commands
+
+```bash
+mill __.compile        # compile all modules
+mill __.test           # run unit tests (fast, no external dependencies)
+mill __.itest          # run integration and E2E tests (requires Claude CLI)
+mill __.publishLocal   # publish to local Maven repository
+```
+
 ## Message Types
 
 All Claude Code message types are available:

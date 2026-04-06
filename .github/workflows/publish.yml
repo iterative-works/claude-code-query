@@ -24,6 +24,9 @@ jobs:
       - name: Run tests
         run: ./mill __.test
 
+      - name: Run integration tests
+        run: ./mill __.itest
+
       - name: Publish to Sonatype Central
         env:
           MILL_PGP_SECRET_BASE64: ${{ secrets.MILL_PGP_SECRET_BASE64 }}

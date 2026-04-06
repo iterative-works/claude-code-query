@@ -1,0 +1,115 @@
+{
+  "version": 2,
+  "issue_id": "CC-23",
+  "artifacts": [
+    {
+      "label": "Analysis",
+      "path": "project-management/issues/CC-23/analysis.md",
+      "category": "input"
+    },
+    {
+      "label": "Tasks",
+      "path": "project-management/issues/CC-23/tasks.md",
+      "category": "output"
+    },
+    {
+      "label": "Phase 1 Context",
+      "path": "project-management/issues/CC-23/phase-01-context.md"
+    },
+    {
+      "label": "Phase 1 Tasks",
+      "path": "project-management/issues/CC-23/phase-01-tasks.md"
+    },
+    {
+      "label": "Phase 2 Context",
+      "path": "project-management/issues/CC-23/phase-02-context.md"
+    },
+    {
+      "label": "Phase 2 Tasks",
+      "path": "project-management/issues/CC-23/phase-02-tasks.md"
+    },
+    {
+      "label": "Implementation Log",
+      "path": "project-management/issues/CC-23/implementation-log.md"
+    },
+    {
+      "label": "Release Notes",
+      "path": "project-management/issues/CC-23/release-notes.md"
+    },
+    {
+      "label": "Review Packet",
+      "path": "project-management/issues/CC-23/review-packet.md"
+    }
+  ],
+  "last_updated": "2026-04-06T07:48:56.904487991Z",
+  "status": "all_complete",
+  "display": {
+    "text": "Ready for Final Review",
+    "type": "success",
+    "subtext": "CI pipeline updates"
+  },
+  "badges": [
+    {
+      "label": "Refactor",
+      "type": "info"
+    },
+    {
+      "label": "3.5-7h",
+      "type": "info"
+    },
+    {
+      "label": "In Progress",
+      "type": "info"
+    },
+    {
+      "label": "Review Needed",
+      "type": "warning"
+    },
+    {
+      "label": "In Progress",
+      "type": "info"
+    },
+    {
+      "label": "Review Needed",
+      "type": "warning"
+    }
+  ],
+  "message": "All phases complete - final PR created",
+  "activity": "waiting",
+  "workflow_type": "waterfall",
+  "git_sha": "ac380b5",
+  "phase_checkpoints": {
+    "2": {
+      "context_sha": "context_sha=55a3813fa04f935e81f25a5ff57f217c1342f634"
+    }
+  },
+  "available_actions": [
+    {
+      "id": "implement",
+      "label": "Continue",
+      "skill": "wf-implement"
+    },
+    {
+      "id": "view-pr",
+      "label": "View Pull Request",
+      "skill": "external-link"
+    },
+    {
+      "id": "implement",
+      "label": "Continue",
+      "skill": "wf-implement"
+    },
+    {
+      "id": "view-pr",
+      "label": "View Pull Request",
+      "skill": "external-link"
+    },
+    {
+      "id": "view-pr",
+      "label": "View Pull Request",
+      "skill": "external-link"
+    }
+  ],
+  "needs_attention": true,
+  "pr_url": "https://github.com/iterative-works/claude-code-query/pull/32"
+}
