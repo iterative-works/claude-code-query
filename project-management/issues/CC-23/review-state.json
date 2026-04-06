@@ -19,14 +19,22 @@
     {
       "label": "Phase 1 Tasks",
       "path": "project-management/issues/CC-23/phase-01-tasks.md"
+    },
+    {
+      "label": "Phase 2 Context",
+      "path": "project-management/issues/CC-23/phase-02-context.md"
+    },
+    {
+      "label": "Phase 2 Tasks",
+      "path": "project-management/issues/CC-23/phase-02-tasks.md"
     }
   ],
-  "last_updated": "2026-04-05T21:22:36.392354054Z",
+  "last_updated": "2026-04-05T22:00:45.966304278Z",
   "status": "awaiting_review",
   "display": {
-    "text": "Phase 01: Awaiting Review",
+    "text": "Phase 02: Awaiting Review",
     "type": "warning",
-    "subtext": "Build modules and test file moves"
+    "subtext": "CI pipeline updates"
   },
   "badges": [
     {
@@ -44,15 +52,23 @@
     {
       "label": "Review Needed",
       "type": "warning"
+    },
+    {
+      "label": "In Progress",
+      "type": "info"
+    },
+    {
+      "label": "Review Needed",
+      "type": "warning"
     }
   ],
-  "message": "Phase 01 implementation started",
+  "message": "Phase 02 implementation started",
   "activity": "waiting",
   "workflow_type": "waterfall",
   "git_sha": "ac380b5",
   "phase_checkpoints": {
-    "1": {
-      "context_sha": "context_sha=ac380b582174ad3b7665da6a946fe927e89c09ba"
+    "2": {
+      "context_sha": "context_sha=55a3813fa04f935e81f25a5ff57f217c1342f634"
     }
   },
   "available_actions": [
@@ -65,8 +81,18 @@
       "id": "view-pr",
       "label": "View Pull Request",
       "skill": "external-link"
+    },
+    {
+      "id": "implement",
+      "label": "Continue",
+      "skill": "wf-implement"
+    },
+    {
+      "id": "view-pr",
+      "label": "View Pull Request",
+      "skill": "external-link"
     }
   ],
   "needs_attention": true,
-  "pr_url": "https://github.com/iterative-works/claude-code-query/pull/30"
+  "pr_url": "https://github.com/iterative-works/claude-code-query/pull/31"
 }
