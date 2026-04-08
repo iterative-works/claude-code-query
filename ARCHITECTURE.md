@@ -244,6 +244,18 @@ A pure utility that converts Claude's path-encoded project directory names back 
 
 Note: The decoding is ambiguous when original path segments contain `-` characters; callers should validate the result against the filesystem.
 
+### ProjectPathEncoder
+
+**Location**: `works.iterative.claude.core.log.ProjectPathEncoder`
+
+The symmetric counterpart to `ProjectPathDecoder`. Encodes an `os.Path` to the Claude project directory name format by replacing every `/` with `-`. Used internally by `ClaudeProjects` to derive the per-project subdirectory name from a working directory path.
+
+### ClaudeProjects
+
+**Location**: `works.iterative.claude.core.log.ClaudeProjects`
+
+A pure utility that resolves the Claude projects base directory and per-project subdirectory paths. Encapsulates the `CLAUDE_CONFIG_DIR` override convention: when the environment variable is set to a non-empty value it replaces `~/.claude`; otherwise the home directory is used. Takes `configDirOverride` and `home` as explicit parameters so callers (direct and effectful implementations) supply the env/home values — the utility itself performs no I/O.
+
 ## Internal CLI Management Layer
 
 ### ProcessManager

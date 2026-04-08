@@ -9,7 +9,7 @@ import works.iterative.claude.core.log.model.LogFileMetadata
 
 class EffectfulConversationLogIndexTest extends CatsEffectSuite:
 
-  private val index = EffectfulConversationLogIndex()
+  private val index = EffectfulConversationLogIndex.make(None, os.home)
 
   private def withProjectDir(
       dirName: String,

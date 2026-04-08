@@ -95,22 +95,23 @@ class EffectfulPackageReexportTest extends CatsEffectSuite:
     val _: Class[ConversationLogReader[?]] = classOf[ConversationLogReader[?]]
 
   test("effectful.* re-exports EffectfulConversationLogIndex"):
-    val index: ConversationLogIndex[IO] = EffectfulConversationLogIndex()
     val tmpDir = os.temp.dir()
-    for sessions <- index.listSessions(tmpDir)
-    yield
-      assertEquals(sessions.size, 0)
-      os.remove.all(tmpDir)
+    val program =
+      for
+        index: ConversationLogIndex[IO] <- EffectfulConversationLogIndex()
+        sessions <- index.listSessions(tmpDir)
+      yield assertEquals(sessions.size, 0)
+    program.guarantee(IO(os.remove.all(tmpDir)))
 
   test("effectful.* re-exports EffectfulConversationLogReader"):
     val reader: ConversationLogReader[IO] = EffectfulConversationLogReader()
     val tmpDir = os.temp.dir()
     val emptyFile = tmpDir / "empty.jsonl"
     os.write(emptyFile, "")
-    for entries <- reader.readAll(emptyFile)
-    yield
-      assertEquals(entries.size, 0)
-      os.remove.all(tmpDir)
+    val program =
+      for entries <- reader.readAll(emptyFile)
+      yield assertEquals(entries.size, 0)
+    program.guarantee(IO(os.remove.all(tmpDir)))
 
   test("effectful.* re-exports ProjectPathDecoder"):
     val decoded = ProjectPathDecoder.decode("-home-user-project")
