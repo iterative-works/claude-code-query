@@ -21,14 +21,14 @@
       "path": "project-management/issues/CC-34/phase-01-tasks.md"
     }
   ],
-  "last_updated": "2026-04-08T18:33:58.302632634Z",
-  "status": "tasks_ready",
+  "last_updated": "2026-04-08T18:34:58.952344263Z",
+  "status": "implementing",
   "display": {
-    "text": "Phase 1: Tasks Ready",
-    "type": "success",
+    "text": "Phase 01: Implementing",
+    "type": "progress",
     "subtext": "Lib-owned project dir resolution"
   },
-  "message": "Phase 1 tasks ready",
+  "message": "Phase 01 implementation started",
   "activity": "waiting",
   "workflow_type": "waterfall",
   "available_actions": [
@@ -59,5 +59,11 @@
     "1": {
       "context_sha": "context_sha=a7d3adbd07c9b6ffa8b65625dfe5b21a3a6d1054"
     }
-  }
+  },
+  "badges": [
+    {
+      "label": "In Progress",
+      "type": "info"
+    }
+  ]
 }
