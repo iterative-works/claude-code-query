@@ -34,10 +34,10 @@ Add cwd-based convenience overloads on both `DirectConversationLogIndex` and `Ef
 
 **Components:**
 - `ProjectPathEncoder` — pure object with `encode(cwd: os.Path): String` that produces the dash-encoded directory name (e.g. `/home/mph/ops/kanon` → `-home-mph-ops-kanon`). Mirrors `ProjectPathDecoder`.
-- `ClaudeProjects` (location TBD — see CLARIFY below) — small value object exposing:
-  - `baseDir(): os.Path` — resolves `CLAUDE_CONFIG_DIR` env var if set (joining `/projects` if it points at the config root) else `~/.claude/projects`.
-  - `projectDirFor(cwd: os.Path): os.Path` — composes `baseDir()` with `ProjectPathEncoder.encode(cwd)`.
-  - Optionally a testable variant that accepts an env lookup function and a home dir, with the public no-arg version delegating to `sys.env.get` and `sys.props("user.home")`.
+- `ClaudeProjects` — pure object in `core` exposing parameterized functions:
+  - `baseDir(configDirOverride: Option[os.Path], home: os.Path): os.Path` — returns `configDirOverride.getOrElse(home / ".claude") / "projects"`.
+  - `projectDirFor(cwd: os.Path, configDirOverride: Option[os.Path], home: os.Path): os.Path` — composes `baseDir` with `ProjectPathEncoder.encode(cwd)`.
+  - Each module's index resolves `CLAUDE_CONFIG_DIR` and `os.home` at its own boundary and passes them in.
 
 **Responsibilities:**
 - Encode the Claude Code on-disk convention for project directories.
@@ -102,50 +102,46 @@ Not applicable — this is a library-internal API change with no CLI, HTTP, or U
 - `effectful/EffectfulConversationLogIndex` → `core/ClaudeProjects` (wrapped in `IO`) → `core/ProjectPathEncoder`.
 - `core/ProjectPathDecoder` and `core/ProjectPathEncoder` become a matched pair.
 
-## Technical Risks & Uncertainties
+## Resolved Decisions
 
-### CLARIFY: Where does `ClaudeProjects` live — `core` or `direct`?
+### Decision: `ClaudeProjects` lives in `core`, env value passed from the edge (Option C)
 
-The encoder is unambiguously pure and belongs in `core` next to `ProjectPathDecoder`. `ClaudeProjects.baseDir()` however performs an env lookup, which is a (small) effect.
+Both `ProjectPathEncoder` and `ClaudeProjects` live in `core`. `ClaudeProjects` is fully pure — its API takes the `CLAUDE_CONFIG_DIR` value and home dir as parameters:
 
-**Questions to answer:**
-1. Is the project's "functional core" rule strict enough that `sys.env.get` disqualifies code from `core`?
-2. Do we want the effectful module to compute `baseDir` inside `IO` (which means `ClaudeProjects.baseDir` must not be called eagerly) or is one-shot resolution at construction time acceptable?
-3. Should we expose a pure `ClaudeProjects.from(envVar: Option[String], home: os.Path)` constructor and keep the impure `apply()` separate?
+```scala
+object ClaudeProjects:
+  def baseDir(configDirOverride: Option[os.Path], home: os.Path): os.Path =
+    configDirOverride.getOrElse(home / ".claude") / "projects"
 
-**Options:**
-- **Option A** — `ProjectPathEncoder` in `core`; `ClaudeProjects` in `core` with both a pure `from(env, home)` constructor and an impure default that reads `sys.env`. Pros: one home for the convention, easy to test. Cons: tiny impurity in `core`.
-- **Option B** — `ProjectPathEncoder` in `core`; `ClaudeProjects` duplicated as thin wrappers in `direct` (sync env read) and `effectful` (env read inside `IO`). Pros: keeps `core` 100% pure. Cons: small duplication.
-- **Option C** — Everything in `core`, but `baseDir` takes the env value as a parameter (`baseDir(configDirOverride: Option[String], home: os.Path)`), and each module's index resolves the inputs at its own boundary. Pros: maximally pure, single home. Cons: slightly clumsier ergonomics for the most common no-arg call.
+  def projectDirFor(cwd: os.Path, configDirOverride: Option[os.Path], home: os.Path): os.Path =
+    baseDir(configDirOverride, home) / ProjectPathEncoder.encode(cwd)
+```
 
-**Impact:** Determines module placement, test setup style, and how the effectful module suspends env access.
+The env read happens at each module's boundary:
+- `direct` reads `sys.env.get("CLAUDE_CONFIG_DIR").map(os.Path(_))` and `os.home` eagerly when the convenience method is called.
+- `effectful` wraps the same reads in `IO` (or `Sync[F].delay`) so effects stay suspended.
 
----
+Trade-off: the no-arg ergonomics are slightly clumsier in `core`, but both modules expose ergonomic no-arg conveniences (`listSessionsFor(cwd)`) so end users never see the parameterized form.
 
-### CLARIFY: Semantics of `CLAUDE_CONFIG_DIR`
+### Decision: `CLAUDE_CONFIG_DIR` is the config root
 
-Need to confirm against Claude Code CLI's documented behavior: when `CLAUDE_CONFIG_DIR=/foo/bar` is set, is the projects directory `/foo/bar/projects` or `/foo/bar` itself? The CLI source / docs should be the authority — guessing here would create a subtle incompatibility.
+When set, projects directory is `${CLAUDE_CONFIG_DIR}/projects` (i.e. the env var replaces `~/.claude`, not `~/.claude/projects`). Matches the issue's real-world example (`CLAUDE_CONFIG_DIR=~/.claude-iw` → sessions at `~/.claude-iw/projects/…`).
 
-**Questions to answer:**
-1. Does the CLI append `/projects` to `CLAUDE_CONFIG_DIR`, or is `CLAUDE_CONFIG_DIR` already the projects root?
-2. What does the CLI do when the env var is set to an empty string?
-3. Does `~` expansion happen inside the env value?
+Edge behavior:
+- Empty string → treat as unset (fall back to `~/.claude/projects`).
+- No shell `~` expansion in the env value (the JVM won't expand it; document this as a known limitation or resolve via `os.Path` which requires absolute paths anyway).
 
-**Impact:** Correctness of the entire feature; getting this wrong silently breaks every consumer.
+### Decision: Encoding is `/` → `-` character replacement, no validation gymnastics
 
----
+`ProjectPathEncoder.encode(cwd: os.Path): String = cwd.toString.replace('/', '-')`.
 
-### CLARIFY: Encoding edge cases
+By taking `os.Path` (always absolute, normalized) we get the edge cases for free:
+- No trailing slash (os.Path normalizes).
+- Always absolute (os.Path enforces).
+- Paths containing literal `-` encode unambiguously (the ambiguity is only in the decode direction; `ProjectPathDecoder` already documents it).
+- Windows: out of scope — this SDK targets Unix layouts anyway.
 
-The naive `path.toString.replace('/', '-')` works for `/home/mph/ops/kanon` but needs spec confirmation for:
-
-**Questions to answer:**
-1. Windows-style paths or drive letters — do we care? (Probably not for this SDK.)
-2. Paths containing literal `-` — the existing decoder is already documented as ambiguous; encoder is unambiguous so this is fine, but a test should pin it.
-3. Trailing slash on cwd — should it be normalized?
-4. Should we validate that `cwd` is absolute and throw / return an error otherwise?
-
-**Impact:** Minor correctness issues; addressable purely with tests.
+Pin current behavior with tests; no runtime validation needed.
 
 ---
 
@@ -212,7 +208,7 @@ Revert the commit; existing API is untouched so consumers are unaffected.
 ## Dependencies
 
 ### Prerequisites
-- Confirm `CLAUDE_CONFIG_DIR` semantics (CLARIFY above) before implementation.
+- None — all CLARIFYs resolved.
 
 ### Layer Dependencies
 - `core` encoder + `ClaudeProjects` must land before the `direct`/`effectful` conveniences.
@@ -223,20 +219,15 @@ Revert the commit; existing API is untouched so consumers are unaffected.
 
 ## Risks & Mitigations
 
-### Risk 1: Misinterpreting `CLAUDE_CONFIG_DIR` semantics
-**Likelihood:** Medium
+### Risk 1: `CLAUDE_CONFIG_DIR` semantics differ from CLI in practice
+**Likelihood:** Low
 **Impact:** High
-**Mitigation:** Verify against the Claude Code CLI source / docs before coding. Add an integration test that mirrors the CLI's actual layout.
+**Mitigation:** Decided: env var replaces `~/.claude` (projects dir is `$CLAUDE_CONFIG_DIR/projects`). Add an integration test using a tmp dir as `CLAUDE_CONFIG_DIR` that mirrors real sessions. If downstream reports mismatch, adjust.
 
 ### Risk 2: Breaking source compatibility on the existing index API
 **Likelihood:** Low
 **Impact:** Medium
 **Mitigation:** Add new methods only; do not rename, remove, or change signatures of existing ones. Existing tests act as the compat gate.
-
-### Risk 3: Hidden impurity in `core` if `ClaudeProjects` lands there
-**Likelihood:** Low
-**Impact:** Low
-**Mitigation:** Resolve via the CLARIFY — prefer Option A or C which keep the impure entry point clearly labeled.
 
 ---
 
