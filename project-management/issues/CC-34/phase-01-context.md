@@ -48,17 +48,45 @@ No prior phase outputs — this is the only phase.
      ```
    - Both are pure and take env/home as parameters — no `sys.env` read inside `core`.
 
-2. **Application (direct) — cwd conveniences**
-   - Add to `DirectConversationLogIndex`:
-     - `listSessionsFor(cwd: os.Path): Seq[LogFileMetadata]`
-     - `forSessionAt(cwd: os.Path, sessionId: String): Option[LogFileMetadata]`
-   - Each resolves `sys.env.get("CLAUDE_CONFIG_DIR")` (treat empty as unset) and `os.home` eagerly, calls `ClaudeProjects.projectDirFor`, then delegates to the existing path-based method.
+2. **Application (direct) — cwd conveniences with constructor injection**
+   - Make the primary constructor private and accept injected config:
+     ```scala
+     class DirectConversationLogIndex private (
+         configDirOverride: Option[os.Path],
+         home: os.Path
+     ) extends ConversationLogIndex[[A] =>> A]
+     ```
+   - Factory methods:
+     - `apply(): DirectConversationLogIndex` — production entry point. Reads `sys.env.get("CLAUDE_CONFIG_DIR").filter(_.nonEmpty).map(os.Path(_))` eagerly, uses `os.home` for the home dir. Returns an instance. Signature preserved from current code — only the body changes.
+     - `apply(configDirOverride: Option[os.Path], home: os.Path): DirectConversationLogIndex` — test seam.
+   - Add instance methods:
+     - `listSessionsFor(cwd: os.Path): Seq[LogFileMetadata]` — delegates to `listSessions(ClaudeProjects.projectDirFor(cwd, configDirOverride, home))`.
+     - `forSessionAt(cwd: os.Path, sessionId: String): Option[LogFileMetadata]` — analogous.
+   - Existing path-based methods (`listSessions`, `forSession`) unchanged.
 
-3. **Application (effectful) — IO-wrapped conveniences**
-   - Add to `EffectfulConversationLogIndex`:
-     - `listSessionsFor(cwd: os.Path): IO[Seq[LogFileMetadata]]`
-     - `forSessionAt(cwd: os.Path, sessionId: String): IO[Option[LogFileMetadata]]`
-   - Env + home reads happen inside the `IO` (via `IO.delay` / `Sync[F].delay`) so effects stay suspended. Delegates to existing path-based IO methods.
+3. **Application (effectful) — IO factory + pure test seam**
+   - Make the primary constructor private and accept injected config:
+     ```scala
+     class EffectfulConversationLogIndex private (
+         configDirOverride: Option[os.Path],
+         home: os.Path
+     ) extends ConversationLogIndex[IO]
+     ```
+   - Factory methods:
+     - `apply(): IO[EffectfulConversationLogIndex]` — **BREAKING CHANGE** from current `apply(): EffectfulConversationLogIndex`. Reads env + `os.home` inside `IO` so effects stay suspended; env is captured once per instance, not per call. Approved: Michal (2026-04-08).
+     - `make(configDirOverride: Option[os.Path], home: os.Path): EffectfulConversationLogIndex` — synchronous test seam, no `IO` wrapping needed by tests.
+   - Add instance methods:
+     - `listSessionsFor(cwd: os.Path): IO[Seq[LogFileMetadata]]` — delegates to `listSessions(ClaudeProjects.projectDirFor(cwd, configDirOverride, home))`.
+     - `forSessionAt(cwd: os.Path, sessionId: String): IO[Option[LogFileMetadata]]` — analogous.
+   - Existing path-based methods (`listSessions`, `forSession`) unchanged.
+   - **Migration note:** any existing caller using `EffectfulConversationLogIndex()` synchronously must switch to the IO-returning factory. Grep the repo during implementation and update call sites.
+
+### Design decisions (resolved)
+
+- **Home dir abstraction:** use `os.home` (typed `os.Path`, cross-platform) rather than `sys.env("HOME")`. Michal's call — better abstraction wins over matching the `CLIDiscovery` convention.
+- **Test seam:** constructor injection via private constructor + alternate factory. No method-signature pollution; production call path untouched.
+- **Effectful env read timing:** captured once inside `IO` at construction via the `apply()` factory. Honors analysis.md:61 (no eager env read at call site) without re-reading env per method call.
+- **`CLAUDE_CONFIG_DIR` empty string:** treated as unset (`.filter(_.nonEmpty)` before `os.Path`).
 
 4. **Docs touch-up**
    - Scaladoc on `ProjectPathEncoder` and `ClaudeProjects` describing the encoding convention and `CLAUDE_CONFIG_DIR` semantics (env var replaces `~/.claude`, so projects dir is `$CLAUDE_CONFIG_DIR/projects`; empty treated as unset; no `~` expansion).
@@ -98,33 +126,34 @@ TDD per component. Write failing tests first.
 - `projectDirFor(cwd=/a/b, None, /tmp/fakeHome)` → `/tmp/fakeHome/.claude/projects/-a-b`.
 
 **`DirectConversationLogIndex` (integration, tmp dir):**
-- Create a tmp dir laid out as `$tmp/projects/-a-b/<session>.jsonl` with a real fixture.
-- Call `listSessionsFor(os.Path("/a/b"))` while pointing `CLAUDE_CONFIG_DIR` at `$tmp` (via a test seam — either set the env for the forked JVM or add a package-private overload taking the override explicitly, whichever matches existing test style).
-- Assert it returns the same metadata as `listSessions($tmp/projects/-a-b)`.
+- Construct via the test-seam factory: `DirectConversationLogIndex(Some(tmpDir), tmpHome)`.
+- Lay out `$tmpDir/projects/-a-b/<session>.jsonl` with a real fixture.
+- Call `listSessionsFor(os.Path("/a/b"))` and assert it returns the same metadata as `listSessions($tmpDir/projects/-a-b)`.
 - Same for `forSessionAt`.
-- Empty `CLAUDE_CONFIG_DIR` string → treated as unset.
+- Test that `configDirOverride = None` falls back to `home / ".claude" / "projects"`.
+- Production `apply()` — smoke test that it constructs without throwing; do not assert on real `$HOME` contents.
 
 **`EffectfulConversationLogIndex` (integration):**
-- Analogous, returning `IO`, unsafely run in the test.
+- Construct via synchronous test seam: `EffectfulConversationLogIndex.make(Some(tmpDir), tmpHome)`.
+- Analogous fixture setup; assert IO-returning methods produce expected metadata.
+- Production `apply(): IO[...]` — smoke test that the IO can be run and produces an instance.
 
 **Regression gate:**
 - `ProjectPathDecoderTest`, existing `DirectConversationLogIndexTest`, `EffectfulConversationLogIndexTest` must remain green untouched.
 - `./mill __.compile` must produce zero warnings.
 - `./mill __.test` must pass.
 
-**Test seam note (CLARIFY during implementation):**
-The tests need a way to inject `CLAUDE_CONFIG_DIR` without relying on process env. Check how existing tests handle env / home. Preferred options, in order:
-1. Package-private overload on the index that accepts `(configDirOverride, home)` explicitly — tests use the overload, production call path threads env reads.
-2. Test-time env mutation (only if already used elsewhere in this repo).
-Pick option 1 unless the repo already has a pattern for option 2.
-
 ## Acceptance Criteria
 
 - [ ] `ProjectPathEncoder` exists in `core` with tests covering the three encoding cases.
 - [ ] `ClaudeProjects` exists in `core`, fully pure, with tests for unset / set / empty-string override and `projectDirFor` composition.
 - [ ] `DirectConversationLogIndex.listSessionsFor(cwd)` and `forSessionAt(cwd, id)` exist, delegate to existing path-based methods, honor `CLAUDE_CONFIG_DIR`.
-- [ ] `EffectfulConversationLogIndex.listSessionsFor(cwd)` and `forSessionAt(cwd, id)` exist as IO-returning methods with env reads suspended.
+- [ ] `DirectConversationLogIndex` has a private constructor with `(configDirOverride, home)`, a no-arg production `apply()` reading env + `os.home`, and a test-seam `apply(configDirOverride, home)`.
+- [ ] `EffectfulConversationLogIndex.listSessionsFor(cwd)` and `forSessionAt(cwd, id)` exist as IO-returning methods.
+- [ ] `EffectfulConversationLogIndex.apply(): IO[EffectfulConversationLogIndex]` reads env + `os.home` inside `IO`, captured once per instance. Existing synchronous `apply()` is removed (breaking change, approved).
+- [ ] `EffectfulConversationLogIndex.make(configDirOverride, home)` exists as a synchronous test seam.
 - [ ] All new public symbols carry Scaladoc covering encoding convention and `CLAUDE_CONFIG_DIR` semantics (env var replaces `~/.claude`; empty = unset; no `~` expansion).
-- [ ] Existing path-based API is byte-identical (no signature, name, or behavior changes).
+- [ ] Existing path-based instance methods (`listSessions`, `forSession`) are byte-identical.
+- [ ] All in-repo call sites of the old `EffectfulConversationLogIndex()` factory are updated to the IO-returning version.
 - [ ] `./mill __.compile` has zero warnings; `./mill __.test` and `./mill __.itest` pass.
 - [ ] No new runtime dependencies introduced.
