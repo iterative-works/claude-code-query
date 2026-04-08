@@ -2,11 +2,11 @@
 
 **Issue:** CC-34
 **Created:** 2026-04-08
-**Status:** 0/1 phases complete (0%)
+**Status:** 1/1 phases complete (100%)
 
 ## Phase Index
 
-- [ ] Phase 1: Lib-owned project dir resolution (Est: 2.5-5h) → `phase-01-context.md`
+- [x] Phase 1: Lib-owned project dir resolution (Est: 2.5-5h) → `phase-01-context.md`
   - `core/ProjectPathEncoder` + tests
   - `core/ClaudeProjects` (pure, parameterized env/home) + tests
   - `DirectConversationLogIndex.listSessionsFor(cwd)` / `forSessionAt(cwd, id)` + tests
@@ -15,7 +15,7 @@
 
 ## Progress Tracker
 
-**Completed:** 0/1 phases
+**Completed:** 1/1 phases
 **Estimated Total:** 2.5-5 hours
 **Time Spent:** 0 hours
 
