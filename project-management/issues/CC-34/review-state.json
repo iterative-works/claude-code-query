@@ -21,11 +21,11 @@
       "path": "project-management/issues/CC-34/phase-01-tasks.md"
     }
   ],
-  "last_updated": "2026-04-08T18:34:58.952344263Z",
-  "status": "implementing",
+  "last_updated": "2026-04-08T19:58:09.393906666Z",
+  "status": "awaiting_review",
   "display": {
-    "text": "Phase 01: Implementing",
-    "type": "progress",
+    "text": "Phase 01: Awaiting Review",
+    "type": "warning",
     "subtext": "Lib-owned project dir resolution"
   },
   "message": "Phase 01 implementation started",
@@ -51,6 +51,11 @@
       "id": "implement",
       "label": "Continue",
       "skill": "wf-implement"
+    },
+    {
+      "id": "view-pr",
+      "label": "View Pull Request",
+      "skill": "external-link"
     }
   ],
   "git_sha": "2518bbf",
@@ -64,6 +69,11 @@
     {
       "label": "In Progress",
       "type": "info"
+    },
+    {
+      "label": "Review Needed",
+      "type": "warning"
     }
-  ]
+  ],
+  "pr_url": "https://github.com/iterative-works/claude-code-query/pull/35"
 }
