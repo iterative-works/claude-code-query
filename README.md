@@ -377,10 +377,10 @@ object LogExample extends IOApp.Simple:
     val logDir = os.Path("/home/user/.claude/projects") /
       ProjectPathDecoder.decode("-home-user-myproject")
 
-    val index  = EffectfulConversationLogIndex()
     val reader = EffectfulConversationLogReader()
 
     for
+      index    <- EffectfulConversationLogIndex()
       sessions <- index.listSessions(logDir)
       _        <- IO.println(s"Found ${sessions.size} sessions")
       entries  <- reader.readAll(sessions.head.path)
