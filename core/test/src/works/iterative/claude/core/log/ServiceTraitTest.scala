@@ -7,7 +7,8 @@ import munit.FunSuite
 import cats.effect.IO
 import works.iterative.claude.core.log.model.{
   ConversationLogEntry,
-  LogFileMetadata
+  LogFileMetadata,
+  SubAgentMetadata
 }
 
 class ServiceTraitTest extends FunSuite:
@@ -20,6 +21,10 @@ class ServiceTraitTest extends FunSuite:
             projectPath: os.Path,
             sessionId: String
         ): Option[LogFileMetadata] = None
+        def listSubAgents(
+            projectPath: os.Path,
+            sessionId: String
+        ): Seq[SubAgentMetadata] = Seq.empty
 
   test("ConversationLogIndex compiles with IO"):
     val _: ConversationLogIndex[IO] = new ConversationLogIndex[IO]:
@@ -30,6 +35,11 @@ class ServiceTraitTest extends FunSuite:
           sessionId: String
       ): IO[Option[LogFileMetadata]] =
         IO.pure(None)
+      def listSubAgents(
+          projectPath: os.Path,
+          sessionId: String
+      ): IO[Seq[SubAgentMetadata]] =
+        IO.pure(Seq.empty)
 
   test("ConversationLogReader compiles with identity F and List stream type"):
     val _: ConversationLogReader[[A] =>> A] =
