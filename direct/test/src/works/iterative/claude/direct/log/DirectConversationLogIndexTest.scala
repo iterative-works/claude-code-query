@@ -5,7 +5,6 @@ package works.iterative.claude.direct.log
 
 import munit.FunSuite
 import works.iterative.claude.core.log.model.LogFileMetadata
-import works.iterative.claude.core.log.model.SubAgentMetadata
 
 class DirectConversationLogIndexTest extends FunSuite:
 
