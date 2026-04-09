@@ -29,14 +29,14 @@
       "path": "project-management/issues/CC-37/phase-02-tasks.md"
     }
   ],
-  "last_updated": "2026-04-09T08:59:39.155417664Z",
-  "status": "tasks_ready",
+  "last_updated": "2026-04-09T09:00:21.127997567Z",
+  "status": "implementing",
   "display": {
-    "text": "Phase 2: Tasks Ready",
-    "type": "success",
+    "text": "Phase 02: Implementing",
+    "type": "progress",
     "subtext": "Trait extension and implementations"
   },
-  "message": "Phase 2 tasks ready",
+  "message": "Phase 02 implementation started",
   "activity": "waiting",
   "workflow_type": "waterfall",
   "available_actions": [
@@ -86,6 +86,10 @@
     {
       "label": "Review Needed",
       "type": "warning"
+    },
+    {
+      "label": "In Progress",
+      "type": "info"
     }
   ],
   "pr_url": "https://github.com/iterative-works/claude-code-query/pull/38"
