@@ -102,36 +102,15 @@ Not applicable. This is a library-only change with no API endpoints or UI.
 
 ## Technical Risks & Uncertainties
 
-### CLARIFY: Trait evolution strategy for ConversationLogIndex
+### RESOLVED: Trait evolution strategy for ConversationLogIndex
 
-Adding `listSubAgents` to `ConversationLogIndex[F[_]]` is a source-breaking change for any class implementing the trait. Within this project, only `DirectConversationLogIndex` and `EffectfulConversationLogIndex` implement it, so the break is contained. However, if external code implements this trait, it would break.
-
-**Questions to answer:**
-1. Should `listSubAgents` go on the existing `ConversationLogIndex` trait or on a separate `SubAgentIndex[F[_]]` trait?
-2. Are there any known external implementations of `ConversationLogIndex`?
-
-**Options:**
-- **Option A**: Add directly to `ConversationLogIndex`. Simplest, one trait to depend on. Breaks external implementors (if any).
-- **Option B**: Create a separate `SubAgentIndex[F[_]]` trait. No breakage. Callers need two type parameters or a combined type.
-- **Option C**: Add to `ConversationLogIndex` with a default implementation returning empty. No breakage, but hides the fact that an implementation doesn't support sub-agents.
-
-**Impact:** API surface and downstream compatibility.
+**Decision:** Add `listSubAgents` directly to `ConversationLogIndex[F[_]]`. The library is pre-1.0 (0.3.0-SNAPSHOT), the trait is internal to this project, and there are no known external implementors. A separate trait would be over-engineering at this stage.
 
 ---
 
-### CLARIFY: SubAgentMetadata content scope
+### RESOLVED: SubAgentMetadata content scope
 
-The `.meta.json` files currently contain `agentType` and `description`. The parent session's `tool_result` contains additional fields like `totalDurationMs`, `totalTokens`, `prompt`, `status`. The issue lists parsing `toolUseResult` as "nice-to-have".
-
-**Questions to answer:**
-1. Should `SubAgentMetadata` include only `.meta.json` fields, or also parent-side fields from the `tool_result`?
-2. Is parsing the parent's `tool_result` content blocks in scope for this issue or deferred?
-
-**Options:**
-- **Option A**: `SubAgentMetadata` contains only `.meta.json` fields + the transcript path. Parent linkage is a separate concern.
-- **Option B**: `SubAgentMetadata` also carries parent-side data (duration, tokens, prompt). Requires scanning parent session entries, significantly more complex.
-
-**Impact:** Scope and complexity of the implementation. Option A is aligned with the issue's explicit acceptance criteria.
+**Decision:** `SubAgentMetadata` contains only `.meta.json` fields (`agentType`, `description`) + the transcript path. Parent-side data from `toolUseResult` (duration, tokens, prompt) is not duplicated — consumers already have the parent transcript loaded and can access that data directly. Parsing `toolUseResult` is deferred as a separate concern.
 
 ---
 
