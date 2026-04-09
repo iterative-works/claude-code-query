@@ -20,7 +20,8 @@ object ConversationLogParser:
       "sessionId",
       "isSidechain",
       "cwd",
-      "version"
+      "version",
+      "agentId"
     )
 
   def parseLogLine(line: String): Option[ConversationLogEntry] =
@@ -41,6 +42,7 @@ object ConversationLogParser:
       isSidechain = cursor.get[Boolean]("isSidechain").toOption.getOrElse(false)
       cwd = cursor.get[String]("cwd").toOption
       version = cursor.get[String]("version").toOption
+      agentId = cursor.get[String]("agentId").toOption
       payload <- parsePayload(entryType, cursor, json)
     yield ConversationLogEntry(
       uuid,
@@ -50,7 +52,8 @@ object ConversationLogParser:
       isSidechain,
       cwd,
       version,
-      payload
+      payload,
+      agentId
     )
 
   private def parseInstant(s: String): Option[Instant] =

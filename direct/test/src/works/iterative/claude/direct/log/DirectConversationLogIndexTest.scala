@@ -107,3 +107,134 @@ class DirectConversationLogIndexTest extends FunSuite:
         case Some(meta) =>
           assertEquals(meta.path, projectDir / "target-session.jsonl")
         case None => fail("Expected Some(LogFileMetadata)")
+
+  // listSubAgents tests
+
+  private def withSubAgentsDir(
+      sessionId: String,
+      agentFiles: List[(String, Option[String])]
+  )(body: os.Path => Unit): Unit =
+    val tmpRoot = os.temp.dir()
+    try
+      val projectDir = tmpRoot / "-home-mph-test-project"
+      os.makeDir.all(projectDir)
+      os.write(projectDir / s"$sessionId.jsonl", "")
+      val subagentsDir = projectDir / sessionId / "subagents"
+      if agentFiles.nonEmpty then os.makeDir.all(subagentsDir)
+      agentFiles.foreach:
+        case (agentId, Some(metaJson)) =>
+          os.write(subagentsDir / s"agent-$agentId.jsonl", "")
+          os.write(subagentsDir / s"agent-$agentId.meta.json", metaJson)
+        case (agentId, None) =>
+          os.write(subagentsDir / s"agent-$agentId.jsonl", "")
+      body(projectDir)
+    finally os.remove.all(tmpRoot)
+
+  private def validMetaJson(
+      agentId: String,
+      agentType: Option[String] = None,
+      description: Option[String] = None
+  ): String =
+    val typeField =
+      agentType.map(t => s""","agentType":"$t"""").getOrElse("")
+    val descField =
+      description.map(d => s""","description":"$d"""").getOrElse("")
+    s"""{"agentId":"$agentId"$typeField$descField}"""
+
+  test("listSubAgents returns empty Seq when subagents directory does not exist"):
+    withSubAgentsDir("sess-1", List.empty): projectDir =>
+      val result = index.listSubAgents(projectDir, "sess-1")
+      assertEquals(result, Seq.empty)
+
+  test("listSubAgents returns empty Seq when subagents directory is empty"):
+    val tmpRoot = os.temp.dir()
+    try
+      val projectDir = tmpRoot / "-home-mph-test-project"
+      os.makeDir.all(projectDir / "sess-1" / "subagents")
+      val result = index.listSubAgents(projectDir, "sess-1")
+      assertEquals(result, Seq.empty)
+    finally os.remove.all(tmpRoot)
+
+  test("listSubAgents discovers sub-agent with valid .meta.json"):
+    withSubAgentsDir(
+      "sess-2",
+      List(("abc", Some(validMetaJson("abc"))))
+    ): projectDir =>
+      val result = index.listSubAgents(projectDir, "sess-2")
+      assertEquals(result.length, 1)
+      assertEquals(result.head.agentId, "abc")
+
+  test("listSubAgents populates all metadata fields from .meta.json"):
+    withSubAgentsDir(
+      "sess-3",
+      List(
+        (
+          "abc",
+          Some(
+            validMetaJson("abc", agentType = Some("researcher"), description = Some("Does research"))
+          )
+        )
+      )
+    ): projectDir =>
+      val result = index.listSubAgents(projectDir, "sess-3")
+      assertEquals(result.length, 1)
+      val meta = result.head
+      assertEquals(meta.agentId, "abc")
+      assertEquals(meta.agentType, Some("researcher"))
+      assertEquals(meta.description, Some("Does research"))
+
+  test("listSubAgents sets transcriptPath to the .jsonl file path"):
+    withSubAgentsDir(
+      "sess-4",
+      List(("abc", Some(validMetaJson("abc"))))
+    ): projectDir =>
+      val result = index.listSubAgents(projectDir, "sess-4")
+      assertEquals(result.length, 1)
+      assertEquals(
+        result.head.transcriptPath,
+        projectDir / "sess-4" / "subagents" / "agent-abc.jsonl"
+      )
+
+  test("listSubAgents skips sub-agent when .meta.json is missing"):
+    withSubAgentsDir("sess-5", List(("abc", None))): projectDir =>
+      val result = index.listSubAgents(projectDir, "sess-5")
+      assertEquals(result, Seq.empty)
+
+  test("listSubAgents skips sub-agent when .meta.json is malformed"):
+    val tmpRoot = os.temp.dir()
+    try
+      val projectDir = tmpRoot / "-home-mph-test-project"
+      val subagentsDir = projectDir / "sess-6" / "subagents"
+      os.makeDir.all(subagentsDir)
+      os.write(subagentsDir / "agent-abc.jsonl", "")
+      os.write(subagentsDir / "agent-abc.meta.json", "NOT VALID JSON {{{")
+      val result = index.listSubAgents(projectDir, "sess-6")
+      assertEquals(result, Seq.empty)
+    finally os.remove.all(tmpRoot)
+
+  test("listSubAgents discovers multiple sub-agents"):
+    withSubAgentsDir(
+      "sess-7",
+      List(
+        ("aaa", Some(validMetaJson("aaa"))),
+        ("bbb", Some(validMetaJson("bbb"))),
+        ("ccc", Some(validMetaJson("ccc")))
+      )
+    ): projectDir =>
+      val result = index.listSubAgents(projectDir, "sess-7")
+      assertEquals(result.length, 3)
+      assertEquals(result.map(_.agentId).toSet, Set("aaa", "bbb", "ccc"))
+
+  test("listSubAgents ignores non-agent files in subagents directory"):
+    val tmpRoot = os.temp.dir()
+    try
+      val projectDir = tmpRoot / "-home-mph-test-project"
+      val subagentsDir = projectDir / "sess-8" / "subagents"
+      os.makeDir.all(subagentsDir)
+      os.write(subagentsDir / "agent-abc.jsonl", "")
+      os.write(subagentsDir / "agent-abc.meta.json", validMetaJson("abc"))
+      os.write(subagentsDir / "notes.txt", "irrelevant")
+      val result = index.listSubAgents(projectDir, "sess-8")
+      assertEquals(result.length, 1)
+      assertEquals(result.head.agentId, "abc")
+    finally os.remove.all(tmpRoot)

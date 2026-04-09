@@ -1,0 +1,122 @@
+{
+  "version": 2,
+  "issue_id": "CC-37",
+  "artifacts": [
+    {
+      "label": "Analysis",
+      "path": "project-management/issues/CC-37/analysis.md",
+      "category": "input"
+    },
+    {
+      "label": "Tasks",
+      "path": "project-management/issues/CC-37/tasks.md",
+      "category": "output"
+    },
+    {
+      "label": "Phase 1 Context",
+      "path": "project-management/issues/CC-37/phase-01-context.md"
+    },
+    {
+      "label": "Phase 1 Tasks",
+      "path": "project-management/issues/CC-37/phase-01-tasks.md"
+    },
+    {
+      "label": "Phase 2 Context",
+      "path": "project-management/issues/CC-37/phase-02-context.md"
+    },
+    {
+      "label": "Phase 2 Tasks",
+      "path": "project-management/issues/CC-37/phase-02-tasks.md"
+    },
+    {
+      "label": "Implementation Log",
+      "path": "project-management/issues/CC-37/implementation-log.md"
+    },
+    {
+      "label": "Release Notes",
+      "path": "project-management/issues/CC-37/release-notes.md"
+    },
+    {
+      "label": "Review Packet",
+      "path": "project-management/issues/CC-37/review-packet.md"
+    }
+  ],
+  "last_updated": "2026-04-09T09:32:28.652441954Z",
+  "status": "all_complete",
+  "display": {
+    "text": "Ready for Final Review",
+    "type": "success",
+    "subtext": "Trait extension and implementations"
+  },
+  "message": "All phases complete - final PR created",
+  "activity": "waiting",
+  "workflow_type": "waterfall",
+  "available_actions": [
+    {
+      "id": "create-tasks",
+      "label": "Generate Tasks",
+      "skill": "wf-create-tasks"
+    },
+    {
+      "id": "implement",
+      "label": "Start Implementation",
+      "skill": "wf-implement"
+    },
+    {
+      "id": "implement",
+      "label": "Start Implementation",
+      "skill": "wf-implement"
+    },
+    {
+      "id": "implement",
+      "label": "Continue",
+      "skill": "wf-implement"
+    },
+    {
+      "id": "view-pr",
+      "label": "View Pull Request",
+      "skill": "external-link"
+    },
+    {
+      "id": "implement",
+      "label": "Continue",
+      "skill": "wf-implement"
+    },
+    {
+      "id": "view-pr",
+      "label": "View Pull Request",
+      "skill": "external-link"
+    },
+    {
+      "id": "view-pr",
+      "label": "View Pull Request",
+      "skill": "external-link"
+    }
+  ],
+  "git_sha": "228d5fc",
+  "needs_attention": true,
+  "phase_checkpoints": {
+    "2": {
+      "context_sha": "context_sha=c4b0bdba5d8f6a4d2bd703ab71ec02aa538eff40"
+    }
+  },
+  "badges": [
+    {
+      "label": "In Progress",
+      "type": "info"
+    },
+    {
+      "label": "Review Needed",
+      "type": "warning"
+    },
+    {
+      "label": "In Progress",
+      "type": "info"
+    },
+    {
+      "label": "Review Needed",
+      "type": "warning"
+    }
+  ],
+  "pr_url": "https://github.com/iterative-works/claude-code-query/pull/40"
+}

@@ -9,6 +9,8 @@ import works.iterative.claude.core.log.ConversationLogIndex
 import works.iterative.claude.core.log.ClaudeProjects
 import works.iterative.claude.core.log.LogFileMetadataBuilder
 import works.iterative.claude.core.log.model.LogFileMetadata
+import works.iterative.claude.core.log.model.SubAgentMetadata
+import works.iterative.claude.core.log.parsing.SubAgentMetadataParser
 
 class EffectfulConversationLogIndex private (
     configDirOverride: Option[os.Path],
@@ -41,6 +43,58 @@ class EffectfulConversationLogIndex private (
       case true =>
         IO(LogFileMetadataBuilder.fromStat(projectPath, candidate)).map(Some(_))
       case false => IO.pure(None)
+
+  def listSubAgents(
+      projectPath: os.Path,
+      sessionId: String
+  ): IO[Seq[SubAgentMetadata]] =
+    val subagentsDir = projectPath / sessionId / "subagents"
+    IO(os.exists(subagentsDir) && os.isDir(subagentsDir)).flatMap:
+      case false => IO.pure(Seq.empty)
+      case true  =>
+        val dir = Fs2Path.fromNioPath(subagentsDir.toNIO)
+        Files[IO]
+          .list(dir)
+          .filter(p =>
+            val name = p.fileName.toString
+            name.startsWith("agent-") && name.endsWith(".jsonl")
+          )
+          .evalMap: p =>
+            val jsonlPath = os.Path(p.toNioPath)
+            val metaPath =
+              jsonlPath / os.up / s"${jsonlPath.last.stripSuffix(".jsonl")}.meta.json"
+            IO(os.exists(metaPath)).flatMap:
+              case false => IO.pure(None)
+              case true  =>
+                IO(os.read(metaPath))
+                  .map(content =>
+                    io.circe.parser
+                      .parse(content)
+                      .toOption
+                      .flatMap(SubAgentMetadataParser.parse(_, jsonlPath))
+                  )
+          .compile
+          .toList
+          .map(_.flatten.toSeq)
+
+  /** Lists all sub-agents for a session in the given working directory.
+    *
+    * Resolves the project directory via `CLAUDE_CONFIG_DIR` semantics (same as
+    * `listSessionsFor`) and delegates to `listSubAgents`.
+    *
+    * @param cwd
+    *   the working directory
+    * @param sessionId
+    *   the session identifier
+    */
+  def listSubAgentsFor(
+      cwd: os.Path,
+      sessionId: String
+  ): IO[Seq[SubAgentMetadata]] =
+    listSubAgents(
+      ClaudeProjects.projectDirFor(cwd, configDirOverride, home),
+      sessionId
+    )
 
   /** Lists all sessions for the given working directory.
     *

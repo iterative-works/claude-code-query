@@ -7,6 +7,8 @@ import works.iterative.claude.core.log.ConversationLogIndex
 import works.iterative.claude.core.log.LogFileMetadataBuilder
 import works.iterative.claude.core.log.ClaudeProjects
 import works.iterative.claude.core.log.model.LogFileMetadata
+import works.iterative.claude.core.log.model.SubAgentMetadata
+import works.iterative.claude.core.log.parsing.SubAgentMetadataParser
 
 class DirectConversationLogIndex private (
     configDirOverride: Option[os.Path],
@@ -28,6 +30,44 @@ class DirectConversationLogIndex private (
     if os.exists(candidate) && os.isFile(candidate) then
       Some(LogFileMetadataBuilder.fromStat(projectPath, candidate))
     else None
+
+  def listSubAgents(
+      projectPath: os.Path,
+      sessionId: String
+  ): Seq[SubAgentMetadata] =
+    val subagentsDir = projectPath / sessionId / "subagents"
+    if !os.exists(subagentsDir) || !os.isDir(subagentsDir) then Seq.empty
+    else
+      os.list(subagentsDir)
+        .filter(p =>
+          os.isFile(p) && p.last.endsWith(".jsonl") && p.last
+            .startsWith("agent-")
+        )
+        .flatMap: jsonlPath =>
+          val metaPath =
+            jsonlPath / os.up / s"${jsonlPath.last.stripSuffix(".jsonl")}.meta.json"
+          if !os.exists(metaPath) then None
+          else
+            io.circe.parser
+              .parse(os.read(metaPath))
+              .toOption
+              .flatMap(SubAgentMetadataParser.parse(_, jsonlPath))
+
+  /** Lists all sub-agents for a session in the given working directory.
+    *
+    * Resolves the project directory via `CLAUDE_CONFIG_DIR` semantics (same as
+    * `listSessionsFor`) and delegates to `listSubAgents`.
+    *
+    * @param cwd
+    *   the working directory
+    * @param sessionId
+    *   the session identifier
+    */
+  def listSubAgentsFor(cwd: os.Path, sessionId: String): Seq[SubAgentMetadata] =
+    listSubAgents(
+      ClaudeProjects.projectDirFor(cwd, configDirOverride, home),
+      sessionId
+    )
 
   /** Lists all sessions for the given working directory.
     *
