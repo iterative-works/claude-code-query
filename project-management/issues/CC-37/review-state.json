@@ -11,16 +11,24 @@
       "label": "Tasks",
       "path": "project-management/issues/CC-37/tasks.md",
       "category": "output"
+    },
+    {
+      "label": "Phase 1 Context",
+      "path": "project-management/issues/CC-37/phase-01-context.md"
+    },
+    {
+      "label": "Phase 1 Tasks",
+      "path": "project-management/issues/CC-37/phase-01-tasks.md"
     }
   ],
-  "last_updated": "2026-04-09T08:29:45.293888782Z",
-  "status": "tasks_ready",
+  "last_updated": "2026-04-09T08:51:36.147280028Z",
+  "status": "awaiting_review",
   "display": {
-    "text": "Tasks Ready",
-    "type": "success",
-    "subtext": "2 phases identified"
+    "text": "Phase 01: Awaiting Review",
+    "type": "warning",
+    "subtext": "Domain model and parsing"
   },
-  "message": "Task breakdown updated. Squashed trait + implementations into single phase.",
+  "message": "Phase 01 implementation started",
   "activity": "waiting",
   "workflow_type": "waterfall",
   "available_actions": [
@@ -38,8 +46,34 @@
       "id": "implement",
       "label": "Start Implementation",
       "skill": "wf-implement"
+    },
+    {
+      "id": "implement",
+      "label": "Continue",
+      "skill": "wf-implement"
+    },
+    {
+      "id": "view-pr",
+      "label": "View Pull Request",
+      "skill": "external-link"
     }
   ],
   "git_sha": "228d5fc",
-  "needs_attention": true
+  "needs_attention": true,
+  "phase_checkpoints": {
+    "1": {
+      "context_sha": "context_sha=dfbb299464b95ca02e6d25279e0637cd8643e493"
+    }
+  },
+  "badges": [
+    {
+      "label": "In Progress",
+      "type": "info"
+    },
+    {
+      "label": "Review Needed",
+      "type": "warning"
+    }
+  ],
+  "pr_url": "https://github.com/iterative-works/claude-code-query/pull/38"
 }

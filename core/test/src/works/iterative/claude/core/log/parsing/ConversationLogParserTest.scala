@@ -124,7 +124,7 @@ class ConversationLogParserTest extends FunSuite:
     val result = ConversationLogParser.parseLogLine(line)
     result match
       case Some(
-            ConversationLogEntry(_, _, _, _, _, _, _, UserLogEntry(content))
+            ConversationLogEntry(_, _, _, _, _, _, _, UserLogEntry(content), _)
           ) =>
         assertEquals(content, List(TextBlock("hello world")))
       case Some(entry) => fail(s"Expected UserLogEntry, got: ${entry.payload}")
@@ -148,7 +148,7 @@ class ConversationLogParserTest extends FunSuite:
     val result = ConversationLogParser.parseLogLine(line)
     result match
       case Some(
-            ConversationLogEntry(_, _, _, _, _, _, _, UserLogEntry(content))
+            ConversationLogEntry(_, _, _, _, _, _, _, UserLogEntry(content), _)
           ) =>
         assertEquals(
           content,
@@ -189,7 +189,8 @@ class ConversationLogParserTest extends FunSuite:
               _,
               _,
               _,
-              AssistantLogEntry(content, model, usage, requestId)
+              AssistantLogEntry(content, model, usage, requestId),
+              _
             )
           ) =>
         assertEquals(content, List(TextBlock("response text")))
@@ -228,7 +229,8 @@ class ConversationLogParserTest extends FunSuite:
               _,
               _,
               _,
-              AssistantLogEntry(content, model, usage, requestId)
+              AssistantLogEntry(content, model, usage, requestId),
+              _
             )
           ) =>
         assertEquals(content, List(TextBlock("minimal")))
@@ -260,7 +262,8 @@ class ConversationLogParserTest extends FunSuite:
               _,
               _,
               _,
-              SystemLogEntry(subtype, data)
+              SystemLogEntry(subtype, data),
+              _
             )
           ) =>
         assertEquals(subtype, "init")
@@ -291,7 +294,8 @@ class ConversationLogParserTest extends FunSuite:
               _,
               _,
               _,
-              ProgressLogEntry(data, parentToolUseId)
+              ProgressLogEntry(data, parentToolUseId),
+              _
             )
           ) =>
         assertEquals(parentToolUseId, Some("tool-use-123"))
@@ -322,7 +326,8 @@ class ConversationLogParserTest extends FunSuite:
               _,
               _,
               _,
-              QueueOperationLogEntry(operation, content)
+              QueueOperationLogEntry(operation, content),
+              _
             )
           ) =>
         assertEquals(operation, "enqueue")
@@ -352,7 +357,8 @@ class ConversationLogParserTest extends FunSuite:
               _,
               _,
               _,
-              FileHistorySnapshotLogEntry(data)
+              FileHistorySnapshotLogEntry(data),
+              _
             )
           ) =>
         assertEquals(data("files"), List("/a.txt", "/b.txt"))
@@ -371,7 +377,7 @@ class ConversationLogParserTest extends FunSuite:
     val result = ConversationLogParser.parseLogLine(line)
     result match
       case Some(
-            ConversationLogEntry(_, _, _, _, _, _, _, LastPromptLogEntry(data))
+            ConversationLogEntry(_, _, _, _, _, _, _, LastPromptLogEntry(data), _)
           ) =>
         assertEquals(data("promptText"), "what is 2+2?")
       case Some(entry) =>
@@ -397,7 +403,8 @@ class ConversationLogParserTest extends FunSuite:
               _,
               _,
               _,
-              RawLogEntry(entryType, json)
+              RawLogEntry(entryType, json),
+              _
             )
           ) =>
         assertEquals(entryType, "future_type_v99")
@@ -435,7 +442,8 @@ class ConversationLogParserTest extends FunSuite:
               _,
               _,
               _,
-              AssistantLogEntry(_, _, Some(usage), _)
+              AssistantLogEntry(_, _, Some(usage), _),
+              _
             )
           ) =>
         assertEquals(usage.inputTokens, 200)
@@ -472,7 +480,8 @@ class ConversationLogParserTest extends FunSuite:
               _,
               _,
               _,
-              AssistantLogEntry(_, _, Some(usage), _)
+              AssistantLogEntry(_, _, Some(usage), _),
+              _
             )
           ) =>
         assertEquals(usage.inputTokens, 10)
@@ -515,6 +524,65 @@ class ConversationLogParserTest extends FunSuite:
       .parse("""{"uuid":"u24","sessionId":"s24","message":{"content":"hi"}}""")
       .getOrElse(fail("parse failed"))
     assertEquals(ConversationLogParser.parseLogEntry(json), None)
+
+
+
+  test("JSONL line with agentId field extracts Some(agentId)"):
+    val line =
+      """{
+        "type":"human",
+        "uuid":"u30",
+        "sessionId":"s30",
+        "agentId":"agent-abc-123",
+        "message":{"content":"hello"}
+      }"""
+    val result = ConversationLogParser.parseLogLine(line)
+    result match
+      case Some(entry) => assertEquals(entry.agentId, Some("agent-abc-123"))
+      case None        => fail("Expected Some(ConversationLogEntry)")
+
+  test("JSONL line without agentId field extracts None"):
+    val line =
+      """{"type":"human","uuid":"u31","sessionId":"s31","message":{"content":"hi"}}"""
+    val result = ConversationLogParser.parseLogLine(line)
+    result match
+      case Some(entry) => assertEquals(entry.agentId, None)
+      case None        => fail("Expected Some(ConversationLogEntry)")
+
+  test("agentId is excluded from data maps in system entries"):
+    val line =
+      """{
+        "type":"system",
+        "uuid":"u32",
+        "sessionId":"s32",
+        "subtype":"init",
+        "agentId":"agent-xyz",
+        "apiKeySource":"environment"
+      }"""
+    val result = ConversationLogParser.parseLogLine(line)
+    result match
+      case Some(ConversationLogEntry(_, _, _, _, _, _, _, SystemLogEntry(_, data), _)) =>
+        assert(!data.contains("agentId"), "agentId must not appear in data map")
+        assertEquals(data("apiKeySource"), "environment")
+      case Some(entry) => fail(s"Expected SystemLogEntry, got: ${entry.payload}")
+      case None        => fail("Expected Some(ConversationLogEntry)")
+
+  test("agentId is excluded from data maps in progress entries"):
+    val line =
+      """{
+        "type":"progress",
+        "uuid":"u33",
+        "sessionId":"s33",
+        "agentId":"agent-xyz",
+        "progress":0.5
+      }"""
+    val result = ConversationLogParser.parseLogLine(line)
+    result match
+      case Some(ConversationLogEntry(_, _, _, _, _, _, _, ProgressLogEntry(data, _), _)) =>
+        assert(!data.contains("agentId"), "agentId must not appear in data map")
+        assertEquals(data("progress"), 0.5)
+      case Some(entry) => fail(s"Expected ProgressLogEntry, got: ${entry.payload}")
+      case None        => fail("Expected Some(ConversationLogEntry)")
 
   test("malformed timestamp string results in None timestamp"):
     val line =

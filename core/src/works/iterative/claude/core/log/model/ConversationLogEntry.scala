@@ -13,5 +13,6 @@ case class ConversationLogEntry(
     isSidechain: Boolean,
     cwd: Option[String],
     version: Option[String],
-    payload: LogEntryPayload
+    payload: LogEntryPayload,
+    agentId: Option[String] = None
 )
