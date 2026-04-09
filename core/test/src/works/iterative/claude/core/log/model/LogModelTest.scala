@@ -261,6 +261,32 @@ class LogModelTest extends FunSuite:
     assertEquals(meta.gitBranch, Some("main"))
     assertEquals(meta.createdAt, Some(now))
 
+  // SubAgentMetadata tests
+
+  test("SubAgentMetadata should hold all fields"):
+    val path = os.Path("/tmp/subagent/transcript.jsonl")
+    val meta = SubAgentMetadata(
+      agentId = "agent-abc-123",
+      agentType = Some("coder"),
+      description = Some("Writes code"),
+      transcriptPath = path
+    )
+    assertEquals(meta.agentId, "agent-abc-123")
+    assertEquals(meta.agentType, Some("coder"))
+    assertEquals(meta.description, Some("Writes code"))
+    assertEquals(meta.transcriptPath, path)
+
+  test("SubAgentMetadata should allow optional fields to be None"):
+    val path = os.Path("/tmp/subagent/transcript.jsonl")
+    val meta = SubAgentMetadata(
+      agentId = "agent-xyz",
+      agentType = None,
+      description = None,
+      transcriptPath = path
+    )
+    assertEquals(meta.agentType, None)
+    assertEquals(meta.description, None)
+
   test("LogFileMetadata should allow optional fields to be None"):
     val path = os.Path("/tmp/session.jsonl")
     val now = Instant.now()
