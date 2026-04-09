@@ -5,7 +5,6 @@ package works.iterative.claude.core.log.parsing
 
 import munit.FunSuite
 import io.circe.parser
-import works.iterative.claude.core.log.model.SubAgentMetadata
 
 class SubAgentMetadataParserTest extends FunSuite:
 
