@@ -4,6 +4,7 @@
 package works.iterative.claude.core.log
 
 import works.iterative.claude.core.log.model.LogFileMetadata
+import works.iterative.claude.core.log.model.SubAgentMetadata
 
 trait ConversationLogIndex[F[_]]:
   def listSessions(projectPath: os.Path): F[Seq[LogFileMetadata]]
@@ -11,3 +12,7 @@ trait ConversationLogIndex[F[_]]:
       projectPath: os.Path,
       sessionId: String
   ): F[Option[LogFileMetadata]]
+  def listSubAgents(
+      projectPath: os.Path,
+      sessionId: String
+  ): F[Seq[SubAgentMetadata]]
