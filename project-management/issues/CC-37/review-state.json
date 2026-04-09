@@ -29,11 +29,11 @@
       "path": "project-management/issues/CC-37/phase-02-tasks.md"
     }
   ],
-  "last_updated": "2026-04-09T09:00:21.127997567Z",
-  "status": "implementing",
+  "last_updated": "2026-04-09T09:10:11.030490536Z",
+  "status": "awaiting_review",
   "display": {
-    "text": "Phase 02: Implementing",
-    "type": "progress",
+    "text": "Phase 02: Awaiting Review",
+    "type": "warning",
     "subtext": "Trait extension and implementations"
   },
   "message": "Phase 02 implementation started",
@@ -69,6 +69,11 @@
       "id": "implement",
       "label": "Continue",
       "skill": "wf-implement"
+    },
+    {
+      "id": "view-pr",
+      "label": "View Pull Request",
+      "skill": "external-link"
     }
   ],
   "git_sha": "228d5fc",
@@ -90,7 +95,11 @@
     {
       "label": "In Progress",
       "type": "info"
+    },
+    {
+      "label": "Review Needed",
+      "type": "warning"
     }
   ],
-  "pr_url": "https://github.com/iterative-works/claude-code-query/pull/38"
+  "pr_url": "https://github.com/iterative-works/claude-code-query/pull/39"
 }
