@@ -1,0 +1,51 @@
+{
+  "version": 2,
+  "issue_id": "CC-41",
+  "artifacts": [
+    {
+      "label": "Analysis",
+      "path": "project-management/issues/CC-41/analysis.md",
+      "category": "input"
+    },
+    {
+      "label": "Tasks",
+      "path": "project-management/issues/CC-41/tasks.md",
+      "category": "output"
+    }
+  ],
+  "last_updated": "2026-04-10T18:03:05.923453133Z",
+  "status": "tasks_ready",
+  "display": {
+    "text": "Tasks Ready",
+    "type": "success",
+    "subtext": "3 phases identified"
+  },
+  "badges": [
+    {
+      "label": "High",
+      "type": "warning"
+    }
+  ],
+  "message": "Task breakdown complete. Ready to begin implementation.",
+  "activity": "waiting",
+  "workflow_type": "diagnostic",
+  "available_actions": [
+    {
+      "id": "create-tasks",
+      "label": "Generate Tasks",
+      "skill": "dx-create-tasks"
+    },
+    {
+      "id": "fix",
+      "label": "Start Investigation",
+      "skill": "dx-fix"
+    },
+    {
+      "id": "implement",
+      "label": "Start Implementation",
+      "skill": "dx-fix"
+    }
+  ],
+  "git_sha": "460dfe1",
+  "needs_attention": true
+}
