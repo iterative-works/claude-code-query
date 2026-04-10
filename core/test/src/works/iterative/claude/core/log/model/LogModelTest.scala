@@ -117,7 +117,7 @@ class LogModelTest extends FunSuite:
     val payload = UserLogEntry(List(TextBlock("hello")))
     val now = Instant.now()
     val entry = ConversationLogEntry(
-      uuid = "uuid-001",
+      uuid = Some("uuid-001"),
       parentUuid = Some("parent-uuid-000"),
       timestamp = Some(now),
       sessionId = "session-abc",
@@ -126,7 +126,7 @@ class LogModelTest extends FunSuite:
       version = Some("1.0"),
       payload = payload
     )
-    assertEquals(entry.uuid, "uuid-001")
+    assertEquals(entry.uuid, Some("uuid-001"))
     assertEquals(entry.parentUuid, Some("parent-uuid-000"))
     assertEquals(entry.timestamp, Some(now))
     assertEquals(entry.sessionId, "session-abc")
@@ -137,7 +137,7 @@ class LogModelTest extends FunSuite:
 
   test("ConversationLogEntry should allow optional fields to be None"):
     val entry = ConversationLogEntry(
-      uuid = "uuid-002",
+      uuid = Some("uuid-002"),
       parentUuid = None,
       timestamp = None,
       sessionId = "session-xyz",
@@ -155,7 +155,7 @@ class LogModelTest extends FunSuite:
     val sessionId = "session-test"
     val entries = List(
       ConversationLogEntry(
-        "u1",
+        Some("u1"),
         None,
         None,
         sessionId,
@@ -165,7 +165,7 @@ class LogModelTest extends FunSuite:
         UserLogEntry(List.empty)
       ),
       ConversationLogEntry(
-        "u2",
+        Some("u2"),
         None,
         None,
         sessionId,
@@ -175,7 +175,7 @@ class LogModelTest extends FunSuite:
         AssistantLogEntry(List.empty, None, None, None)
       ),
       ConversationLogEntry(
-        "u3",
+        Some("u3"),
         None,
         None,
         sessionId,
@@ -185,7 +185,7 @@ class LogModelTest extends FunSuite:
         SystemLogEntry("init", Map.empty)
       ),
       ConversationLogEntry(
-        "u4",
+        Some("u4"),
         None,
         None,
         sessionId,
@@ -195,7 +195,7 @@ class LogModelTest extends FunSuite:
         ProgressLogEntry(Map.empty, None)
       ),
       ConversationLogEntry(
-        "u5",
+        Some("u5"),
         None,
         None,
         sessionId,
@@ -205,7 +205,7 @@ class LogModelTest extends FunSuite:
         QueueOperationLogEntry("op", None)
       ),
       ConversationLogEntry(
-        "u6",
+        Some("u6"),
         None,
         None,
         sessionId,
@@ -215,7 +215,7 @@ class LogModelTest extends FunSuite:
         FileHistorySnapshotLogEntry(Map.empty)
       ),
       ConversationLogEntry(
-        "u7",
+        Some("u7"),
         None,
         None,
         sessionId,
@@ -225,7 +225,7 @@ class LogModelTest extends FunSuite:
         LastPromptLogEntry(Map.empty)
       ),
       ConversationLogEntry(
-        "u8",
+        Some("u8"),
         None,
         None,
         sessionId,

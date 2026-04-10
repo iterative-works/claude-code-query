@@ -34,8 +34,8 @@ object ConversationLogParser:
   def parseLogEntry(json: Json): Option[ConversationLogEntry] =
     val cursor = json.hcursor
     for
-      uuid <- cursor.get[String]("uuid").toOption
       sessionId <- cursor.get[String]("sessionId").toOption
+      uuid = cursor.get[String]("uuid").toOption
       entryType <- cursor.get[String]("type").toOption
       parentUuid = cursor.get[String]("parentUuid").toOption
       timestamp = cursor.get[String]("timestamp").toOption.flatMap(parseInstant)

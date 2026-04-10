@@ -5,8 +5,9 @@
 
 ## Tasks
 
-- [ ] [impl] [ ] [reviewed] Write failing test reproducing the defect (entry without uuid is silently dropped)
-- [ ] [impl] [ ] [reviewed] Investigate root cause (confirm uuid monadic bind causes short-circuit)
-- [ ] [impl] [ ] [reviewed] Implement fix (make uuid optional in ConversationLogEntry, change `<-` to `=` in for-comprehension)
-- [ ] [impl] [ ] [reviewed] Propagate Option[String] type change through downstream consumers and tests
-- [ ] [impl] [ ] [reviewed] Verify fix passes and no regressions
+- [x] [impl] [x] [reviewed] Write failing test reproducing the defect (entry without uuid is silently dropped)
+- [x] [impl] [x] [reviewed] Investigate root cause (confirm uuid monadic bind causes short-circuit)
+- [x] [impl] [x] [reviewed] Implement fix (make uuid optional in ConversationLogEntry, change `<-` to `=` in for-comprehension)
+- [x] [impl] [x] [reviewed] Propagate Option[String] type change through downstream consumers and tests
+- [x] [impl] [x] [reviewed] Verify fix passes and no regressions
+**Phase Status:** Complete

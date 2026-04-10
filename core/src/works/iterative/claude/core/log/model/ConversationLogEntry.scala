@@ -6,7 +6,7 @@ package works.iterative.claude.core.log.model
 import java.time.Instant
 
 case class ConversationLogEntry(
-    uuid: String,
+    uuid: Option[String],
     parentUuid: Option[String],
     timestamp: Option[Instant],
     sessionId: String,
