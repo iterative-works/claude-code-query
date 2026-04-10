@@ -11,8 +11,8 @@ class DirectConversationLogReaderTest extends FunSuite:
 
   private val reader = DirectConversationLogReader()
 
-  private val humanLine =
-    """{"type":"human","uuid":"u1","sessionId":"s1","message":{"content":"hello"}}"""
+  private val userLine =
+    """{"type":"user","uuid":"u1","sessionId":"s1","message":{"content":"hello"}}"""
   private val assistantLine =
     """{"type":"assistant","uuid":"u2","sessionId":"s1","message":{"content":[{"type":"text","text":"hi there"}]}}"""
   private val systemLine =
@@ -38,8 +38,8 @@ class DirectConversationLogReaderTest extends FunSuite:
       val result = reader.readAll(path)
       assertEquals(result, List.empty[ConversationLogEntry])
 
-  test("readAll parses a single human entry"):
-    withLogFile(List(humanLine)): path =>
+  test("readAll parses a single user entry"):
+    withLogFile(List(userLine)): path =>
       val result = reader.readAll(path)
       assertEquals(result.length, 1)
       assertEquals(result.head.sessionId, "s1")
@@ -49,29 +49,29 @@ class DirectConversationLogReaderTest extends FunSuite:
       )
 
   test("readAll parses multiple entries of different types"):
-    withLogFile(List(humanLine, assistantLine, systemLine)): path =>
+    withLogFile(List(userLine, assistantLine, systemLine)): path =>
       val result = reader.readAll(path)
       assertEquals(result.length, 3)
 
   test("readAll preserves order of entries"):
-    withLogFile(List(humanLine, assistantLine)): path =>
+    withLogFile(List(userLine, assistantLine)): path =>
       val result = reader.readAll(path)
       assertEquals(result.length, 2)
       assert(result(0).payload.isInstanceOf[UserLogEntry])
       assert(result(1).payload.isInstanceOf[AssistantLogEntry])
 
   test("readAll skips malformed JSON lines silently"):
-    withLogFile(List(humanLine, "{bad json}", assistantLine)): path =>
+    withLogFile(List(userLine, "{bad json}", assistantLine)): path =>
       val result = reader.readAll(path)
       assertEquals(result.length, 2)
 
   test("readAll handles mixed blank and valid lines"):
-    withLogFile(List(emptyLine, humanLine, blankLine, assistantLine)): path =>
+    withLogFile(List(emptyLine, userLine, blankLine, assistantLine)): path =>
       val result = reader.readAll(path)
       assertEquals(result.length, 2)
 
   test("stream produces same entries as readAll"):
-    withLogFile(List(humanLine, assistantLine, systemLine)): path =>
+    withLogFile(List(userLine, assistantLine, systemLine)): path =>
       val fromReadAll = reader.readAll(path)
       val fromStream = supervised:
         reader.stream(path).runToList()
@@ -85,7 +85,7 @@ class DirectConversationLogReaderTest extends FunSuite:
 
   test("stream skips blank and malformed lines"):
     withLogFile(
-      List(emptyLine, humanLine, "{not json}", blankLine, assistantLine)
+      List(emptyLine, userLine, "{not json}", blankLine, assistantLine)
     ): path =>
       val result = supervised:
         reader.stream(path).runToList()

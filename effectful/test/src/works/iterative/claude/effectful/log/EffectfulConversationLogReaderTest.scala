@@ -11,8 +11,8 @@ class EffectfulConversationLogReaderTest extends CatsEffectSuite:
 
   private val reader = EffectfulConversationLogReader()
 
-  private val humanLine =
-    """{"type":"human","uuid":"u1","sessionId":"s1","message":{"content":"hello"}}"""
+  private val userLine =
+    """{"type":"user","uuid":"u1","sessionId":"s1","message":{"content":"hello"}}"""
   private val assistantLine =
     """{"type":"assistant","uuid":"u2","sessionId":"s1","message":{"content":[{"type":"text","text":"hi there"}]}}"""
   private val systemLine =
@@ -40,8 +40,8 @@ class EffectfulConversationLogReaderTest extends CatsEffectSuite:
         .map: result =>
           assertEquals(result, List.empty[ConversationLogEntry])
 
-  test("readAll parses a single human entry"):
-    withLogFile(List(humanLine)): path =>
+  test("readAll parses a single user entry"):
+    withLogFile(List(userLine)): path =>
       reader
         .readAll(path)
         .map: result =>
@@ -53,14 +53,14 @@ class EffectfulConversationLogReaderTest extends CatsEffectSuite:
           )
 
   test("readAll parses multiple entries of different types"):
-    withLogFile(List(humanLine, assistantLine, systemLine)): path =>
+    withLogFile(List(userLine, assistantLine, systemLine)): path =>
       reader
         .readAll(path)
         .map: result =>
           assertEquals(result.length, 3)
 
   test("readAll preserves order of entries"):
-    withLogFile(List(humanLine, assistantLine)): path =>
+    withLogFile(List(userLine, assistantLine)): path =>
       reader
         .readAll(path)
         .map: result =>
@@ -69,14 +69,14 @@ class EffectfulConversationLogReaderTest extends CatsEffectSuite:
           assert(result(1).payload.isInstanceOf[AssistantLogEntry])
 
   test("readAll skips malformed JSON lines silently"):
-    withLogFile(List(humanLine, "{bad json}", assistantLine)): path =>
+    withLogFile(List(userLine, "{bad json}", assistantLine)): path =>
       reader
         .readAll(path)
         .map: result =>
           assertEquals(result.length, 2)
 
   test("stream produces same entries as readAll"):
-    withLogFile(List(humanLine, assistantLine, systemLine)): path =>
+    withLogFile(List(userLine, assistantLine, systemLine)): path =>
       for
         fromReadAll <- reader.readAll(path)
         fromStream <- reader.stream(path).compile.toList
@@ -92,7 +92,7 @@ class EffectfulConversationLogReaderTest extends CatsEffectSuite:
           assertEquals(result, List.empty[ConversationLogEntry])
 
   test("stream skips blank and malformed lines"):
-    withLogFile(List("", humanLine, "{not json}", "   ", assistantLine)):
+    withLogFile(List("", userLine, "{not json}", "   ", assistantLine)):
       path =>
         reader
           .stream(path)

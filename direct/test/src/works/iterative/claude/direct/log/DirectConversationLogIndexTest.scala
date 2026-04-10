@@ -162,7 +162,7 @@ class DirectConversationLogIndexTest extends FunSuite:
     ): projectDir =>
       val result = index.listSubAgents(projectDir, "sess-2")
       assertEquals(result.length, 1)
-      assertEquals(result.head.agentId, "abc")
+      assertEquals(result.head.agentId, "agent-abc")
 
   test("listSubAgents populates all metadata fields from .meta.json"):
     withSubAgentsDir(
@@ -179,7 +179,7 @@ class DirectConversationLogIndexTest extends FunSuite:
       val result = index.listSubAgents(projectDir, "sess-3")
       assertEquals(result.length, 1)
       val meta = result.head
-      assertEquals(meta.agentId, "abc")
+      assertEquals(meta.agentId, "agent-abc")
       assertEquals(meta.agentType, Some("researcher"))
       assertEquals(meta.description, Some("Does research"))
 
@@ -223,7 +223,7 @@ class DirectConversationLogIndexTest extends FunSuite:
     ): projectDir =>
       val result = index.listSubAgents(projectDir, "sess-7")
       assertEquals(result.length, 3)
-      assertEquals(result.map(_.agentId).toSet, Set("aaa", "bbb", "ccc"))
+      assertEquals(result.map(_.agentId).toSet, Set("agent-aaa", "agent-bbb", "agent-ccc"))
 
   test("listSubAgents ignores non-agent files in subagents directory"):
     val tmpRoot = os.temp.dir()
@@ -236,5 +236,5 @@ class DirectConversationLogIndexTest extends FunSuite:
       os.write(subagentsDir / "notes.txt", "irrelevant")
       val result = index.listSubAgents(projectDir, "sess-8")
       assertEquals(result.length, 1)
-      assertEquals(result.head.agentId, "abc")
+      assertEquals(result.head.agentId, "agent-abc")
     finally os.remove.all(tmpRoot)

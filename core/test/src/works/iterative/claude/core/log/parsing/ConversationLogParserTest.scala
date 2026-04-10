@@ -15,7 +15,7 @@ class ConversationLogParserTest extends FunSuite:
 
   test("parseLogLine with valid JSONL line returns Some(ConversationLogEntry)"):
     val line =
-      """{"type":"human","uuid":"u1","sessionId":"s1","message":{"content":"hello"}}"""
+      """{"type":"user","uuid":"u1","sessionId":"s1","message":{"content":"hello"}}"""
     val result = ConversationLogParser.parseLogLine(line)
     assert(
       result.isDefined,
@@ -30,19 +30,22 @@ class ConversationLogParserTest extends FunSuite:
 
   test("parseLogLine with invalid JSON returns None"):
     assertEquals(
-      ConversationLogParser.parseLogLine("""{"type": "human", malformed}"""),
+      ConversationLogParser.parseLogLine("""{"type": "user", malformed}"""),
       None
     )
 
-  test("parseLogEntry with missing required uuid field returns None"):
+  test("parseLogEntry with missing uuid field parses successfully with uuid = None"):
     val json = parser
-      .parse("""{"type":"human","sessionId":"s1","message":{"content":"hi"}}""")
+      .parse("""{"type":"user","sessionId":"s1","message":{"content":"hi"}}""")
       .getOrElse(fail("parse failed"))
-    assertEquals(ConversationLogParser.parseLogEntry(json), None)
+    val result = ConversationLogParser.parseLogEntry(json)
+    result match
+      case Some(entry) => assertEquals(entry.uuid, None)
+      case None        => fail("Expected Some(ConversationLogEntry) when uuid is absent")
 
   test("parseLogEntry with missing required sessionId field returns None"):
     val json = parser
-      .parse("""{"type":"human","uuid":"u1","message":{"content":"hi"}}""")
+      .parse("""{"type":"user","uuid":"u1","message":{"content":"hi"}}""")
       .getOrElse(fail("parse failed"))
     assertEquals(ConversationLogParser.parseLogEntry(json), None)
 
@@ -51,7 +54,7 @@ class ConversationLogParserTest extends FunSuite:
   test("parses all envelope metadata fields"):
     val line =
       """{
-        "type":"human",
+        "type":"user",
         "uuid":"uuid-001",
         "parentUuid":"parent-uuid-000",
         "timestamp":"2024-01-15T10:30:00Z",
@@ -64,7 +67,7 @@ class ConversationLogParserTest extends FunSuite:
     val result = ConversationLogParser.parseLogLine(line)
     result match
       case Some(entry) =>
-        assertEquals(entry.uuid, "uuid-001")
+        assertEquals(entry.uuid, Some("uuid-001"))
         assertEquals(entry.parentUuid, Some("parent-uuid-000"))
         assertEquals(
           entry.timestamp,
@@ -78,7 +81,7 @@ class ConversationLogParserTest extends FunSuite:
 
   test("parses with optional fields absent"):
     val line =
-      """{"type":"human","uuid":"u2","sessionId":"s2","message":{"content":"hi"}}"""
+      """{"type":"user","uuid":"u2","sessionId":"s2","message":{"content":"hi"}}"""
     val result = ConversationLogParser.parseLogLine(line)
     result match
       case Some(entry) =>
@@ -91,7 +94,7 @@ class ConversationLogParserTest extends FunSuite:
   test("parses ISO-8601 timestamp string to Instant"):
     val line =
       """{
-        "type":"human",
+        "type":"user",
         "uuid":"u3",
         "sessionId":"s3",
         "timestamp":"2025-06-01T12:00:00.000Z",
@@ -108,7 +111,7 @@ class ConversationLogParserTest extends FunSuite:
 
   test("isSidechain defaults to false when absent"):
     val line =
-      """{"type":"human","uuid":"u4","sessionId":"s4","message":{"content":"x"}}"""
+      """{"type":"user","uuid":"u4","sessionId":"s4","message":{"content":"x"}}"""
     val result = ConversationLogParser.parseLogLine(line)
     result match
       case Some(entry) => assertEquals(entry.isSidechain, false)
@@ -117,10 +120,10 @@ class ConversationLogParserTest extends FunSuite:
   // --- Payload type tests ---
 
   test(
-    """"human" type with string content produces UserLogEntry with List(TextBlock)"""
+    """"user" type with string content produces UserLogEntry with List(TextBlock)"""
   ):
     val line =
-      """{"type":"human","uuid":"u5","sessionId":"s5","message":{"content":"hello world"}}"""
+      """{"type":"user","uuid":"u5","sessionId":"s5","message":{"content":"hello world"}}"""
     val result = ConversationLogParser.parseLogLine(line)
     result match
       case Some(
@@ -131,11 +134,11 @@ class ConversationLogParserTest extends FunSuite:
       case None        => fail("Expected Some(ConversationLogEntry)")
 
   test(
-    """"human" type with array content produces UserLogEntry with parsed content blocks"""
+    """"user" type with array content produces UserLogEntry with parsed content blocks"""
   ):
     val line =
       """{
-        "type":"human",
+        "type":"user",
         "uuid":"u6",
         "sessionId":"s6",
         "message":{
@@ -305,11 +308,11 @@ class ConversationLogParserTest extends FunSuite:
       case None => fail("Expected Some(ConversationLogEntry)")
 
   test(
-    """"queue_operation" type with operation and content produces QueueOperationLogEntry"""
+    """"queue-operation" type with operation and content produces QueueOperationLogEntry"""
   ):
     val line =
       """{
-        "type":"queue_operation",
+        "type":"queue-operation",
         "uuid":"u11",
         "sessionId":"s11",
         "operation":"enqueue",
@@ -337,11 +340,11 @@ class ConversationLogParserTest extends FunSuite:
       case None => fail("Expected Some(ConversationLogEntry)")
 
   test(
-    """"file_history_snapshot" type with data produces FileHistorySnapshotLogEntry"""
+    """"file-history-snapshot" type with data produces FileHistorySnapshotLogEntry"""
   ):
     val line =
       """{
-        "type":"file_history_snapshot",
+        "type":"file-history-snapshot",
         "uuid":"u12",
         "sessionId":"s12",
         "files":["/a.txt","/b.txt"]
@@ -382,6 +385,66 @@ class ConversationLogParserTest extends FunSuite:
         assertEquals(data("promptText"), "what is 2+2?")
       case Some(entry) =>
         fail(s"Expected LastPromptLogEntry, got: ${entry.payload}")
+      case None => fail("Expected Some(ConversationLogEntry)")
+
+  test(
+    """"permission-mode" type with data produces PermissionModeLogEntry"""
+  ):
+    val line =
+      """{
+        "type":"permission-mode",
+        "uuid":"u43",
+        "sessionId":"s43",
+        "permissionMode":"default"
+      }"""
+    val result = ConversationLogParser.parseLogLine(line)
+    result match
+      case Some(
+            ConversationLogEntry(
+              _,
+              _,
+              _,
+              _,
+              _,
+              _,
+              _,
+              PermissionModeLogEntry(data),
+              _
+            )
+          ) =>
+        assertEquals(data("permissionMode"), "default")
+      case Some(entry) =>
+        fail(s"Expected PermissionModeLogEntry, got: ${entry.payload}")
+      case None => fail("Expected Some(ConversationLogEntry)")
+
+  test(
+    """"attachment" type with data produces AttachmentLogEntry"""
+  ):
+    val line =
+      """{
+        "type":"attachment",
+        "uuid":"u44",
+        "sessionId":"s44",
+        "fileName":"foo.txt"
+      }"""
+    val result = ConversationLogParser.parseLogLine(line)
+    result match
+      case Some(
+            ConversationLogEntry(
+              _,
+              _,
+              _,
+              _,
+              _,
+              _,
+              _,
+              AttachmentLogEntry(data),
+              _
+            )
+          ) =>
+        assertEquals(data("fileName"), "foo.txt")
+      case Some(entry) =>
+        fail(s"Expected AttachmentLogEntry, got: ${entry.payload}")
       case None => fail("Expected Some(ConversationLogEntry)")
 
   test("unknown type produces RawLogEntry with preserved JSON"):
@@ -501,15 +564,15 @@ class ConversationLogParserTest extends FunSuite:
     val result = ConversationLogParser.parseLogLine(line)
     assertEquals(result, None)
 
-  test("\"queue_operation\" type without operation returns None"):
+  test("\"queue-operation\" type without operation returns None"):
     val line =
-      """{"type":"queue_operation","uuid":"u21","sessionId":"s21","content":"msg"}"""
+      """{"type":"queue-operation","uuid":"u21","sessionId":"s21","content":"msg"}"""
     val result = ConversationLogParser.parseLogLine(line)
     assertEquals(result, None)
 
-  test("\"human\" type without message field returns None"):
+  test("\"user\" type without message field returns None"):
     val line =
-      """{"type":"human","uuid":"u22","sessionId":"s22"}"""
+      """{"type":"user","uuid":"u22","sessionId":"s22"}"""
     val result = ConversationLogParser.parseLogLine(line)
     assertEquals(result, None)
 
@@ -518,6 +581,22 @@ class ConversationLogParserTest extends FunSuite:
       """{"type":"assistant","uuid":"u23","sessionId":"s23"}"""
     val result = ConversationLogParser.parseLogLine(line)
     assertEquals(result, None)
+
+  test("\"permission-mode\" type without uuid parses successfully with uuid = None"):
+    val line =
+      """{"type":"permission-mode","sessionId":"s43","permissionMode":"default"}"""
+    val result = ConversationLogParser.parseLogLine(line)
+    result match
+      case Some(entry) => assertEquals(entry.uuid, None)
+      case None        => fail("Expected Some(ConversationLogEntry)")
+
+  test("\"attachment\" type without uuid parses successfully with uuid = None"):
+    val line =
+      """{"type":"attachment","sessionId":"s44","fileName":"foo.txt"}"""
+    val result = ConversationLogParser.parseLogLine(line)
+    result match
+      case Some(entry) => assertEquals(entry.uuid, None)
+      case None        => fail("Expected Some(ConversationLogEntry)")
 
   test("parseLogEntry with missing required type field returns None"):
     val json = parser
@@ -530,7 +609,7 @@ class ConversationLogParserTest extends FunSuite:
   test("JSONL line with agentId field extracts Some(agentId)"):
     val line =
       """{
-        "type":"human",
+        "type":"user",
         "uuid":"u30",
         "sessionId":"s30",
         "agentId":"agent-abc-123",
@@ -543,7 +622,7 @@ class ConversationLogParserTest extends FunSuite:
 
   test("JSONL line without agentId field extracts None"):
     val line =
-      """{"type":"human","uuid":"u31","sessionId":"s31","message":{"content":"hi"}}"""
+      """{"type":"user","uuid":"u31","sessionId":"s31","message":{"content":"hi"}}"""
     val result = ConversationLogParser.parseLogLine(line)
     result match
       case Some(entry) => assertEquals(entry.agentId, None)
@@ -587,7 +666,7 @@ class ConversationLogParserTest extends FunSuite:
   test("malformed timestamp string results in None timestamp"):
     val line =
       """{
-        "type":"human",
+        "type":"user",
         "uuid":"u25",
         "sessionId":"s25",
         "timestamp":"not-a-date",
@@ -597,3 +676,41 @@ class ConversationLogParserTest extends FunSuite:
     result match
       case Some(entry) => assertEquals(entry.timestamp, None)
       case None        => fail("Expected Some(ConversationLogEntry)")
+
+  // --- uuid optional tests ---
+
+  test("entry without uuid field is parsed with uuid = None"):
+    val line =
+      """{"type":"permission-mode","sessionId":"s50","permissionMode":"default"}"""
+    val result = ConversationLogParser.parseLogLine(line)
+    result match
+      case Some(entry) => assertEquals(entry.uuid, None)
+      case None        => fail("Expected Some(ConversationLogEntry) for entry without uuid")
+
+  test("entry with uuid field is parsed with uuid = Some(value)"):
+    val line =
+      """{"type":"user","uuid":"u51","sessionId":"s51","message":{"content":"hi"}}"""
+    val result = ConversationLogParser.parseLogLine(line)
+    result match
+      case Some(entry) => assertEquals(entry.uuid, Some("u51"))
+      case None        => fail("Expected Some(ConversationLogEntry)")
+
+  test("file-history-snapshot without uuid is parsed successfully"):
+    val line =
+      """{"type":"file-history-snapshot","sessionId":"s52","files":["/a.txt"]}"""
+    val result = ConversationLogParser.parseLogLine(line)
+    result match
+      case Some(ConversationLogEntry(_, _, _, _, _, _, _, FileHistorySnapshotLogEntry(data), _)) =>
+        assertEquals(data("files"), List("/a.txt"))
+      case Some(entry) => fail(s"Expected FileHistorySnapshotLogEntry, got: ${entry.payload}")
+      case None        => fail("Expected Some(ConversationLogEntry) for entry without uuid")
+
+  test("transcript with mix of uuid-present and uuid-absent entries parses all entries"):
+    val lines = List(
+      """{"type":"user","uuid":"u60","sessionId":"s60","message":{"content":"hello"}}""",
+      """{"type":"permission-mode","sessionId":"s60","permissionMode":"default"}""",
+      """{"type":"assistant","uuid":"u61","sessionId":"s60","message":{"content":[{"type":"text","text":"hi"}]}}"""
+    )
+    val results = lines.flatMap(ConversationLogParser.parseLogLine)
+    assertEquals(results.size, 3, "All three entries should parse, including the one without uuid")
+
