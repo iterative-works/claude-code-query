@@ -45,6 +45,8 @@ M	effectful/test/src/works/iterative/claude/effectful/log/EffectfulConversationL
 **Fix applied:**
 - `SubAgentMetadataParser.scala` — replaced for-comprehension with `Option.when(!json.isNull)`, deriving `agentId` from `transcriptPath.last.stripSuffix(".jsonl")` instead of reading from JSON
 - `SubAgentMetadataParserTest.scala` — updated all test fixtures to use realistic transcript paths (`agent-<id>.jsonl`) and removed `agentId` from JSON; removed duplicate test; renamed tests for clarity; added 3 new tests
+- `DirectConversationLogIndexTest.scala` — updated agentId expectations from `"abc"` to `"agent-abc"` (filename-derived)
+- `EffectfulConversationLogIndexTest.scala` — same agentId expectation updates
 
 **Regression tests added:**
 - 3 new tests: agentId derived from filename, agentId in JSON ignored, real-world `.meta.json` content
@@ -57,6 +59,8 @@ M	effectful/test/src/works/iterative/claude/effectful/log/EffectfulConversationL
 ```
 M	core/src/works/iterative/claude/core/log/parsing/SubAgentMetadataParser.scala
 M	core/test/src/works/iterative/claude/core/log/parsing/SubAgentMetadataParserTest.scala
+M	direct/test/src/works/iterative/claude/direct/log/DirectConversationLogIndexTest.scala
+M	effectful/test/src/works/iterative/claude/effectful/log/EffectfulConversationLogIndexTest.scala
 ```
 
 ---
