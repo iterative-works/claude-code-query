@@ -42,6 +42,14 @@ case class LastPromptLogEntry(
     data: Map[String, Any]
 ) extends LogEntryPayload
 
+case class PermissionModeLogEntry(
+    data: Map[String, Any]
+) extends LogEntryPayload
+
+case class AttachmentLogEntry(
+    data: Map[String, Any]
+) extends LogEntryPayload
+
 case class RawLogEntry(
     entryType: String,
     json: Json

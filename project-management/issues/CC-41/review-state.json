@@ -21,20 +21,28 @@
       "path": "project-management/issues/CC-41/phase-01-tasks.md"
     }
   ],
-  "last_updated": "2026-04-10T20:41:05.367633319Z",
-  "status": "tasks_ready",
+  "last_updated": "2026-04-10T21:07:23.943780008Z",
+  "status": "awaiting_review",
   "display": {
-    "text": "Phase 1: Tasks Ready",
-    "type": "success",
+    "text": "Phase 01: Awaiting Review",
+    "type": "warning",
     "subtext": "Fix entry type name mismatches in ConversationLogParser"
   },
   "badges": [
     {
       "label": "High",
       "type": "warning"
+    },
+    {
+      "label": "In Progress",
+      "type": "info"
+    },
+    {
+      "label": "Review Needed",
+      "type": "warning"
     }
   ],
-  "message": "Phase 1 tasks ready",
+  "message": "Phase 01 implementation started",
   "activity": "waiting",
   "workflow_type": "diagnostic",
   "available_actions": [
@@ -57,6 +65,11 @@
       "id": "implement",
       "label": "Continue",
       "skill": "dx-fix"
+    },
+    {
+      "id": "view-pr",
+      "label": "View Pull Request",
+      "skill": "external-link"
     }
   ],
   "git_sha": "460dfe1",
@@ -65,5 +78,6 @@
     "1": {
       "context_sha": "context_sha=97133ae79e91cdccb9f63747b036035553a02842"
     }
-  }
+  },
+  "pr_url": "https://github.com/iterative-works/claude-code-query/pull/42"
 }
