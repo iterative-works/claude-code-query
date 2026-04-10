@@ -37,3 +37,26 @@ M	effectful/test/src/works/iterative/claude/effectful/log/EffectfulConversationL
 ```
 
 ---
+
+## Phase 2: Derive agentId from filename in SubAgentMetadataParser (2026-04-10)
+
+**Root cause:** `SubAgentMetadataParser.parse` required `agentId` from JSON via `cursor.get[String]("agentId").toOption` in a for-comprehension guard. Real `.meta.json` files produced by Claude Code CLI contain only `agentType` and `description` — `agentId` is encoded in the transcript filename (`agent-<id>.jsonl`). The for-comprehension always yielded `None` for real data.
+
+**Fix applied:**
+- `SubAgentMetadataParser.scala` — replaced for-comprehension with `Option.when(!json.isNull)`, deriving `agentId` from `transcriptPath.last.stripSuffix(".jsonl")` instead of reading from JSON
+- `SubAgentMetadataParserTest.scala` — updated all test fixtures to use realistic transcript paths (`agent-<id>.jsonl`) and removed `agentId` from JSON; removed duplicate test; renamed tests for clarity; added 3 new tests
+
+**Regression tests added:**
+- 3 new tests: agentId derived from filename, agentId in JSON ignored, real-world `.meta.json` content
+
+**Code review:**
+- Iterations: 1 (no critical issues; warnings fixed: removed duplicate test, inlined cursor variable, improved test names and PURPOSE comment)
+- Review file: review-phase-02-20260410-211739.md
+
+**Files changed:**
+```
+M	core/src/works/iterative/claude/core/log/parsing/SubAgentMetadataParser.scala
+M	core/test/src/works/iterative/claude/core/log/parsing/SubAgentMetadataParserTest.scala
+```
+
+---
