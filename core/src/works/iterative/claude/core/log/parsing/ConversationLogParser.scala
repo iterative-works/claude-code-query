@@ -66,15 +66,19 @@ object ConversationLogParser:
       json: Json
   ): Option[LogEntryPayload] =
     entryType match
-      case "human"                 => parseUserPayload(cursor)
+      case "user"                  => parseUserPayload(cursor)
       case "assistant"             => parseAssistantPayload(cursor)
       case "system"                => parseSystemPayload(cursor, json)
       case "progress"              => Some(parseProgressPayload(cursor, json))
-      case "queue_operation"       => parseQueueOperationPayload(cursor)
-      case "file_history_snapshot" =>
+      case "queue-operation"       => parseQueueOperationPayload(cursor)
+      case "file-history-snapshot" =>
         Some(parseDataOnlyPayload(json, FileHistorySnapshotLogEntry.apply))
       case "last_prompt" =>
         Some(parseDataOnlyPayload(json, LastPromptLogEntry.apply))
+      case "permission-mode" =>
+        Some(parseDataOnlyPayload(json, PermissionModeLogEntry.apply))
+      case "attachment" =>
+        Some(parseDataOnlyPayload(json, AttachmentLogEntry.apply))
       case _ => Some(RawLogEntry(entryType, json))
 
   private def parseContentBlocks(cursor: HCursor): List[ContentBlock] =
