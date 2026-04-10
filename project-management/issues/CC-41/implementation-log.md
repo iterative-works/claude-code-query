@@ -64,3 +64,30 @@ M	effectful/test/src/works/iterative/claude/effectful/log/EffectfulConversationL
 ```
 
 ---
+
+## Phase 3: Support entries without uuid field (2026-04-10)
+
+**Root cause:** `ConversationLogParser.parseLogEntry` used monadic bind (`uuid <- cursor.get[String]("uuid").toOption`) in its for-comprehension. When `uuid` is absent from the JSON (as with `permission-mode`, `file-history-snapshot` entries), `.toOption` yields `None` and the entire for-comprehension short-circuits, silently dropping the entry before payload parsing is attempted.
+
+**Fix applied:**
+- `ConversationLogEntry.scala` — changed `uuid: String` to `uuid: Option[String]`
+- `ConversationLogParser.scala` — changed `uuid <- cursor.get[String]("uuid").toOption` to `uuid = cursor.get[String]("uuid").toOption` (plain assignment instead of monadic bind), reordered for-comprehension to start with `sessionId <-` as the first required binding
+- `ConversationLogParserTest.scala` — updated existing uuid assertions to expect `Some(...)`, added 4 new regression tests covering uuid-absent, uuid-present, file-history-snapshot without uuid, and mixed-entry transcript
+- `LogModelTest.scala` — updated all `ConversationLogEntry` constructions to use `Some("...")` for uuid field
+
+**Regression tests added:**
+- 4 new tests for uuid optional behavior
+
+**Code review:**
+- Iterations: 1 (no critical issues)
+- Review file: review-phase-03-20260410-233419.md
+
+**Files changed:**
+```
+M	core/src/works/iterative/claude/core/log/model/ConversationLogEntry.scala
+M	core/src/works/iterative/claude/core/log/parsing/ConversationLogParser.scala
+M	core/test/src/works/iterative/claude/core/log/model/LogModelTest.scala
+M	core/test/src/works/iterative/claude/core/log/parsing/ConversationLogParserTest.scala
+```
+
+---
