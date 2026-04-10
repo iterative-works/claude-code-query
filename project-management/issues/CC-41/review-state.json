@@ -15,13 +15,17 @@
     {
       "label": "Phase 1 Context",
       "path": "project-management/issues/CC-41/phase-01-context.md"
+    },
+    {
+      "label": "Phase 1 Tasks",
+      "path": "project-management/issues/CC-41/phase-01-tasks.md"
     }
   ],
-  "last_updated": "2026-04-10T18:08:36.622684105Z",
-  "status": "context_ready",
+  "last_updated": "2026-04-10T20:41:05.367633319Z",
+  "status": "tasks_ready",
   "display": {
-    "text": "Phase 1: Context Ready",
-    "type": "info",
+    "text": "Phase 1: Tasks Ready",
+    "type": "success",
     "subtext": "Fix entry type name mismatches in ConversationLogParser"
   },
   "badges": [
@@ -30,8 +34,8 @@
       "type": "warning"
     }
   ],
-  "message": "Phase 1 context ready for review",
-  "activity": "working",
+  "message": "Phase 1 tasks ready",
+  "activity": "waiting",
   "workflow_type": "diagnostic",
   "available_actions": [
     {
@@ -47,6 +51,11 @@
     {
       "id": "implement",
       "label": "Start Implementation",
+      "skill": "dx-fix"
+    },
+    {
+      "id": "implement",
+      "label": "Continue",
       "skill": "dx-fix"
     }
   ],
