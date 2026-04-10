@@ -29,11 +29,11 @@
       "path": "project-management/issues/CC-41/phase-02-tasks.md"
     }
   ],
-  "last_updated": "2026-04-10T21:13:53.573356812Z",
-  "status": "tasks_ready",
+  "last_updated": "2026-04-10T21:23:39.899134733Z",
+  "status": "awaiting_review",
   "display": {
-    "text": "Phase 02: Tasks Ready",
-    "type": "success",
+    "text": "Phase 02: Awaiting Review",
+    "type": "warning",
     "subtext": "Derive agentId from filename in SubAgentMetadataParser"
   },
   "badges": [
@@ -48,9 +48,17 @@
     {
       "label": "Review Needed",
       "type": "warning"
+    },
+    {
+      "label": "In Progress",
+      "type": "info"
+    },
+    {
+      "label": "Review Needed",
+      "type": "warning"
     }
   ],
-  "message": "Phase 02 tasks ready",
+  "message": "Phase 02 implementation started",
   "activity": "waiting",
   "workflow_type": "diagnostic",
   "available_actions": [
@@ -83,6 +91,11 @@
       "id": "implement",
       "label": "Continue",
       "skill": "dx-fix"
+    },
+    {
+      "id": "view-pr",
+      "label": "View Pull Request",
+      "skill": "external-link"
     }
   ],
   "git_sha": "460dfe1",
@@ -92,5 +105,5 @@
       "context_sha": "context_sha=7fd16df51262440f70f783f27d5ef7bbdae0683e"
     }
   },
-  "pr_url": "https://github.com/iterative-works/claude-code-query/pull/42"
+  "pr_url": "https://github.com/iterative-works/claude-code-query/pull/43"
 }

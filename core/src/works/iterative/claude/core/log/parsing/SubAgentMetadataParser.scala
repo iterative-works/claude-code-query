@@ -1,5 +1,5 @@
 // PURPOSE: Pure parser for sub-agent .meta.json sidecar files into SubAgentMetadata
-// PURPOSE: Returns None for missing required fields or unparseable input
+// PURPOSE: Returns None only for null JSON input; agentType and description are optional fields
 
 package works.iterative.claude.core.log.parsing
 
@@ -9,11 +9,10 @@ import works.iterative.claude.core.log.model.SubAgentMetadata
 object SubAgentMetadataParser:
 
   def parse(json: Json, transcriptPath: os.Path): Option[SubAgentMetadata] =
-    val cursor = json.hcursor
-    for agentId <- cursor.get[String]("agentId").toOption
-    yield SubAgentMetadata(
-      agentId = agentId,
-      agentType = cursor.get[String]("agentType").toOption,
-      description = cursor.get[String]("description").toOption,
-      transcriptPath = transcriptPath
-    )
+    Option.when(!json.isNull):
+      SubAgentMetadata(
+        agentId = transcriptPath.last.stripSuffix(".jsonl"),
+        agentType = json.hcursor.get[String]("agentType").toOption,
+        description = json.hcursor.get[String]("description").toOption,
+        transcriptPath = transcriptPath
+      )
