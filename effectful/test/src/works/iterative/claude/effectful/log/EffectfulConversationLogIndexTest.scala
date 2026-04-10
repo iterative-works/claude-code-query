@@ -163,7 +163,7 @@ class EffectfulConversationLogIndexTest extends CatsEffectSuite:
         .listSubAgents(projectDir, "sess-2")
         .map: result =>
           assertEquals(result.length, 1)
-          assertEquals(result.head.agentId, "abc")
+          assertEquals(result.head.agentId, "agent-abc")
 
   test("listSubAgents populates all metadata fields from .meta.json"):
     withSubAgentsDir(
@@ -186,7 +186,7 @@ class EffectfulConversationLogIndexTest extends CatsEffectSuite:
         .map: result =>
           assertEquals(result.length, 1)
           val meta = result.head
-          assertEquals(meta.agentId, "abc")
+          assertEquals(meta.agentId, "agent-abc")
           assertEquals(meta.agentType, Some("researcher"))
           assertEquals(meta.description, Some("Does research"))
 
@@ -237,7 +237,7 @@ class EffectfulConversationLogIndexTest extends CatsEffectSuite:
         .listSubAgents(projectDir, "sess-7")
         .map: result =>
           assertEquals(result.length, 3)
-          assertEquals(result.map(_.agentId).toSet, Set("aaa", "bbb", "ccc"))
+          assertEquals(result.map(_.agentId).toSet, Set("agent-aaa", "agent-bbb", "agent-ccc"))
 
   test("listSubAgents ignores non-agent files in subagents directory"):
     IO(os.temp.dir()).flatMap: tmpRoot =>
@@ -251,5 +251,5 @@ class EffectfulConversationLogIndexTest extends CatsEffectSuite:
           .listSubAgents(projectDir, "sess-8")
           .map: result =>
             assertEquals(result.length, 1)
-            assertEquals(result.head.agentId, "abc")
+            assertEquals(result.head.agentId, "agent-abc")
           .guarantee(IO(os.remove.all(tmpRoot)))
