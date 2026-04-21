@@ -43,7 +43,7 @@ A thin, three-layer extension entirely inside the `core` module:
 
 **Components:**
 - `core/src/works/iterative/claude/core/model/PermissionMode.scala` — add enum case `DontAsk`.
-- `core/src/works/iterative/claude/core/model/QueryOptions.scala` — add three fields (`strictMcpConfig: Boolean = false`, `mcpConfigPath: Option[String] = None`, `settingSources: List[String] = Nil`) with matching `withStrictMcpConfig(flag: Boolean)`, `withMcpConfigPath(path: String)`, `withSettingSources(sources: List[String])` helpers. Update the `QueryOptions.simple(prompt)` factory to explicitly pass the new defaults so the factory remains exhaustive in named arguments.
+- `core/src/works/iterative/claude/core/model/QueryOptions.scala` — add three fields (`strictMcpConfig: Option[Boolean] = None`, `mcpConfigPath: Option[String] = None`, `settingSources: List[String] = Nil`) with matching `withStrictMcpConfig(flag: Boolean)` (wraps in `Some`), `withMcpConfigPath(path: String)`, `withSettingSources(sources: List[String])` helpers. Update the `QueryOptions.simple(prompt)` factory to explicitly pass the new defaults so the factory remains exhaustive in named arguments.
 - `core/src/works/iterative/claude/core/model/SessionOptions.scala` — symmetric three fields + three fluent helpers. `SessionOptions.defaults` remains `SessionOptions()` and needs no edit because the new fields have defaults.
 
 **Responsibilities:**
@@ -61,8 +61,8 @@ A thin, three-layer extension entirely inside the `core` module:
 - `core/src/works/iterative/claude/core/cli/CLIArgumentBuilder.scala` — two edits, one per public method:
   - `buildArgs(QueryOptions)`:
     - Extend the `permissionMode` match with `case Some(PermissionMode.DontAsk) => List("--permission-mode", "dontAsk")`.
-    - Add `strictMcpConfigArgs`: `if options.strictMcpConfig then List("--strict-mcp-config") else Nil`.
-    - Add `mcpConfigPathArgs`: `options.mcpConfigPath match { case Some(path) => List("--mcp-config", path); case None => Nil }`.
+    - Add `strictMcpConfigArgs`: `options.strictMcpConfig match { case Some(true) => List("--strict-mcp-config"); case _ => Nil }` (covers `None` and `Some(false)` — no `--no-strict-mcp-config` flag exists today).
+    - Add `mcpConfigPathArgs`: `options.mcpConfigPath match { case Some(path) => List("--mcp-config", path, "--"); case None => Nil }`. The trailing `"--"` is mandatory — `--mcp-config` is variadic and would otherwise consume downstream argv tokens (prompt, caller-appended flags) as additional config paths.
     - Add `settingSourcesArgs`: `if options.settingSources.nonEmpty then List("--setting-sources", options.settingSources.mkString(",")) else Nil`.
     - Append the new arg groups to the final `List(...).flatten` in deterministic order.
   - `buildSessionArgs(SessionOptions)`: same four additions, same ordering.
@@ -99,7 +99,7 @@ A thin, three-layer extension entirely inside the `core` module:
 
 - **Mirror existing style.** Each new flag follows the same `Option[T]` / boolean / `List[String]` + `match` / `if` template already used in `CLIArgumentBuilder`. Do not introduce a new abstraction (builder, typeclass, DSL) — YAGNI.
 - **Functional core.** All additions are pure: immutable case classes, pure `List[String]` outputs.
-- **Defaults preserve behaviour.** `strictMcpConfig: Boolean = false`, `mcpConfigPath: Option[String] = None`, `settingSources: List[String] = Nil`. Each translates to `List.empty` when defaulted.
+- **Defaults preserve behaviour.** `strictMcpConfig: Option[Boolean] = None`, `mcpConfigPath: Option[String] = None`, `settingSources: List[String] = Nil`. Each translates to `List.empty` when defaulted (and `Some(false)` also emits nothing, since no negation flag exists).
 - **Enum case naming.** Keep `DontAsk` exactly as specified in the issue (Scala PascalCase). The CLI string is `"dontAsk"` (camelCase), matching the existing pattern `AcceptEdits -> "acceptEdits"` and `BypassPermissions -> "bypassPermissions"`.
 
 ### Technology Choices
@@ -114,15 +114,22 @@ A thin, three-layer extension entirely inside the `core` module:
 - `effectful` module (`effectful/src/works/iterative/claude/effectful/package.scala`): same pattern, same outcome.
 - Downstream consumers (PROC-401 specifically) must recompile against the new `0.3.0-SNAPSHOT` to pick up the enum case and fields.
 
-### Argv Ordering (concrete proposal)
+### Argv Ordering (decided)
 
-Append the four new arg groups to the existing `List(...).flatten` in the following order, placed **after** `permissionModeArgs` and **after** `maxThinkingTokensArgs` (i.e., at the tail end of the existing sequence). Within the new group, order is:
+Append the new arg groups to the existing `List(...).flatten` in the following order, placed **after** `permissionModeArgs` and **after** `maxThinkingTokensArgs` (i.e., at the tail end of the existing sequence). Within the new group, order is:
 
 1. `strictMcpConfigArgs`
 2. `mcpConfigPathArgs`
 3. `settingSourcesArgs`
 
 The `DontAsk` branch slots into the existing `permissionModeArgs` position (no positional change to that group).
+
+**Critical: `--mcp-config` is variadic — it greedily consumes subsequent tokens as additional config paths until it hits a recognized flag or a `--` terminator. Tail-positioning alone is NOT safe**, because `buildArgs` output is concatenated with downstream pieces (prompt, other CLI fragments) by the process runner, so anything appended by the caller would be swallowed as a config path. Emitting a `--` terminator immediately after the path isolates the variadic regardless of argv position or what follows.
+
+Therefore:
+
+- `mcpConfigPathArgs` emits `List("--mcp-config", path, "--")` when set (path + explicit terminator).
+- `mcpConfigPathArgs` emits `Nil` when unset (no flag, no terminator).
 
 So for `buildArgs`, the final `List(...).flatten` becomes:
 
@@ -133,79 +140,43 @@ resumeArgs, permissionModeArgs, maxThinkingTokensArgs,
 strictMcpConfigArgs, mcpConfigPathArgs, settingSourcesArgs
 ```
 
+where `mcpConfigPathArgs`, when non-empty, is a three-element list `["--mcp-config", "<path>", "--"]`.
+
 For `buildSessionArgs`, same order appended after `maxThinkingTokensArgs`, with the required streaming flags block remaining first.
 
-Rationale: appending at the tail avoids disturbing any existing test that asserts positional invariants (e.g., `args.take(requiredFlags.length)` in `SessionOptionsArgsTest`). The order *within* the new group is alphabetically stable by semantic grouping (strict flag first, then the path it governs, then orthogonal settings-source restriction).
+Rationale: tail-append keeps the existing `args.take(requiredFlags.length)` invariant in `SessionOptionsArgsTest` intact. Within the new group, the order is semantically grouped (strict flag first, then the path it governs, then orthogonal settings-source restriction). The `--` terminator after `--mcp-config <path>` makes the group position-independent and robust to future additions or caller-appended arguments.
 
-> **CLARIFY:** Is the proposed tail-append position + intra-group order acceptable, or does PROC-401 (or any downstream) prefer a specific ordering? If there's no preference, this ordering stands and is locked by the smoke test.
+## Resolved Decisions
 
-## Technical Risks & Uncertainties
+### Decision: QueryOptions-side test file
 
-### CLARIFY: Missing `QueryOptionsArgsTest.scala` file
+The issue mentions `QueryOptionsArgsTest` symmetric to `SessionOptionsArgsTest`, but that file does not exist. `CLIArgumentBuilderTest.scala` is the de-facto QueryOptions args test today.
 
-The issue's acceptance criteria mention `QueryOptionsArgsTest` symmetric to `SessionOptionsArgsTest`, but that file does **not** exist in the repo today. `CLIArgumentBuilderTest.scala` is the de-facto "QueryOptions args test" (it exclusively exercises `buildArgs(QueryOptions)`).
-
-**Questions to answer:**
-1. Should we add the new coverage to the existing `CLIArgumentBuilderTest.scala` (matches current repo convention, smallest diff)?
-2. Should we create a new `QueryOptionsArgsTest.scala` alongside `CLIArgumentBuilderTest.scala` to mirror `SessionOptionsArgsTest.scala` naming (uniform but introduces a second file that partially overlaps with the existing one)?
-3. Should we rename `CLIArgumentBuilderTest.scala` to `QueryOptionsArgsTest.scala` as a follow-up cleanup (out of scope for this issue, but worth noting)?
-
-**Options:**
-- **Option A (recommended):** Add new cases to the existing `CLIArgumentBuilderTest.scala`. Minimal, consistent with current layout.
-- **Option B:** Create a new `QueryOptionsArgsTest.scala` alongside. Matches issue wording literally; introduces two partially-overlapping files.
-- **Option C:** Rename existing file. Larger churn; out of scope unless requested.
-
-**Impact:** Choice of test-file naming only; no runtime behaviour difference.
+**Decided:** Option A — add the new QueryOptions-side coverage (seven per-field/branch tests plus the smoke round-trip) to the existing `CLIArgumentBuilderTest.scala`. Smallest diff, consistent with current repo layout. Potential future canonicalization (rename to `QueryOptionsArgsTest.scala`) is out of scope for this issue.
 
 ---
 
-### CLARIFY: Argv ordering policy
+### Decision: Argv ordering policy
 
-See Technical Decisions > Argv Ordering. The proposal is tail-append in the order (`strictMcpConfig`, `mcpConfigPath`, `settingSources`). This needs a green-light so the smoke round-trip test can assert the exact sequence.
-
-**Questions to answer:**
-1. Confirm tail-append position.
-2. Confirm intra-group order.
-3. Should the smoke test assert the exact sub-sequence (`args.containsSlice(...)`) or just containment of each flag individually?
-
-**Options:**
-- **Option A (recommended):** Tail-append, order as proposed, smoke test uses `containsSlice` on the four new flags for determinism.
-- **Option B:** Tail-append, order as proposed, smoke test only uses `contains` per flag (looser, slightly more forgiving).
-- **Option C:** Different position (e.g., immediately after `permissionModeArgs`). Requires updating this analysis and the test.
-
-**Impact:** Test strictness and future refactor latitude.
+**Decided:** Tail-append the three new groups in order `strictMcpConfigArgs` → `mcpConfigPathArgs` → `settingSourcesArgs`, after `maxThinkingTokensArgs`. `mcpConfigPathArgs` emits a three-element list `["--mcp-config", "<path>", "--"]` to terminate the variadic `--mcp-config` and prevent downstream argv tokens (prompt, caller-appended flags) from being swallowed as additional config paths. Smoke test uses `containsSlice` for pair/triple adjacency and `indexOf` comparisons for cross-group ordering. See Technical Decisions > Argv Ordering for the full rationale.
 
 ---
 
-### CLARIFY: Boolean fluent helper ergonomics
+### Decision: Boolean fluent helper shape
 
-`withStrictMcpConfig(flag: Boolean)` is the pattern from the issue. The rest of the fluent API for boolean-like fields is mixed: `continueConversation` is `Option[Boolean]` with `withContinueConversation(continue: Boolean)` (no no-arg convenience), `inheritEnvironment` is the same.
-
-**Questions to answer:**
-1. Is `withStrictMcpConfig(flag: Boolean)` (always taking an explicit boolean) sufficient, matching the `continueConversation` / `inheritEnvironment` precedent?
-2. Or should we also offer a no-arg `withStrictMcpConfig: QueryOptions` that sets it to `true` for cleaner consumer call sites (`opts.withStrictMcpConfig`)?
-
-**Options:**
-- **Option A (recommended):** Single `withStrictMcpConfig(flag: Boolean)` — matches existing precedent, YAGNI.
-- **Option B:** Both `withStrictMcpConfig(flag: Boolean)` and zero-arg `withStrictMcpConfig`. Minor convenience, small surface growth.
-
-**Impact:** API surface size and call-site ergonomics.
+**Decided:** Option A — single `withStrictMcpConfig(flag: Boolean)` on both `QueryOptions` and `SessionOptions`. No zero-arg convenience. Matches existing precedent from `withContinueConversation(continue: Boolean)` and `withInheritEnvironment(inherit: Boolean)` in the same case classes.
 
 ---
 
-### CLARIFY: `strictMcpConfig` field type — `Boolean` vs `Option[Boolean]`
+### Decision: `strictMcpConfig` field type
 
-Other boolean-like options in `QueryOptions` use `Option[Boolean]` (e.g., `continueConversation`, `inheritEnvironment`). The issue specifies `strictMcpConfig: Boolean = false`.
+**Decided:** Option B — `strictMcpConfig: Option[Boolean] = None` on both `QueryOptions` and `SessionOptions`. Consistent with other boolean-ish fields (`continueConversation`, `inheritEnvironment`). Preserves the possibility of distinguishing "unset" from "explicit false" in case a future CLI surface adds a negation semantic; the SDK should not prematurely flatten that.
 
-**Questions to answer:**
-1. Is the plain `Boolean = false` from the issue the right choice (matches "flag" semantics — either present or absent)?
-2. Or should we use `Option[Boolean] = None` for stylistic consistency with `continueConversation` (tri-state: unset / explicit false / explicit true)?
+**Translation:**
+- `Some(true)` → `List("--strict-mcp-config")`
+- `Some(false)` or `None` → `Nil` (no flag emitted — today the CLI has no `--no-strict-mcp-config`, so both default and explicit-false are argv-identical)
 
-**Options:**
-- **Option A (recommended, matches issue):** `strictMcpConfig: Boolean = false`. Simpler. Flag is either emitted (true) or not (false / default). Matches CLI semantics — the flag has no "off" equivalent.
-- **Option B:** `Option[Boolean] = None`. Stylistic consistency with `continueConversation`. But `Some(false)` would be semantically indistinguishable from `None` because there is no `--no-strict-mcp-config` flag — adds complexity for no gain.
-
-**Impact:** Field declaration and one `match`/`if` line in the CLI builder.
+**Fluent helper:** `withStrictMcpConfig(flag: Boolean): QueryOptions = copy(strictMcpConfig = Some(flag))` (and the mirror on `SessionOptions`).
 
 ---
 
@@ -224,7 +195,7 @@ Other boolean-like options in `QueryOptions` use `Option[Boolean]` (e.g., `conti
 - Pure additive mirror of an existing, well-understood pattern — no design discovery required.
 - Single-module scope; no cross-module churn thanks to re-export aliases.
 - Test surface is small and mechanical.
-- The CLARIFY markers are about style/naming, not about unknowns that could blow up effort.
+- Resolved decisions (see "Resolved Decisions" section) are about style/naming, not about unknowns that could blow up effort.
 
 ## Recommended Phase Plan
 
@@ -248,10 +219,11 @@ Unit tests only — this change has no integration or E2E surface (it's pure arg
 
 **CLI Translation Layer (`CLIArgumentBuilderTest.scala`):**
 Add the following tests:
-1. `strictMcpConfig = true emits --strict-mcp-config` — asserts `args.contains("--strict-mcp-config")`.
-2. `strictMcpConfig default (false) does not emit --strict-mcp-config` — asserts `!args.contains("--strict-mcp-config")`.
-3. `mcpConfigPath maps to --mcp-config <path>` — asserts the pair appears.
-4. `mcpConfigPath default (None) does not emit --mcp-config` — asserts absent.
+1. `strictMcpConfig = Some(true) emits --strict-mcp-config` — asserts `args.contains("--strict-mcp-config")`.
+2. `strictMcpConfig default (None) does not emit --strict-mcp-config` — asserts `!args.contains("--strict-mcp-config")`.
+2a. `strictMcpConfig = Some(false) does not emit --strict-mcp-config` — asserts `!args.contains("--strict-mcp-config")` (documents the "no negation flag" behaviour).
+3. `mcpConfigPath maps to --mcp-config <path> --` — asserts the three-element slice `List("--mcp-config", path, "--")` appears (terminator isolates the variadic `--mcp-config` from whatever follows in argv).
+4. `mcpConfigPath default (None) does not emit --mcp-config` — asserts absent; also asserts the standalone `"--"` terminator is absent when the flag is unset (so we don't emit a stray terminator).
 5. `settingSources non-empty maps to --setting-sources with CSV value` — asserts `args.contains("--setting-sources")` and `args.contains("project,user")` for `List("project", "user")`.
 6. `settingSources default (Nil) does not emit --setting-sources` — asserts absent.
 7. `PermissionMode.DontAsk maps to --permission-mode dontAsk` — asserts pair appears and string is exactly `"dontAsk"`.
@@ -270,12 +242,13 @@ Add the following tests:
 
      // presence
      assert(args.contains("--strict-mcp-config"))
-     assert(args.containsSlice(List("--mcp-config", "./.mcp.json")))
+     // --mcp-config is variadic; must be followed by "--" to isolate it
+     assert(args.containsSlice(List("--mcp-config", "./.mcp.json", "--")))
      assert(args.containsSlice(List("--setting-sources", "project")))
      assert(args.containsSlice(List("--permission-mode", "dontAsk")))
 
      // deterministic order: permission-mode precedes the MCP/settings trio,
-     // which appears as strict -> mcp-config -> setting-sources
+     // which appears as strict -> mcp-config (+ terminator) -> setting-sources
      val pmIdx = args.indexOf("--permission-mode")
      val strictIdx = args.indexOf("--strict-mcp-config")
      val mcpIdx = args.indexOf("--mcp-config")
@@ -334,7 +307,7 @@ None in this SDK. Consumers (PROC-401) will start passing the four new flags.
 ### Risk 2: Consumer (PROC-401) expects a different argv order than our chosen one
 **Likelihood:** Low
 **Impact:** Low (the CLI accepts any order; our smoke test just pins one)
-**Mitigation:** Flagged as CLARIFY above. Get confirmation before locking the order into the smoke test. If PROC-401 only inspects by flag presence, keep our order; if it expects a specific slice, match that.
+**Mitigation:** Ordering is locked by decision (see "Resolved Decisions > Argv ordering policy") and asserted in the smoke test. If PROC-401 surfaces a different expectation during validation, adjust the smoke test and this analysis in follow-up.
 
 ### Risk 3: `settingSources: List[String]` vs typed enum drift
 **Likelihood:** Low
@@ -370,6 +343,5 @@ None in this SDK. Consumers (PROC-401) will start passing the four new flags.
 **Analysis Status:** Ready for Review
 
 **Next Steps:**
-1. Resolve the four CLARIFY markers (test file naming, argv ordering, fluent helper ergonomics, `Boolean` vs `Option[Boolean]`).
-2. Run **wf-create-tasks** with issue ID `CC-46`.
-3. Run **wf-implement** for the single merged phase.
+1. Run **wf-create-tasks** with issue ID `CC-46`.
+2. Run **wf-implement** for the single merged phase.
