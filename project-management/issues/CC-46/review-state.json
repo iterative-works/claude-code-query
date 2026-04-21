@@ -15,17 +15,21 @@
     {
       "label": "Phase 1 Context",
       "path": "project-management/issues/CC-46/phase-01-context.md"
+    },
+    {
+      "label": "Phase 1 Tasks",
+      "path": "project-management/issues/CC-46/phase-01-tasks.md"
     }
   ],
-  "last_updated": "2026-04-21T20:05:45.443507367Z",
-  "status": "context_ready",
+  "last_updated": "2026-04-21T20:10:30.408808087Z",
+  "status": "tasks_ready",
   "display": {
-    "text": "Phase 1: Context Ready",
-    "type": "info",
+    "text": "Phase 1: Tasks Ready",
+    "type": "success",
     "subtext": "Option-C isolation knobs (domain + CLI + tests)"
   },
-  "message": "Phase 1 context ready for review",
-  "activity": "working",
+  "message": "Phase 1 tasks ready",
+  "activity": "waiting",
   "workflow_type": "waterfall",
   "available_actions": [
     {
@@ -41,6 +45,11 @@
     {
       "id": "implement",
       "label": "Start Implementation",
+      "skill": "wf-implement"
+    },
+    {
+      "id": "implement",
+      "label": "Continue",
       "skill": "wf-implement"
     }
   ],
