@@ -8,3 +8,6 @@ enum PermissionMode:
   case Default
   case AcceptEdits
   case BypassPermissions
+
+  /** Enforce `allowedTools` as a hard allow-list; no prompts, no hangs. */
+  case DontAsk

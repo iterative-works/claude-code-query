@@ -52,11 +52,26 @@ object CLIArgumentBuilder:
         List("--permission-mode", "acceptEdits")
       case Some(PermissionMode.BypassPermissions) =>
         List("--permission-mode", "bypassPermissions")
+      case Some(PermissionMode.DontAsk) =>
+        List("--permission-mode", "dontAsk")
       case None => List.empty
 
     val maxThinkingTokensArgs = options.maxThinkingTokens match
       case Some(tokens) => List("--max-thinking-tokens", tokens.toString)
       case None         => List.empty
+
+    val strictMcpConfigArgs = options.strictMcpConfig match
+      case Some(true) => List("--strict-mcp-config")
+      case _          => List.empty
+
+    val mcpConfigPathArgs = options.mcpConfigPath match
+      case Some(path) => List("--mcp-config", path, "--")
+      case None       => List.empty
+
+    val settingSourcesArgs =
+      if options.settingSources.nonEmpty then
+        List("--setting-sources", options.settingSources.mkString(","))
+      else List.empty
 
     List(
       maxTurnsArgs,
@@ -68,7 +83,10 @@ object CLIArgumentBuilder:
       continueConversationArgs,
       resumeArgs,
       permissionModeArgs,
-      maxThinkingTokensArgs
+      maxThinkingTokensArgs,
+      strictMcpConfigArgs,
+      mcpConfigPathArgs,
+      settingSourcesArgs
     ).flatten
 
   /** Converts SessionOptions into list of CLI arguments for a Claude Code
@@ -115,11 +133,26 @@ object CLIArgumentBuilder:
         List("--permission-mode", "acceptEdits")
       case Some(PermissionMode.BypassPermissions) =>
         List("--permission-mode", "bypassPermissions")
+      case Some(PermissionMode.DontAsk) =>
+        List("--permission-mode", "dontAsk")
       case None => List.empty
 
     val maxThinkingTokensArgs = options.maxThinkingTokens match
       case Some(tokens) => List("--max-thinking-tokens", tokens.toString)
       case None         => List.empty
+
+    val strictMcpConfigArgs = options.strictMcpConfig match
+      case Some(true) => List("--strict-mcp-config")
+      case _          => List.empty
+
+    val mcpConfigPathArgs = options.mcpConfigPath match
+      case Some(path) => List("--mcp-config", path, "--")
+      case None       => List.empty
+
+    val settingSourcesArgs =
+      if options.settingSources.nonEmpty then
+        List("--setting-sources", options.settingSources.mkString(","))
+      else List.empty
 
     List(
       List(
@@ -138,5 +171,8 @@ object CLIArgumentBuilder:
       continueConversationArgs,
       resumeArgs,
       permissionModeArgs,
-      maxThinkingTokensArgs
+      maxThinkingTokensArgs,
+      strictMcpConfigArgs,
+      mcpConfigPathArgs,
+      settingSourcesArgs
     ).flatten
