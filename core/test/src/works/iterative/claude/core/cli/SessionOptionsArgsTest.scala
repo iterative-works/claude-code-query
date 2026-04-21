@@ -122,6 +122,89 @@ class SessionOptionsArgsTest extends CatsEffectSuite:
     val args = CLIArgumentBuilder.buildSessionArgs(SessionOptions())
     assertEquals(args, requiredFlags)
 
+  test("PermissionMode.DontAsk maps to --permission-mode dontAsk"):
+    val args = CLIArgumentBuilder.buildSessionArgs(
+      SessionOptions().withPermissionMode(PermissionMode.DontAsk)
+    )
+    assert(args.containsSlice(List("--permission-mode", "dontAsk")))
+
+  test("strictMcpConfig = Some(true) emits --strict-mcp-config"):
+    val args = CLIArgumentBuilder.buildSessionArgs(
+      SessionOptions().withStrictMcpConfig(true)
+    )
+    assert(args.contains("--strict-mcp-config"))
+
+  test("strictMcpConfig default (None) does not emit --strict-mcp-config"):
+    val args = CLIArgumentBuilder.buildSessionArgs(SessionOptions())
+    assert(!args.contains("--strict-mcp-config"))
+
+  test("strictMcpConfig = Some(false) does not emit --strict-mcp-config"):
+    val args = CLIArgumentBuilder.buildSessionArgs(
+      SessionOptions().withStrictMcpConfig(false)
+    )
+    assert(!args.contains("--strict-mcp-config"))
+
+  test("mcpConfigPath maps to --mcp-config <path> --"):
+    val args = CLIArgumentBuilder.buildSessionArgs(
+      SessionOptions().withMcpConfigPath("./.mcp.json")
+    )
+    assert(args.containsSlice(List("--mcp-config", "./.mcp.json", "--")))
+
+  test("mcpConfigPath default (None) does not emit --mcp-config"):
+    val args = CLIArgumentBuilder.buildSessionArgs(SessionOptions())
+    assert(!args.contains("--mcp-config"))
+
+  test(
+    "settingSources non-empty maps to --setting-sources with CSV value"
+  ):
+    val args = CLIArgumentBuilder.buildSessionArgs(
+      SessionOptions().withSettingSources(List("project", "user"))
+    )
+    assert(args.containsSlice(List("--setting-sources", "project,user")))
+
+  test("settingSources default (Nil) does not emit --setting-sources"):
+    val args = CLIArgumentBuilder.buildSessionArgs(SessionOptions())
+    assert(!args.contains("--setting-sources"))
+
+  test(
+    "all four Option-C isolation flags round-trip in deterministic order"
+  ):
+    val options = SessionOptions()
+      .withStrictMcpConfig(true)
+      .withMcpConfigPath("./.mcp.json")
+      .withSettingSources(List("project", "local"))
+      .withPermissionMode(PermissionMode.DontAsk)
+
+    val args = CLIArgumentBuilder.buildSessionArgs(options)
+
+    // presence
+    assert(args.contains("--strict-mcp-config"))
+    assert(args.containsSlice(List("--mcp-config", "./.mcp.json", "--")))
+    assert(args.containsSlice(List("--setting-sources", "project,local")))
+    assert(args.containsSlice(List("--permission-mode", "dontAsk")))
+
+    // deterministic order: permission-mode precedes the MCP/settings trio
+    val pmIdx = args.indexOf("--permission-mode")
+    val strictIdx = args.indexOf("--strict-mcp-config")
+    val mcpIdx = args.indexOf("--mcp-config")
+    val ssIdx = args.indexOf("--setting-sources")
+    assert(pmIdx < strictIdx)
+    assert(strictIdx < mcpIdx)
+    assert(mcpIdx < ssIdx)
+
+  test(
+    "required session flags still appear at the start of the argument list when all four new flags are set"
+  ):
+    val options = SessionOptions()
+      .withStrictMcpConfig(true)
+      .withMcpConfigPath("./.mcp.json")
+      .withSettingSources(List("project"))
+      .withPermissionMode(PermissionMode.DontAsk)
+
+    val args = CLIArgumentBuilder.buildSessionArgs(options)
+
+    assertEquals(args.take(requiredFlags.length), requiredFlags)
+
   test("multiple options combine correctly"):
     val args = CLIArgumentBuilder.buildSessionArgs(
       SessionOptions()

@@ -64,6 +64,8 @@ case class QueryOptions(
       *   - AcceptEdits: Auto-accept file edit operations
       *   - BypassPermissions: Allow all tools without prompting (use with
       *     caution)
+      *   - DontAsk: Enforce `allowedTools` as a hard allow-list; no prompts, no
+      *     hangs
       */
     permissionMode: Option[PermissionMode] = None,
 
@@ -101,7 +103,23 @@ case class QueryOptions(
       * true) or used as the complete environment (if inheritEnvironment is
       * false).
       */
-    environmentVariables: Option[Map[String, String]] = None
+    environmentVariables: Option[Map[String, String]] = None,
+
+    /** Restrict Claude to only the MCP servers listed in --mcp-config
+      * (--strict-mcp-config). `Some(true)` emits the flag; `Some(false)` and
+      * `None` emit nothing.
+      */
+    strictMcpConfig: Option[Boolean] = None,
+
+    /** Path to an MCP configuration file (--mcp-config <path> --). The trailing
+      * `--` terminator is mandatory because the flag is variadic.
+      */
+    mcpConfigPath: Option[String] = None,
+
+    /** Ordered list of setting sources to load (--setting-sources <csv>). Empty
+      * list emits nothing.
+      */
+    settingSources: List[String] = Nil
 ):
   // ==== FLUENT API FOR FUNCTIONAL MUTATION ====
 
@@ -139,6 +157,12 @@ case class QueryOptions(
     copy(inheritEnvironment = Some(inherit))
   def withEnvironmentVariables(vars: Map[String, String]): QueryOptions =
     copy(environmentVariables = Some(vars))
+  def withStrictMcpConfig(flag: Boolean): QueryOptions =
+    copy(strictMcpConfig = Some(flag))
+  def withMcpConfigPath(path: String): QueryOptions =
+    copy(mcpConfigPath = Some(path))
+  def withSettingSources(sources: List[String]): QueryOptions =
+    copy(settingSources = sources)
 
 object QueryOptions:
   /** Create QueryOptions with just a prompt and sane defaults */
@@ -161,5 +185,8 @@ object QueryOptions:
     maxThinkingTokens = None,
     timeout = None,
     inheritEnvironment = None,
-    environmentVariables = None
+    environmentVariables = None,
+    strictMcpConfig = None,
+    mcpConfigPath = None,
+    settingSources = Nil
   )

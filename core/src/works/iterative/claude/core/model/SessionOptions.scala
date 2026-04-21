@@ -69,7 +69,23 @@ case class SessionOptions(
 
     /** Additional environment variables to set for the Claude Code CLI process
       */
-    environmentVariables: Option[Map[String, String]] = None
+    environmentVariables: Option[Map[String, String]] = None,
+
+    /** Restrict Claude to only the MCP servers listed in --mcp-config
+      * (--strict-mcp-config). `Some(true)` emits the flag; `Some(false)` and
+      * `None` emit nothing.
+      */
+    strictMcpConfig: Option[Boolean] = None,
+
+    /** Path to an MCP configuration file (--mcp-config <path> --). The trailing
+      * `--` terminator is mandatory because the flag is variadic.
+      */
+    mcpConfigPath: Option[String] = None,
+
+    /** Ordered list of setting sources to load (--setting-sources <csv>). Empty
+      * list emits nothing.
+      */
+    settingSources: List[String] = Nil
 ):
   def withCwd(cwd: String): SessionOptions = copy(cwd = Some(cwd))
   def withExecutable(executable: String): SessionOptions =
@@ -105,6 +121,12 @@ case class SessionOptions(
     copy(inheritEnvironment = Some(inherit))
   def withEnvironmentVariables(vars: Map[String, String]): SessionOptions =
     copy(environmentVariables = Some(vars))
+  def withStrictMcpConfig(flag: Boolean): SessionOptions =
+    copy(strictMcpConfig = Some(flag))
+  def withMcpConfigPath(path: String): SessionOptions =
+    copy(mcpConfigPath = Some(path))
+  def withSettingSources(sources: List[String]): SessionOptions =
+    copy(settingSources = sources)
 
 object SessionOptions:
   /** Create SessionOptions with all defaults */
