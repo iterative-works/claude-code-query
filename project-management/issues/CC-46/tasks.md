@@ -2,15 +2,15 @@
 
 **Issue:** CC-46
 **Created:** 2026-04-21
-**Status:** 0/1 phases complete (0%)
+**Status:** 1/1 phases complete (100%)
 
 ## Phase Index
 
-- [ ] Phase 1: Option-C isolation knobs (domain + CLI + tests) (Est: 2.75-4.5h) → `phase-01-context.md`
+- [x] Phase 1: Option-C isolation knobs (domain + CLI + tests) (Est: 2.75-4.5h) → `phase-01-context.md`
 
 ## Progress Tracker
 
-**Completed:** 0/1 phases
+**Completed:** 1/1 phases
 **Estimated Total:** 2.75-4.5 hours
 **Time Spent:** 0 hours
 
