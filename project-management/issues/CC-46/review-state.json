@@ -1,0 +1,96 @@
+{
+  "version": 2,
+  "issue_id": "CC-46",
+  "artifacts": [
+    {
+      "label": "Analysis",
+      "path": "project-management/issues/CC-46/analysis.md",
+      "category": "input"
+    },
+    {
+      "label": "Tasks",
+      "path": "project-management/issues/CC-46/tasks.md",
+      "category": "output"
+    },
+    {
+      "label": "Phase 1 Context",
+      "path": "project-management/issues/CC-46/phase-01-context.md"
+    },
+    {
+      "label": "Phase 1 Tasks",
+      "path": "project-management/issues/CC-46/phase-01-tasks.md"
+    },
+    {
+      "label": "Review Packet",
+      "path": "project-management/issues/CC-46/review-packet.md"
+    },
+    {
+      "label": "Implementation Log",
+      "path": "project-management/issues/CC-46/implementation-log.md"
+    },
+    {
+      "label": "Release Notes",
+      "path": "project-management/issues/CC-46/release-notes.md"
+    }
+  ],
+  "last_updated": "2026-04-21T20:39:42.746727725Z",
+  "status": "all_complete",
+  "display": {
+    "text": "Ready for Final Review",
+    "type": "success",
+    "subtext": "Option-C isolation knobs (domain + CLI + tests)"
+  },
+  "message": "All phases complete - final PR created",
+  "activity": "waiting",
+  "workflow_type": "waterfall",
+  "available_actions": [
+    {
+      "id": "create-tasks",
+      "label": "Generate Tasks",
+      "skill": "wf-create-tasks"
+    },
+    {
+      "id": "implement",
+      "label": "Start Implementation",
+      "skill": "wf-implement"
+    },
+    {
+      "id": "implement",
+      "label": "Start Implementation",
+      "skill": "wf-implement"
+    },
+    {
+      "id": "implement",
+      "label": "Continue",
+      "skill": "wf-implement"
+    },
+    {
+      "id": "view-pr",
+      "label": "View Pull Request",
+      "skill": "external-link"
+    },
+    {
+      "id": "view-pr",
+      "label": "View Pull Request",
+      "skill": "external-link"
+    }
+  ],
+  "git_sha": "67a1642",
+  "needs_attention": true,
+  "phase_checkpoints": {
+    "1": {
+      "context_sha": "context_sha=144c711743dcb8741865050b7539a3553f385a23"
+    }
+  },
+  "badges": [
+    {
+      "label": "In Progress",
+      "type": "info"
+    },
+    {
+      "label": "Review Needed",
+      "type": "warning"
+    }
+  ],
+  "pr_url": "https://github.com/iterative-works/claude-code-query/pull/48"
+}

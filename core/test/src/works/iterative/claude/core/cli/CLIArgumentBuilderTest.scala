@@ -185,6 +185,84 @@ class CLIArgumentBuilderTest extends CatsEffectSuite:
     assert(args.contains(""))
     assert(args.contains("--disallowedTools"))
 
+  test("PermissionMode.DontAsk maps to --permission-mode dontAsk"):
+    val options = QueryOptions
+      .simple("test prompt")
+      .withPermissionMode(PermissionMode.DontAsk)
+
+    val args = CLIArgumentBuilder.buildArgs(options)
+
+    assert(args.containsSlice(List("--permission-mode", "dontAsk")))
+
+  test("strictMcpConfig = Some(true) emits --strict-mcp-config"):
+    val args = CLIArgumentBuilder.buildArgs(
+      QueryOptions.simple("test prompt").withStrictMcpConfig(true)
+    )
+    assert(args.contains("--strict-mcp-config"))
+
+  test("strictMcpConfig default (None) does not emit --strict-mcp-config"):
+    val args = CLIArgumentBuilder.buildArgs(QueryOptions.simple("test prompt"))
+    assert(!args.contains("--strict-mcp-config"))
+
+  test("strictMcpConfig = Some(false) does not emit --strict-mcp-config"):
+    val args = CLIArgumentBuilder.buildArgs(
+      QueryOptions.simple("test prompt").withStrictMcpConfig(false)
+    )
+    assert(!args.contains("--strict-mcp-config"))
+
+  test("mcpConfigPath maps to --mcp-config <path> --"):
+    val args = CLIArgumentBuilder.buildArgs(
+      QueryOptions.simple("test prompt").withMcpConfigPath("./.mcp.json")
+    )
+    assert(args.containsSlice(List("--mcp-config", "./.mcp.json", "--")))
+
+  test("mcpConfigPath default (None) does not emit --mcp-config"):
+    val args = CLIArgumentBuilder.buildArgs(QueryOptions.simple("test prompt"))
+    assert(!args.contains("--mcp-config"))
+
+  test(
+    "settingSources non-empty maps to --setting-sources with CSV value"
+  ):
+    val args = CLIArgumentBuilder.buildArgs(
+      QueryOptions
+        .simple("test prompt")
+        .withSettingSources(List("project", "user"))
+    )
+    assert(args.containsSlice(List("--setting-sources", "project,user")))
+
+  test("settingSources default (Nil) does not emit --setting-sources"):
+    val args = CLIArgumentBuilder.buildArgs(QueryOptions.simple("test prompt"))
+    assert(!args.contains("--setting-sources"))
+
+  test(
+    "all four Option-C isolation flags round-trip in deterministic order"
+  ):
+    val options = QueryOptions
+      .simple("test prompt")
+      .withStrictMcpConfig(true)
+      .withMcpConfigPath("./.mcp.json")
+      .withSettingSources(List("project", "local"))
+      .withPermissionMode(PermissionMode.DontAsk)
+
+    val args = CLIArgumentBuilder.buildArgs(options)
+
+    // presence
+    assert(args.contains("--strict-mcp-config"))
+    // --mcp-config is variadic; must be followed by "--" to isolate it
+    assert(args.containsSlice(List("--mcp-config", "./.mcp.json", "--")))
+    assert(args.containsSlice(List("--setting-sources", "project,local")))
+    assert(args.containsSlice(List("--permission-mode", "dontAsk")))
+
+    // deterministic order: permission-mode precedes the MCP/settings trio,
+    // which appears as strict -> mcp-config (+ terminator) -> setting-sources
+    val pmIdx = args.indexOf("--permission-mode")
+    val strictIdx = args.indexOf("--strict-mcp-config")
+    val mcpIdx = args.indexOf("--mcp-config")
+    val ssIdx = args.indexOf("--setting-sources")
+    assert(pmIdx < strictIdx)
+    assert(strictIdx < mcpIdx)
+    assert(mcpIdx < ssIdx)
+
   test("special characters in prompts and values are preserved"):
     val options = QueryOptions(
       prompt = "test prompt",
