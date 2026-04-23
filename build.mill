@@ -11,7 +11,7 @@ trait SharedModule extends IWScalaModule with PublishModule with ScalafixModule 
   override def scalaVersion = IWScalaVersions.scala3LTSVersion
   // ScalafixModule handles -Xsemanticdb, so disable IWScalaModule's duplicate
   override def semanticDbOptions = Task { Seq.empty }
-  def publishVersion = "0.3.0-SNAPSHOT"
+  def publishVersion = "0.3.0"
   override def artifactName = "claude-code-query-" + super.artifactName()
   def pomSettings = PomSettings(
     description = "Scala SDK for Claude Code CLI",
