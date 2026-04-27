@@ -210,11 +210,12 @@ class CLIArgumentBuilderTest extends CatsEffectSuite:
     )
     assert(!args.contains("--strict-mcp-config"))
 
-  test("mcpConfigPath maps to --mcp-config <path> --"):
+  test("mcpConfigPath maps to --mcp-config <path>"):
     val args = CLIArgumentBuilder.buildArgs(
       QueryOptions.simple("test prompt").withMcpConfigPath("./.mcp.json")
     )
-    assert(args.containsSlice(List("--mcp-config", "./.mcp.json", "--")))
+    assert(args.containsSlice(List("--mcp-config", "./.mcp.json")))
+    assert(!args.contains("--"))
 
   test("mcpConfigPath default (None) does not emit --mcp-config"):
     val args = CLIArgumentBuilder.buildArgs(QueryOptions.simple("test prompt"))
@@ -248,13 +249,15 @@ class CLIArgumentBuilderTest extends CatsEffectSuite:
 
     // presence
     assert(args.contains("--strict-mcp-config"))
-    // --mcp-config is variadic; must be followed by "--" to isolate it
-    assert(args.containsSlice(List("--mcp-config", "./.mcp.json", "--")))
+    assert(args.containsSlice(List("--mcp-config", "./.mcp.json")))
     assert(args.containsSlice(List("--setting-sources", "project,local")))
     assert(args.containsSlice(List("--permission-mode", "dontAsk")))
+    // buildArgs itself does not emit "--"; the caller inserts it before
+    // the positional prompt.
+    assert(!args.contains("--"))
 
     // deterministic order: permission-mode precedes the MCP/settings trio,
-    // which appears as strict -> mcp-config (+ terminator) -> setting-sources
+    // which appears as strict -> mcp-config -> setting-sources
     val pmIdx = args.indexOf("--permission-mode")
     val strictIdx = args.indexOf("--strict-mcp-config")
     val mcpIdx = args.indexOf("--mcp-config")

@@ -144,11 +144,14 @@ class SessionOptionsArgsTest extends CatsEffectSuite:
     )
     assert(!args.contains("--strict-mcp-config"))
 
-  test("mcpConfigPath maps to --mcp-config <path> --"):
+  test("mcpConfigPath maps to --mcp-config <path> (no terminator)"):
     val args = CLIArgumentBuilder.buildSessionArgs(
       SessionOptions().withMcpConfigPath("./.mcp.json")
     )
-    assert(args.containsSlice(List("--mcp-config", "./.mcp.json", "--")))
+    assert(args.containsSlice(List("--mcp-config", "./.mcp.json")))
+    // Sessions never append a positional argument, so no "--" terminator
+    // is needed -- the next "--" flag (or end of args) terminates the variadic.
+    assert(!args.contains("--"))
 
   test("mcpConfigPath default (None) does not emit --mcp-config"):
     val args = CLIArgumentBuilder.buildSessionArgs(SessionOptions())
@@ -179,9 +182,10 @@ class SessionOptionsArgsTest extends CatsEffectSuite:
 
     // presence
     assert(args.contains("--strict-mcp-config"))
-    assert(args.containsSlice(List("--mcp-config", "./.mcp.json", "--")))
+    assert(args.containsSlice(List("--mcp-config", "./.mcp.json")))
     assert(args.containsSlice(List("--setting-sources", "project,local")))
     assert(args.containsSlice(List("--permission-mode", "dontAsk")))
+    assert(!args.contains("--"))
 
     // deterministic order: permission-mode precedes the MCP/settings trio
     val pmIdx = args.indexOf("--permission-mode")

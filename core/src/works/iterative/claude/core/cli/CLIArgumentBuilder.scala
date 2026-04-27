@@ -65,7 +65,7 @@ object CLIArgumentBuilder:
       case _          => List.empty
 
     val mcpConfigPathArgs = options.mcpConfigPath match
-      case Some(path) => List("--mcp-config", path, "--")
+      case Some(path) => List("--mcp-config", path)
       case None       => List.empty
 
     val settingSourcesArgs =
@@ -146,7 +146,7 @@ object CLIArgumentBuilder:
       case _          => List.empty
 
     val mcpConfigPathArgs = options.mcpConfigPath match
-      case Some(path) => List("--mcp-config", path, "--")
+      case Some(path) => List("--mcp-config", path)
       case None       => List.empty
 
     val settingSourcesArgs =

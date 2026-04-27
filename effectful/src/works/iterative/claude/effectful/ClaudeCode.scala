@@ -82,7 +82,7 @@ object ClaudeCode:
   private def buildCLIArguments(options: QueryOptions): List[String] =
     List("--print", "--verbose", "--output-format", "stream-json") ++
       CLIArgumentBuilder.buildArgs(options) ++
-      List(options.prompt)
+      List("--", options.prompt)
 
   private def validateConfigurationOrFail(options: QueryOptions)(using
       logger: Logger[IO]

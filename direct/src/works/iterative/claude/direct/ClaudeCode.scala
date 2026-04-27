@@ -129,7 +129,7 @@ object ClaudeCode:
     options.executableArgs.getOrElse {
       List("--print", "--verbose", "--output-format", "stream-json") ++
         CLIArgumentBuilder.buildArgs(options) ++
-        List(options.prompt)
+        List("--", options.prompt)
     }
 
   // ==== DETAILED IMPLEMENTATION ====
