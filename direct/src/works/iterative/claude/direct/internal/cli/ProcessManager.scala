@@ -289,7 +289,8 @@ object ProcessManager:
       } else {
         logger.error(s"Process failed with exit code: $exitCode")
         val stderrContent =
-          if stderr.nonEmpty then stderr else "Process failed during streaming"
+          if stderr.nonEmpty then stderr
+          else "(no stderr; check stdout result message)"
         Some(
           ProcessExecutionError(
             exitCode,
