@@ -31,5 +31,8 @@ object JsonParserTest extends ClaudeZioSpec:
       val line =
         """{"type":"assistant","message":{"content":[{"type":"text","text":"yo"}]}}"""
       for result <- JsonParser.parseJsonLine(line)
-      yield assertTrue(result.contains(AssistantMessage(List(TextBlock("yo")))))
+      yield assertTrue(result.contains(AssistantMessage(List(TextBlock("yo"))))),
+    test("parseJsonLine returns None without failing on malformed JSON"):
+      for result <- JsonParser.parseJsonLine("{ not json")
+      yield assertTrue(result.isEmpty)
   )
