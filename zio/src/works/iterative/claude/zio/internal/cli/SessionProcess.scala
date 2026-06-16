@@ -207,8 +207,12 @@ private final class SessionImpl(
       Ref
         .make(false)
         .map: resultSeenRef =>
+          // Pull one element at a time: the message queue is shared and
+          // long-lived across turns, so a larger chunk would let takeUntil
+          // over-pull and discard messages buffered after this turn's
+          // ResultMessage instead of leaving them for the next turn's stream.
           val body = ZStream
-            .fromQueue(messageQueue)
+            .fromQueue(messageQueue, maxChunkSize = 1)
             .collectWhile { case Some(message) => message }
             .tap:
               case _: ResultMessage => resultSeenRef.set(true)

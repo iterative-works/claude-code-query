@@ -82,6 +82,31 @@ object SessionTest extends ClaudeZioSpec:
                    )
         msgs    <- session.stream.runCollect
       yield assertTrue(msgs.toList == List(assistant, result)),
+    test("stream leaves messages buffered after the ResultMessage for the next turn"):
+      val extra = AssistantMessage(List(TextBlock("turn two")))
+      for
+        stdinQueue      <- Queue.unbounded[Chunk[Byte]]
+        messageQueue    <- Queue.unbounded[Option[Message]]
+        // Two turns' worth of messages buffered up front in the shared queue.
+        _               <- ZIO.foreachDiscard(
+                             List(Some(assistant), Some(result), Some(extra), Some(result))
+                           )(messageQueue.offer)
+        sessionIdRef    <- Ref.make("sess-1")
+        aliveRef        <- Ref.make(true)
+        pendingErrorRef <- Ref.make(Option.empty[CLIError])
+        session          = SessionProcess.make(
+                             stdinQueue,
+                             sessionIdRef,
+                             messageQueue,
+                             aliveRef,
+                             pendingErrorRef
+                           )
+        firstTurn       <- session.stream.runCollect
+        secondTurn      <- session.stream.runCollect
+      yield assertTrue(
+        firstTurn.toList == List(assistant, result),
+        secondTurn.toList == List(extra, result)
+      ),
     test("stream fails with the pending error on EOF before a ResultMessage"):
       for
         session <- makeSession(
