@@ -51,6 +51,42 @@ object SessionTest extends ClaudeZioSpec:
         session <- makeSession(alive = false, pendingError = None)
         error   <- session.send("hi").flip
       yield assertTrue(error == SessionProcessDied(None, "")),
+    test("send fails with the pending error when the stdin queue is shut down"):
+      for
+        stdinQueue      <- Queue.unbounded[Chunk[Byte]]
+        messageQueue    <- Queue.unbounded[Option[Message]]
+        sessionIdRef    <- Ref.make("sess-1")
+        aliveRef        <- Ref.make(true)
+        pendingErrorRef <- Ref.make(
+                             Option[CLIError](SessionProcessDied(Some(7), "gone"))
+                           )
+        session          = SessionProcess.make(
+                             stdinQueue,
+                             sessionIdRef,
+                             messageQueue,
+                             aliveRef,
+                             pendingErrorRef
+                           )
+        _               <- stdinQueue.shutdown
+        error           <- session.send("hi").flip
+      yield assertTrue(error == SessionProcessDied(Some(7), "gone")),
+    test("send fails with SessionProcessDied(None) when the stdin queue is shut down without a recorded error"):
+      for
+        stdinQueue      <- Queue.unbounded[Chunk[Byte]]
+        messageQueue    <- Queue.unbounded[Option[Message]]
+        sessionIdRef    <- Ref.make("sess-1")
+        aliveRef        <- Ref.make(true)
+        pendingErrorRef <- Ref.make(Option.empty[CLIError])
+        session          = SessionProcess.make(
+                             stdinQueue,
+                             sessionIdRef,
+                             messageQueue,
+                             aliveRef,
+                             pendingErrorRef
+                           )
+        _               <- stdinQueue.shutdown
+        error           <- session.send("hi").flip
+      yield assertTrue(error == SessionProcessDied(None, "")),
     test("send enqueues an SDKUserMessage line carrying the session id"):
       for
         stdinQueue      <- Queue.unbounded[Chunk[Byte]]

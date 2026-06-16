@@ -190,19 +190,31 @@ private final class SessionImpl(
 
   def send(prompt: String): IO[CLIError, Unit] =
     aliveRef.get.flatMap:
-      case false =>
-        pendingErrorRef.get.flatMap:
-          case Some(error) => ZIO.fail(error)
-          case None        => ZIO.fail(SessionProcessDied(None, ""))
-      case true =>
-        sessionIdRef.get.flatMap: currentId =>
-          val message = SDKUserMessage(content = prompt, sessionId = currentId)
-          val json = message.asJson.noSpaces + "\n"
-          ZIO.logDebug(
-            s"Writing SDKUserMessage to stdin: ${message.asJson.noSpaces}"
-          ) *> stdinQueue
-            .offer(Chunk.fromArray(json.getBytes(StandardCharsets.UTF_8)))
-            .unit
+      case false => failProcessGone
+      case true  =>
+        // A shut-down stdin queue means the session has been released or the
+        // process has gone; offering to it would interrupt the caller's fiber.
+        // Surface the recorded death as a typed error instead.
+        stdinQueue.isShutdown.flatMap:
+          case true  => failProcessGone
+          case false =>
+            sessionIdRef.get.flatMap: currentId =>
+              val message =
+                SDKUserMessage(content = prompt, sessionId = currentId)
+              val json = message.asJson.noSpaces + "\n"
+              ZIO.logDebug(
+                s"Writing SDKUserMessage to stdin: ${message.asJson.noSpaces}"
+              ) *> stdinQueue
+                .offer(Chunk.fromArray(json.getBytes(StandardCharsets.UTF_8)))
+                .unit
+
+  /** Fails with the recorded death error, or a generic [[SessionProcessDied]]
+    * when the process is gone but no specific error was captured.
+    */
+  private def failProcessGone: IO[CLIError, Nothing] =
+    pendingErrorRef.get.flatMap:
+      case Some(error) => ZIO.fail(error)
+      case None        => ZIO.fail(SessionProcessDied(None, ""))
 
   def stream: ZStream[Any, CLIError, Message] =
     ZStream.unwrap:
