@@ -4,7 +4,7 @@ This document describes the architectural design of the Claude Code Scala SDK, a
 
 ## Build Modules
 
-The SDK is organized as three independent Mill modules, each published as a separate artifact to Maven Central.
+The SDK is organized as four independent Mill modules, each published as a separate artifact to Maven Central.
 
 ### Module Layout
 
@@ -12,18 +12,19 @@ The SDK is organized as three independent Mill modules, each published as a sepa
 claude-code-query/
 ├── core/src/          # Shared types, parsing, and CLI management
 ├── direct/src/        # Ox-based direct-style API
-└── effectful/src/     # cats-effect/fs2 effectful API
+├── effectful/src/     # cats-effect/fs2 effectful API
+└── zio/src/           # ZIO/ZStream API with typed errors
 ```
 
 ### Dependency Graph
 
 ```
 direct  ──┐
-           ├──▶  core
-effectful ─┘
+effectful ─┼──▶  core
+zio      ──┘
 ```
 
-Both `direct` and `effectful` depend on `core`. The two API modules are independent of each other and have no transitive dependency coupling: `direct` does not pull in cats-effect or fs2, and `effectful` does not pull in Ox.
+`direct`, `effectful`, and `zio` each depend on `core`. The three API modules are independent of each other and have no transitive dependency coupling: `direct` does not pull in cats-effect or ZIO, `effectful` does not pull in Ox or ZIO, and `zio` does not pull in Ox or cats-effect.
 
 ### Published Artifact Coordinates
 
@@ -32,6 +33,7 @@ Both `direct` and `effectful` depend on `core`. The two API modules are independ
 | core | `works.iterative:claude-code-query-core_3:0.1.0` |
 | direct | `works.iterative:claude-code-query-direct_3:0.1.0` |
 | effectful | `works.iterative:claude-code-query-effectful_3:0.1.0` |
+| zio | `works.iterative:claude-code-query-zio_3:0.1.0` |
 
 ### Build Commands
 
@@ -50,7 +52,7 @@ mill __.publishLocal
 
 The SDK follows these key principles:
 
-- **Dual API Design**: Offers both direct-style (Ox-based) and effectful (cats-effect-based) APIs
+- **Multiple API Designs**: Offers direct-style (Ox-based), effectful (cats-effect-based), and ZIO-based APIs over the same core
 - **Functional Core**: Uses immutable data structures and pure functions
 - **Simplified Interface**: Flattens the complex TypeScript CLI output into clean, user-friendly Scala types
 - **Separation of Concerns**: Clear boundaries between API, process management, CLI interaction, and parsing
@@ -59,24 +61,24 @@ The SDK follows these key principles:
 ## High-Level Architecture
 
 ```
-┌─────────────────────────────────────────┐
-│           Public API Layer              │
-├──────────────────┬──────────────────────┤
-│   Direct API     │    Effectful API     │
-│   (Ox-based)     │ (cats-effect-based)  │
-└──────────────────┴──────────────────────┘
-            │                │
-            └────────┬───────┘
-                     │
-         ┌──────────▼────────────┐
-         │    Core Components    │
-         ├───────────────────────┤
-         │  • Model Types        │
-         │  • CLI Discovery      │
-         │  • Argument Builder   │
-         │  • Process Manager    │
-         │  • JSON Parser        │
-         └───────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                     Public API Layer                         │
+├──────────────────┬──────────────────────┬────────────────────┤
+│   Direct API     │    Effectful API     │      ZIO API       │
+│   (Ox-based)     │ (cats-effect-based)  │  (ZIO/ZStream)     │
+└──────────────────┴──────────────────────┴────────────────────┘
+            │                │                      │
+            └────────────────┼──────────────────────┘
+                             │
+                 ┌──────────▼────────────┐
+                 │    Core Components    │
+                 ├───────────────────────┤
+                 │  • Model Types        │
+                 │  • CLI Discovery      │
+                 │  • Argument Builder   │
+                 │  • Process Manager    │
+                 │  • JSON Parser        │
+                 └───────────────────────┘
 ```
 
 ## Public API Layer
@@ -117,9 +119,28 @@ A fully effectful API using cats-effect IO and fs2 streams for applications that
 - **Composable Operations**: Leverage cats-effect's powerful combinators
 - **Given-based Logging**: Uses log4cats with given instances for clean dependency injection
 
+### ZIO API (ZIO + ZStream)
+**Location**: `works.iterative.claude.zio.ClaudeCode`
+
+A ZIO-native API using `ZIO` and `ZStream`, for applications built on the ZIO ecosystem.
+
+**Key Methods**:
+- `ask(prompt: String): IO[CLIError, String]` - Simple query returning extracted text
+- `query(options: QueryOptions): ZStream[Any, CLIError, Message]` - Streaming messages
+- `querySync(options: QueryOptions): IO[CLIError, List[Message]]` - Collects all messages
+- `queryResult(options: QueryOptions): IO[CLIError, String]` - Extracted text result
+- `session(options: SessionOptions): ZIO[Scope, CLIError, Session]` - Scoped multi-turn session
+
+**Architecture Features**:
+- **Typed Errors**: Failures are surfaced through a typed `CLIError` channel, not as exceptions
+- **Streaming Support**: `ZStream` for memory-efficient message processing
+- **Resource Safety**: Sessions are `Scope`-acquired; finalizers shut down the process deterministically
+- **Subprocess Management**: Uses `zio-process` for spawning the CLI and streaming stdout/stderr
+- **Built-in Logging**: Uses ZIO's runtime logging (`ZIO.log*`); no logger is threaded through the API
+
 ### Shared Architecture Pattern
 
-Both APIs follow a **stepdown rule** with three levels:
+All APIs follow a **stepdown rule** with three levels:
 1. **High-level "What" operations** - Public API methods that define what we want to accomplish
 2. **Mid-level "How" operations** - Private methods that orchestrate the steps to accomplish the goals
 3. **Low-level validation and utilities** - Specific implementation details and validations
@@ -169,7 +190,7 @@ sealed trait ContentBlock
 
 ## Conversation Log Parsing
 
-The SDK can read and parse Claude Code conversation log files (`.jsonl` files written by the Claude Code CLI). This subsystem follows the same functional core / dual-implementation pattern used by the query API.
+The SDK can read and parse Claude Code conversation log files (`.jsonl` files written by the Claude Code CLI). This subsystem follows the same functional core / per-effect-implementation pattern used by the query API.
 
 ### Log File Format
 
@@ -225,7 +246,7 @@ trait ConversationLogReader[F[_]]:
   def stream(path: os.Path): EntryStream
 ```
 
-The `F[_]` parameter is instantiated as the identity functor (`[A] =>> A`) for direct-style callers and as `IO` for effectful callers.
+The `F[_]` parameter is instantiated as the identity functor (`[A] =>> A`) for direct-style callers, as `IO` for effectful callers, and as `zio.Task` for ZIO callers.
 
 ### Implementations
 
@@ -235,6 +256,8 @@ The `F[_]` parameter is instantiated as the identity functor (`[A] =>> A`) for d
 | `DirectConversationLogReader` | `direct.log` | identity | `ox.flow.Flow[ConversationLogEntry]` |
 | `EffectfulConversationLogIndex` | `effectful.log` | `cats.effect.IO` | — |
 | `EffectfulConversationLogReader` | `effectful.log` | `cats.effect.IO` | `fs2.Stream[IO, ConversationLogEntry]` |
+| `ZioConversationLogIndex` | `zio.log` | `zio.Task` | — |
+| `ZioConversationLogReader` | `zio.log` | `zio.Task` | `zio.stream.ZStream[Any, Throwable, ConversationLogEntry]` |
 
 ### ProjectPathDecoder
 
@@ -415,9 +438,25 @@ A test belongs in `itest` if it spawns a subprocess (`os.proc`, `ProcessBuilder`
 - Integration with SLF4J backends
 - Given-based dependency injection
 
+### ZIO API Stack
+
+**ZIO**: Effect system for the ZIO ecosystem:
+- Typed error channel (`CLIError`) instead of exceptions
+- Fiber-based concurrency
+- Scope-based resource safety for sessions
+- Built-in runtime logging (`ZIO.log*`), pluggable via zio-logging/SLF4J
+
+**ZStream**: Functional streaming for ZIO:
+- Memory-efficient, back-pressured message processing
+- Composable stream operators
+
+**zio-process**: Subprocess management for ZIO:
+- Spawns the CLI and exposes stdout/stderr as `ZStream`s
+- Queue-backed stdin for interactive multi-turn sessions
+
 ### Shared Components
 
-**circe**: JSON parsing for both APIs:
+**circe**: JSON parsing for all APIs:
 - Type-safe JSON decoding with HCursor
 - Comprehensive error information
 - Functional programming patterns
@@ -425,8 +464,9 @@ A test belongs in `itest` if it spawns a subprocess (`os.proc`, `ProcessBuilder`
 
 **SLF4J**: Logging abstraction:
 - Pluggable logging backends (logback included)
-- Consistent logging across both APIs
+- Consistent logging across the APIs
 - Direct API uses given-based SLF4J logger injection
 - Effectful API uses log4cats with SLF4J backend
+- ZIO API uses ZIO's built-in runtime logging (routable to SLF4J via zio-logging)
 
-This dual-API architecture provides flexibility for users to choose their preferred programming style while sharing the same robust core implementation for CLI interaction and message processing.
+This multi-API architecture provides flexibility for users to choose their preferred programming style while sharing the same robust core implementation for CLI interaction and message processing.

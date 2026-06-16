@@ -1,6 +1,6 @@
 //| mvnDeps: ["works.iterative::mill-iw-support::0.1.3", "com.goyeau::mill-scalafix::0.6.0"]
 // PURPOSE: Mill build definition for the claude-code-query Scala SDK.
-// PURPOSE: Defines three modules: core (shared types/parsing), direct (Ox-based sync API), effectful (cats-effect/fs2 async API).
+// PURPOSE: Defines four modules: core (shared types/parsing), direct (Ox-based sync API), effectful (cats-effect/fs2 async API), zio (ZIO/ZStream async API).
 package build
 
 import mill._, scalalib._, publish._
@@ -107,6 +107,31 @@ object effectful extends SharedModule {
       mvn"org.typelevel::munit-cats-effect:2.1.0",
       mvn"org.typelevel::log4cats-testing:2.7.1",
       mvn"ch.qos.logback:logback-classic:1.5.32"
+    )
+  }
+}
+
+object zio extends SharedModule {
+  def moduleDeps = Seq(core)
+  def mvnDeps = Seq(
+    mvn"com.lihaoyi::os-lib:0.11.8",
+    mvn"dev.zio::zio:2.1.26",
+    mvn"dev.zio::zio-streams:2.1.26",
+    mvn"dev.zio::zio-process:0.8.0"
+  )
+
+  object test extends ScalaTests with TestModule.ZioTest {
+    def mvnDeps = Seq(
+      mvn"dev.zio::zio-test:2.1.26",
+      mvn"dev.zio::zio-test-sbt:2.1.26"
+    )
+  }
+
+  object itest extends ScalaTests with TestModule.ZioTest {
+    def moduleDeps = super.moduleDeps ++ Seq(zio.test)
+    def mvnDeps = Seq(
+      mvn"dev.zio::zio-test:2.1.26",
+      mvn"dev.zio::zio-test-sbt:2.1.26"
     )
   }
 }
