@@ -34,10 +34,12 @@ object ClaudeCode:
     ZStream.unwrap:
       for
         _ <- ZIO.logInfo(s"Initiating query with prompt: ${options.prompt}")
-        _ <- validateConfiguration(options)
         executablePath <- resolveExecutable(options.pathToClaudeCodeExecutable)
         args = buildCLIArguments(options)
-      yield ProcessManager.executeProcess(executablePath, args, options)
+        _ <- validateConfiguration(options)
+      yield ProcessManager
+        .executeProcess(executablePath, args, options)
+        .ensuring(ZIO.logInfo("Query completed"))
 
   /** Execute a query and collect all messages into a list. */
   def querySync(options: QueryOptions): IO[CLIError, List[Message]] =
@@ -90,20 +92,27 @@ object ClaudeCode:
             )
           .orElseSucceed((false, false))
           .flatMap: (exists, isDirectory) =>
-            if !exists then
-              ZIO.fail(
-                ConfigurationError(
-                  "cwd",
-                  workingDir,
-                  "Working directory does not exist"
+            val maybeError =
+              if !exists then
+                Some(
+                  ConfigurationError(
+                    "cwd",
+                    workingDir,
+                    "Working directory does not exist"
+                  )
                 )
-              )
-            else if !isDirectory then
-              ZIO.fail(
-                ConfigurationError(
-                  "cwd",
-                  workingDir,
-                  "Path exists but is not a directory"
+              else if !isDirectory then
+                Some(
+                  ConfigurationError(
+                    "cwd",
+                    workingDir,
+                    "Path exists but is not a directory"
+                  )
                 )
-              )
-            else ZIO.unit
+              else None
+            maybeError match
+              case Some(error) =>
+                ZIO.logWarning(
+                  s"Configuration validation failed: ${error.reason}"
+                ) *> ZIO.fail(error)
+              case None => ZIO.unit

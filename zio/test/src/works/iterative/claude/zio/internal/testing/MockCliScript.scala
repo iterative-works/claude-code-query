@@ -50,3 +50,19 @@ object MockCliScript:
     turnMessages.foreach(line => builder.append(s"  echo '${escape(line)}'\n"))
     builder.append("done\n")
     writeScript(builder.toString)
+
+  /** A session-mode script that emits init, reads one prompt, emits a partial
+    * message, then exits non-zero before any ResultMessage — simulating a
+    * process that dies mid-turn.
+    */
+  def crashMidTurnScript(
+      initMessage: String,
+      partialMessage: String,
+      exitCode: Int = 1
+  ): os.Path =
+    val builder = new StringBuilder("#!/bin/bash\n")
+    builder.append(s"echo '${escape(initMessage)}'\n")
+    builder.append("read -r _line\n")
+    builder.append(s"echo '${escape(partialMessage)}'\n")
+    builder.append(s"exit $exitCode\n")
+    writeScript(builder.toString)

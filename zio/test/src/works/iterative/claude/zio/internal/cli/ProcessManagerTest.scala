@@ -12,10 +12,9 @@ import works.iterative.claude.zio.internal.testing.ClaudeZioSpec
 
 object ProcessManagerTest extends ClaudeZioSpec:
 
-  private def standard(command: Command): Command.Standard = command match
-    case s: Command.Standard => s
-    case _: Command.Piped    =>
-      throw new AssertionError("expected a standard command")
+  // buildCommand always produces a Command.Standard; narrow without throwing.
+  private def standard(command: Command): Command.Standard =
+    command.asInstanceOf[Command.Standard]
 
   def spec = suite("ProcessManager")(
     test("builds a command with the executable and arguments"):

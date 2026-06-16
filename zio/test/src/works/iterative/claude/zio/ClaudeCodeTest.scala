@@ -12,14 +12,21 @@ import works.iterative.claude.zio.internal.testing.ClaudeZioSpec
 object ClaudeCodeTest extends ClaudeZioSpec:
   def spec = suite("ClaudeCode")(
     test("query fails with ConfigurationError when cwd does not exist"):
-      val options =
-        QueryOptions.simple("hi").withCwd("/nonexistent/path/zzz-claude-sdk")
+      // Pin an explicit executable so resolution succeeds regardless of whether
+      // the real CLI is on PATH; the cwd validation is what must fail here.
+      val options = QueryOptions
+        .simple("hi")
+        .withClaudeExecutable("/bin/echo")
+        .withCwd("/nonexistent/path/zzz-claude-sdk")
       for error <- ClaudeCode.query(options).runCollect.flip
       yield assertTrue(error.isInstanceOf[ConfigurationError]),
     test("query fails with ConfigurationError when cwd is a file, not a directory"):
       for
         file   <- ZIO.attempt(java.io.File.createTempFile("claude", ".txt"))
-        options = QueryOptions.simple("hi").withCwd(file.getAbsolutePath)
+        options = QueryOptions
+                    .simple("hi")
+                    .withClaudeExecutable("/bin/echo")
+                    .withCwd(file.getAbsolutePath)
         error  <- ClaudeCode.query(options).runCollect.flip
         _      <- ZIO.attempt(file.delete()).ignore
       yield assertTrue(error.isInstanceOf[ConfigurationError]),

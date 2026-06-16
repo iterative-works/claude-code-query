@@ -218,6 +218,10 @@ private final class SessionImpl(
               case _: ResultMessage => resultSeenRef.set(true)
               case _                => ZIO.unit
             .takeUntil(_.isInstanceOf[ResultMessage])
+          // After the turn ends without a ResultMessage (the queue signalled
+          // EOF because the process died mid-turn), surface the recorded death
+          // error. A consumer that abandons the stream early instead observes
+          // the error on its next `send`, which checks the same refs.
           val check = ZStream.fromZIO:
             resultSeenRef.get.flatMap:
               case true  => ZIO.unit

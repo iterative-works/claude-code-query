@@ -8,8 +8,10 @@ import zio.stream.*
 import zio.process.{Command, Process, ProcessInput, CommandError}
 import java.io.File
 import works.iterative.claude.core.model.{QueryOptions, Message}
+import scala.concurrent.duration.FiniteDuration
 import works.iterative.claude.core.{
   CLIError,
+  CLINotFoundError,
   ProcessExecutionError,
   ProcessTimeoutError,
   EnvironmentValidationError
@@ -86,7 +88,9 @@ object ProcessManager:
     messages.catchAll: error =>
       ZStream.unwrap:
         timedOutRef.get.map: timedOut =>
-          if timedOut then ZStream.fromZIO(failTimeout(options, command)).drain
+          if timedOut then
+            options.timeout.fold(ZStream.fail(error)): timeout =>
+              ZStream.fromZIO(raiseTimeout(timeout, command))
           else ZStream.fail(error)
 
   private def configureCommand(
@@ -137,7 +141,8 @@ object ProcessManager:
           timedOut <- timedOutRef.get
           stderrContent <- stderrFiber.join
           _ <-
-            if timedOut then failTimeout(options, command)
+            if timedOut then
+              options.timeout.fold(ZIO.unit)(raiseTimeout(_, command))
             else if exitCode.code != 0 then
               ZIO.logError(
                 s"Process failed with exit code ${exitCode.code}: $stderrContent"
@@ -160,16 +165,13 @@ object ProcessManager:
           *> process.killForcibly.ignore).forkScoped.unit
       case None => ZIO.unit
 
-  private def failTimeout(
-      options: QueryOptions,
+  private def raiseTimeout(
+      timeout: FiniteDuration,
       command: List[String]
-  ): IO[ProcessTimeoutError, Unit] =
-    options.timeout match
-      case Some(timeout) =>
-        ZIO.logError(
-          s"Process timed out after ${timeout.toSeconds} seconds"
-        ) *> ZIO.fail(ProcessTimeoutError(timeout, command))
-      case None => ZIO.unit
+  ): IO[ProcessTimeoutError, Nothing] =
+    ZIO.logError(
+      s"Process timed out after ${timeout.toSeconds} seconds"
+    ) *> ZIO.fail(ProcessTimeoutError(timeout, command))
 
   /** Best-effort stderr capture; never fails so it cannot mask the real error.
     */
@@ -182,10 +184,13 @@ object ProcessManager:
       error: CommandError,
       command: List[String]
   ): CLIError =
-    val exitCode = error match
-      case CommandError.NonZeroErrorCode(code) => code.code
-      case _                                   => -1
-    ProcessExecutionError(exitCode, error.getMessage, command)
+    error match
+      case CommandError.ProgramNotFound(_) =>
+        CLINotFoundError(error.getMessage)
+      case CommandError.NonZeroErrorCode(code) =>
+        ProcessExecutionError(code.code, error.getMessage, command)
+      case _ =>
+        ProcessExecutionError(-1, error.getMessage, command)
 
   /** Validates environment variable names for obviously invalid cases.
     *
