@@ -54,18 +54,40 @@ object ProcessManager:
         builtCommand <- buildCommand(executablePath, args, options)
         process <- builtCommand.run
           .mapError(toProcessError(_, command))
-        _ <- ZIO.addFinalizer(process.killForcibly.ignore)
         stderrFiber <- collectStderr(process).forkScoped
         timedOutRef <- Ref.make(false)
         _ <- scheduleTimeout(process, options, timedOutRef)
-      yield parseMessages(process, command)
-        ++ checkCompletion(
-          process,
-          stderrFiber,
-          timedOutRef,
-          options,
-          command
-        )
+        // Registered last so it runs first on teardown: killing the process
+        // makes the pipes hit EOF, letting the forked readers finish promptly.
+        _ <- ZIO.addFinalizer(process.killForcibly.ignore)
+      yield wrapTimeout(
+        parseMessages(process, command)
+          ++ checkCompletion(
+            process,
+            stderrFiber,
+            timedOutRef,
+            options,
+            command
+          ),
+        timedOutRef,
+        options,
+        command
+      )
+
+  /** Ensures a fired timeout is the authoritative failure even when killing the
+    * process first surfaces a read or exit error on the message stream.
+    */
+  private def wrapTimeout(
+      messages: ZStream[Any, CLIError, Message],
+      timedOutRef: Ref[Boolean],
+      options: QueryOptions,
+      command: List[String]
+  ): ZStream[Any, CLIError, Message] =
+    messages.catchAll: error =>
+      ZStream.unwrap:
+        timedOutRef.get.map: timedOut =>
+          if timedOut then ZStream.fromZIO(failTimeout(options, command)).drain
+          else ZStream.fail(error)
 
   private def configureCommand(
       executablePath: String,

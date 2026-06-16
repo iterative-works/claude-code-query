@@ -44,8 +44,6 @@ object SessionProcess:
       pendingErrorRef <- Ref.make(Option.empty[CLIError])
       process <- buildCommand(executablePath, args, options, stdinQueue).run
         .mapError(toSessionError(_, command))
-      _ <- ZIO.addFinalizer(process.killForcibly.ignore)
-      _ <- ZIO.addFinalizer(stdinQueue.shutdown)
       _ <- startStdoutReader(
         process,
         messageQueue,
@@ -54,6 +52,12 @@ object SessionProcess:
         pendingErrorRef
       ).forkScoped
       _ <- captureStderr(process).forkScoped
+      // Finalizers run in reverse registration order, so registering the kill
+      // last makes it run first on teardown: killing the process makes the
+      // pipes hit EOF, letting the forked readers finish and the stdin pump
+      // stop promptly. stdinQueue.shutdown then releases the input stream.
+      _ <- ZIO.addFinalizer(stdinQueue.shutdown)
+      _ <- ZIO.addFinalizer(process.killForcibly.ignore)
       _ <- readInitMessage(messageQueue, sessionIdRef)
     yield make(
       stdinQueue,
