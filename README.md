@@ -6,24 +6,26 @@ EXPERIMENTAL - this code is not yet properly tested or documented, work in progr
 
 ## Features
 
-- **Dual API Design**: Choose between simple blocking calls or concurrent operations
-- **Single Import**: Everything you need with `import works.iterative.claude.direct.*`
+- **Multiple API Styles**: Direct (Ox), effectful (cats-effect/fs2), or ZIO (ZIO/ZStream) over a shared core
+- **Single Import**: Everything you need with `import works.iterative.claude.direct.*` (or `.effectful.*` / `.zio.*`)
 - **Fluent Configuration**: Chain method calls to configure query options
 - **Structured Concurrency**: Built on Ox for safe concurrent operations
 - **Type Safety**: Full Scala 3 support with compile-time guarantees
 
 ## Quick Start
 
-Add the dependency to your project. Use the `direct` module for Ox-based direct-style code, or the `effectful` module for cats-effect/fs2:
+Add the dependency to your project. Use the `direct` module for Ox-based direct-style code, the `effectful` module for cats-effect/fs2, or the `zio` module for ZIO/ZStream:
 
 ```scala
 // Mill
 ivy"works.iterative::claude-code-query-direct:0.1.0"
 ivy"works.iterative::claude-code-query-effectful:0.1.0"
+ivy"works.iterative::claude-code-query-zio:0.1.0"
 
 // SBT
 "works.iterative" %% "claude-code-query-direct" % "0.1.0"
 "works.iterative" %% "claude-code-query-effectful" % "0.1.0"
+"works.iterative" %% "claude-code-query-zio" % "0.1.0"
 ```
 
 ## Simple API (Blocking)
@@ -291,6 +293,107 @@ val program = for {
 // Resources are automatically cleaned up via fs2's Resource management
 ```
 
+## ZIO API
+
+For applications built on ZIO, the SDK provides a ZIO-native API using `ZIO`, `ZStream`, and `zio-process`. Errors are surfaced through a typed `CLIError` channel rather than as exceptions, and logging uses ZIO's built-in logging (no logger needs to be threaded through):
+
+```scala
+import works.iterative.claude.zio.*
+import zio.*
+
+object ZioExample extends ZIOAppDefault:
+  def run =
+    for
+      // Simple question
+      answer <- ClaudeCode.ask("What is 2+2?")
+      _      <- Console.printLine(answer)
+
+      // Query with options
+      options = QueryOptions
+                  .simple("Explain quantum computing")
+                  .withMaxTurns(3)
+                  .withModel("claude-3-5-sonnet-20241022")
+
+      // Get all messages
+      messages <- ClaudeCode.querySync(options)
+      _        <- Console.printLine(s"Got ${messages.length} messages")
+    yield ()
+```
+
+### Streaming with ZStream
+
+`query` returns a `ZStream[Any, CLIError, Message]` that emits messages as the CLI produces them:
+
+```scala
+import works.iterative.claude.zio.*
+import zio.*
+import zio.stream.*
+
+val program: ZIO[Any, CLIError, Unit] =
+  ClaudeCode
+    .query(QueryOptions.simple("Write a story"))
+    .collect { case AssistantMessage(content) => content }
+    .runForeach: content =>
+      ZIO.foreachDiscard(content):
+        case TextBlock(text) => Console.printLine(text).orDie
+        case _               => ZIO.unit
+```
+
+### Typed Error Handling
+
+The ZIO API carries `CLIError` in the error channel, so failures are handled with the usual ZIO combinators:
+
+```scala
+import works.iterative.claude.zio.*
+import zio.*
+
+val program: UIO[String] =
+  ClaudeCode
+    .queryResult(QueryOptions.simple("Hello Claude"))
+    .catchAll:
+      case ProcessExecutionError(exitCode, stderr, _) =>
+        ZIO.succeed(s"CLI failed with exit $exitCode: $stderr")
+      case ConfigurationError(parameter, value, reason) =>
+        ZIO.succeed(s"Invalid $parameter=$value: $reason")
+      case error =>
+        ZIO.succeed(s"Unexpected error: ${error.message}")
+```
+
+### Concurrent Queries
+
+Leverage ZIO's fiber-based concurrency:
+
+```scala
+import works.iterative.claude.zio.*
+import zio.*
+
+val queries = List("What is 2+2?", "What is 3+3?", "What is 4+4?")
+
+val results: ZIO[Any, CLIError, List[String]] =
+  ZIO.foreachPar(queries): q =>
+    ClaudeCode.queryResult(QueryOptions.simple(q))
+```
+
+### Multi-turn Sessions
+
+`session` opens a scoped, long-lived conversation. The underlying process is shut down automatically when the scope closes:
+
+```scala
+import works.iterative.claude.zio.*
+import zio.*
+
+val program: ZIO[Any, CLIError, Unit] =
+  ZIO.scoped:
+    for
+      session <- ClaudeCode.session(SessionOptions.defaults)
+      _       <- session.send("Remember the number 42.")
+      _       <- session.stream.runDrain
+      _       <- session.send("What number did I ask you to remember?")
+      answer  <- session.stream.runCollect
+      _       <- Console.printLine(answer.mkString("\n"))
+    yield ()
+```
+
 ## Conversation Log Parsing
 
 The SDK can read and parse the JSONL conversation logs that Claude Code writes to disk. Log files are stored under `~/.claude/projects/` in directories named after the project path.
@@ -405,20 +508,59 @@ val program: IO[Unit] =
     .drain
 ```
 
+### Listing and Reading Sessions (ZIO API)
+
+```scala
+import works.iterative.claude.zio.*
+import zio.*
+
+object LogExample extends ZIOAppDefault:
+  def run =
+    val logDir = os.Path("/home/user/.claude/projects") /
+      ProjectPathDecoder.decode("-home-user-myproject")
+
+    val reader = ZioConversationLogReader()
+
+    for
+      index    <- ZioConversationLogIndex()
+      sessions <- index.listSessions(logDir)
+      _        <- Console.printLine(s"Found ${sessions.size} sessions")
+      entries  <- reader.readAll(sessions.head.path)
+      _        <- Console.printLine(s"Loaded ${entries.size} entries")
+    yield ()
+```
+
+### Streaming Log Entries (ZIO API)
+
+```scala
+import works.iterative.claude.zio.*
+import zio.*
+import zio.stream.*
+
+val reader = ZioConversationLogReader()
+
+val program: ZIO[Any, Throwable, Unit] =
+  reader.stream(path)
+    .collect { case entry if entry.payload.isInstanceOf[AssistantLogEntry] => entry }
+    .runForeach(entry => Console.printLine(s"Assistant turn: ${entry.uuid}"))
+```
+
 ## Architecture
 
-The SDK is split into three modules:
+The SDK is split into four modules:
 
 - **core**: Shared model types, JSON parsing, and CLI management. Depends only on circe.
 - **direct** (`claude-code-query-direct`): Ox-based synchronous API. Depends on core + Ox + os-lib + SLF4J.
 - **effectful** (`claude-code-query-effectful`): cats-effect/fs2 API. Depends on core + cats-effect + fs2 + log4cats.
+- **zio** (`claude-code-query-zio`): ZIO/ZStream API with typed errors. Depends on core + zio + zio-streams + zio-process.
 
 Technology stack:
 
 - **Ox**: Structured concurrency for safe concurrent operations (direct API)
 - **cats-effect IO + fs2**: Functional effects and streaming for the effectful API
+- **ZIO + ZStream + zio-process**: Functional effects, streaming, and subprocess management for the ZIO API
 - **Scala 3**: Modern language features and type safety
-- **log4cats + SLF4J**: Flexible logging with both given-based and effectful approaches
+- **log4cats + SLF4J**: Flexible logging with both given-based and effectful approaches; the ZIO API uses ZIO's built-in logging
 
 ### Build Commands
 
