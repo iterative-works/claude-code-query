@@ -90,29 +90,43 @@ object ClaudeCode:
               java.nio.file.Files.exists(path),
               java.nio.file.Files.isDirectory(path)
             )
-          .orElseSucceed((false, false))
+          .mapError: cause =>
+            ConfigurationError(
+              "cwd",
+              workingDir,
+              s"Cannot access working directory: ${cause.getMessage}"
+            )
           .flatMap: (exists, isDirectory) =>
-            val maybeError =
-              if !exists then
-                Some(
-                  ConfigurationError(
-                    "cwd",
-                    workingDir,
-                    "Working directory does not exist"
-                  )
-                )
-              else if !isDirectory then
-                Some(
-                  ConfigurationError(
-                    "cwd",
-                    workingDir,
-                    "Path exists but is not a directory"
-                  )
-                )
-              else None
-            maybeError match
+            cwdError(workingDir, exists, isDirectory) match
               case Some(error) =>
                 ZIO.logWarning(
                   s"Configuration validation failed: ${error.reason}"
                 ) *> ZIO.fail(error)
               case None => ZIO.unit
+
+  /** Classifies a working directory from its probed existence and
+    * directory-ness, returning the configuration error (if any). Pure so the
+    * decision can be tested without touching the filesystem.
+    */
+  private[claude] def cwdError(
+      workingDir: String,
+      exists: Boolean,
+      isDirectory: Boolean
+  ): Option[ConfigurationError] =
+    if !exists then
+      Some(
+        ConfigurationError(
+          "cwd",
+          workingDir,
+          "Working directory does not exist"
+        )
+      )
+    else if !isDirectory then
+      Some(
+        ConfigurationError(
+          "cwd",
+          workingDir,
+          "Path exists but is not a directory"
+        )
+      )
+    else None

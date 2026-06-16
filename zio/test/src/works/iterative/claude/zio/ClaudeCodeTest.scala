@@ -30,6 +30,28 @@ object ClaudeCodeTest extends ClaudeZioSpec:
         error  <- ClaudeCode.query(options).runCollect.flip
         _      <- ZIO.attempt(file.delete()).ignore
       yield assertTrue(error.isInstanceOf[ConfigurationError]),
+    test("cwdError flags a missing working directory"):
+      assertTrue(
+        ClaudeCode.cwdError("/x", exists = false, isDirectory = false) ==
+          Some(
+            ConfigurationError("cwd", "/x", "Working directory does not exist")
+          )
+      ),
+    test("cwdError flags a path that exists but is not a directory"):
+      assertTrue(
+        ClaudeCode.cwdError("/x", exists = true, isDirectory = false) ==
+          Some(
+            ConfigurationError(
+              "cwd",
+              "/x",
+              "Path exists but is not a directory"
+            )
+          )
+      ),
+    test("cwdError accepts an existing directory"):
+      assertTrue(
+        ClaudeCode.cwdError("/x", exists = true, isDirectory = true).isEmpty
+      ),
     test("buildCLIArguments wraps args with streaming flags and a trailing prompt"):
       val args = ClaudeCode.buildCLIArguments(QueryOptions.simple("hello"))
       assertTrue(
