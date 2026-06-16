@@ -110,3 +110,28 @@ object effectful extends SharedModule {
     )
   }
 }
+
+object zio extends SharedModule {
+  def moduleDeps = Seq(core)
+  def mvnDeps = Seq(
+    mvn"com.lihaoyi::os-lib:0.11.8",
+    mvn"dev.zio::zio:2.1.26",
+    mvn"dev.zio::zio-streams:2.1.26",
+    mvn"dev.zio::zio-process:0.8.0"
+  )
+
+  object test extends ScalaTests with TestModule.ZioTest {
+    def mvnDeps = Seq(
+      mvn"dev.zio::zio-test:2.1.26",
+      mvn"dev.zio::zio-test-sbt:2.1.26"
+    )
+  }
+
+  object itest extends ScalaTests with TestModule.ZioTest {
+    def moduleDeps = super.moduleDeps ++ Seq(zio.test)
+    def mvnDeps = Seq(
+      mvn"dev.zio::zio-test:2.1.26",
+      mvn"dev.zio::zio-test-sbt:2.1.26"
+    )
+  }
+}
