@@ -71,5 +71,21 @@ object ZioConversationLogIndexTest extends ClaudeZioSpec:
                       os.write(subagents / "agent-1.meta.json", "{ not json")
                     )
         agents   <- index.listSubAgents(dir, "sess")
-      yield assertTrue(agents.isEmpty)
+      yield assertTrue(agents.isEmpty),
+    test("listSubAgents ignores a subdirectory named like an agent transcript"):
+      val meta = """{"agentType":"explorer","description":"d"}"""
+      for
+        dir      <- ZIO.attempt(os.temp.dir())
+        subagents = dir / "sess" / "subagents"
+        _        <- ZIO.attempt(os.makeDir.all(subagents))
+        _        <- ZIO.attempt(os.write(subagents / "agent-1.jsonl", "{}"))
+        _        <- ZIO.attempt(os.write(subagents / "agent-1.meta.json", meta))
+        // A directory matching the agent-*.jsonl pattern, with a valid meta
+        // sidecar: only the os.isFile guard keeps it from being parsed.
+        _        <- ZIO.attempt(os.makeDir.all(subagents / "agent-decoy.jsonl"))
+        _        <- ZIO.attempt(
+                      os.write(subagents / "agent-decoy.meta.json", meta)
+                    )
+        agents   <- index.listSubAgents(dir, "sess")
+      yield assertTrue(agents.map(_.agentId) == Seq("agent-1"))
   )
