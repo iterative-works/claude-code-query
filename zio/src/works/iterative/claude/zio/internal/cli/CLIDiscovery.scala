@@ -1,5 +1,5 @@
 // PURPOSE: CLI discovery functionality for finding the Claude Code executable
-// PURPOSE: Uses functional programming with dependency injection for testability
+// PURPOSE: Searches PATH and common installation directories, failing with typed errors
 
 package works.iterative.claude.zio.internal.cli
 
