@@ -98,17 +98,41 @@ object ProcessManager:
       args: List[String],
       options: QueryOptions
   ): Command =
-    // zio-process inherits the parent environment and merges extra vars on top.
-    // It cannot clear the inherited environment, so `inheritEnvironment = false`
-    // is honoured only as far as additive variables; full clearing is not
-    // supported by the underlying library.
-    val base = Command(executablePath, args*)
-    val withEnv = options.environmentVariables.fold(base): envVars =>
-      if envVars.nonEmpty then base.env(envVars) else base
-    val withCwd = options.cwd.fold(withEnv): cwd =>
-      withEnv.workingDirectory(new File(cwd))
     // The CLI reads its prompt from arguments; close stdin so it never blocks.
-    withCwd.stdin(ProcessInput.fromStream(ZStream.empty))
+    baseCommand(
+      executablePath,
+      args,
+      options.inheritEnvironment,
+      options.environmentVariables,
+      options.cwd
+    ).stdin(ProcessInput.fromStream(ZStream.empty))
+
+  /** Builds the zio-process command (without stdin), applying environment and
+    * working-directory configuration shared by query and session modes.
+    *
+    * When `inheritEnvironment` is `Some(false)`, the command is launched
+    * through POSIX `env -i` so the child starts with only the explicitly
+    * provided variables; zio-process's own `env` only merges onto the inherited
+    * environment and cannot clear it. (Clearing this way requires a POSIX `env`
+    * and is therefore unavailable on stock Windows.) Otherwise the parent
+    * environment is inherited and extra variables are merged on top.
+    */
+  private[cli] def baseCommand(
+      executablePath: String,
+      args: List[String],
+      inheritEnvironment: Option[Boolean],
+      environmentVariables: Option[Map[String, String]],
+      cwd: Option[String]
+  ): Command =
+    val envVars = environmentVariables.getOrElse(Map.empty)
+    val base =
+      if inheritEnvironment.getOrElse(true) then
+        if envVars.nonEmpty then Command(executablePath, args*).env(envVars)
+        else Command(executablePath, args*)
+      else
+        val envPairs = envVars.toList.map((key, value) => s"$key=$value")
+        Command("env", (("-i" :: envPairs) ++ (executablePath :: args))*)
+    cwd.fold(base)(dir => base.workingDirectory(new File(dir)))
 
   private def parseMessages(
       process: Process,

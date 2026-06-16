@@ -41,6 +41,29 @@ object ProcessManagerTest extends ClaudeZioSpec:
         QueryOptions.simple("p").withEnvironmentVariables(Map("FOO" -> "bar"))
       for command <- ProcessManager.buildCommand("/bin/claude", Nil, options)
       yield assertTrue(standard(command).env.get("FOO").contains("bar")),
+    test("launches via `env -i` with only the given variables when not inheriting"):
+      val options = QueryOptions
+        .simple("p")
+        .withInheritEnvironment(false)
+        .withEnvironmentVariables(Map("FOO" -> "bar"))
+      for command <- ProcessManager.buildCommand(
+                       "/bin/claude",
+                       List("--print"),
+                       options
+                     )
+      yield
+        val parts = standard(command).command.toList
+        assertTrue(
+          parts.take(2) == List("env", "-i"),
+          parts.contains("FOO=bar"),
+          parts.containsSlice(List("/bin/claude", "--print"))
+        ),
+    test("inheritEnvironment=false with no variables still launches via `env -i`"):
+      val options = QueryOptions.simple("p").withInheritEnvironment(false)
+      for command <- ProcessManager.buildCommand("/bin/claude", Nil, options)
+      yield assertTrue(
+        standard(command).command.toList == List("env", "-i", "/bin/claude")
+      ),
     test("rejects environment variable names containing hyphens"):
       val options =
         QueryOptions.simple("p").withEnvironmentVariables(Map("BAD-NAME" -> "x"))

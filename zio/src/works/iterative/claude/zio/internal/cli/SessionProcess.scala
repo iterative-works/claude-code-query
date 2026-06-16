@@ -6,7 +6,6 @@ package works.iterative.claude.zio.internal.cli
 import zio.*
 import zio.stream.ZStream
 import zio.process.{Command, Process, ProcessInput, CommandError}
-import java.io.File
 import java.nio.charset.StandardCharsets
 import io.circe.syntax.*
 import works.iterative.claude.core.{
@@ -89,12 +88,15 @@ object SessionProcess:
       options: SessionOptions,
       stdinQueue: Queue[Chunk[Byte]]
   ): Command =
-    val base = Command(executablePath, args*)
-    val withEnv = options.environmentVariables.fold(base): envVars =>
-      if envVars.nonEmpty then base.env(envVars) else base
-    val withCwd = options.cwd.fold(withEnv): cwd =>
-      withEnv.workingDirectory(new File(cwd))
-    withCwd.stdin(ProcessInput.fromQueue(stdinQueue))
+    ProcessManager
+      .baseCommand(
+        executablePath,
+        args,
+        options.inheritEnvironment,
+        options.environmentVariables,
+        options.cwd
+      )
+      .stdin(ProcessInput.fromQueue(stdinQueue))
 
   /** Background fiber: reads stdout lines, parses into messages, and enqueues
     * them. Malformed lines are logged and skipped. When stdout completes the

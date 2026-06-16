@@ -59,5 +59,28 @@ object ProcessManagerIntegrationTest extends ClaudeZioSpec:
                      .executeProcess(script.toString, Nil, options)
                      .runCollect
                      .flip
-      yield assertTrue(error.isInstanceOf[ProcessTimeoutError])
+      yield assertTrue(error.isInstanceOf[ProcessTimeoutError]),
+    test("inheritEnvironment=false launches with a cleared environment"):
+      val cleared   = ProcessManager.baseCommand(
+        "printenv",
+        Nil,
+        inheritEnvironment = Some(false),
+        environmentVariables = Some(Map("FOO" -> "bar")),
+        cwd = None
+      )
+      val inherited = ProcessManager.baseCommand(
+        "printenv",
+        Nil,
+        inheritEnvironment = Some(true),
+        environmentVariables = Some(Map("FOO" -> "bar")),
+        cwd = None
+      )
+      for
+        clearedEnv   <- cleared.lines
+        inheritedEnv <- inherited.lines
+      yield assertTrue(
+        clearedEnv.toList == List("FOO=bar"),
+        inheritedEnv.contains("FOO=bar"),
+        inheritedEnv.exists(_.startsWith("PATH="))
+      )
   ) @@ TestAspect.withLiveClock @@ TestAspect.timeout(Duration.fromSeconds(60))
