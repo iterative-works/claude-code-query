@@ -29,6 +29,13 @@ object ZioConversationLogIndexTest extends ClaudeZioSpec:
         found   <- index.forSession(dir, "abc")
         missing <- index.forSession(dir, "nope")
       yield assertTrue(found.exists(_.sessionId == "abc"), missing.isEmpty),
+    test("listSessions ignores a directory whose name ends with .jsonl"):
+      for
+        dir      <- ZIO.attempt(os.temp.dir())
+        _        <- ZIO.attempt(os.write(dir / "real.jsonl", "{}"))
+        _        <- ZIO.attempt(os.makeDir.all(dir / "decoy.jsonl"))
+        metadata <- index.listSessions(dir)
+      yield assertTrue(metadata.map(_.sessionId).toSet == Set("real")),
     test("listSubAgents parses agent meta sidecars"):
       for
         dir      <- ZIO.attempt(os.temp.dir())
@@ -45,5 +52,24 @@ object ZioConversationLogIndexTest extends ClaudeZioSpec:
       yield assertTrue(
         agents.map(_.agentId) == Seq("agent-1"),
         agents.head.agentType.contains("explorer")
-      )
+      ),
+    test("listSubAgents skips an agent whose .meta.json is missing"):
+      for
+        dir      <- ZIO.attempt(os.temp.dir())
+        subagents = dir / "sess" / "subagents"
+        _        <- ZIO.attempt(os.makeDir.all(subagents))
+        _        <- ZIO.attempt(os.write(subagents / "agent-1.jsonl", "{}"))
+        agents   <- index.listSubAgents(dir, "sess")
+      yield assertTrue(agents.isEmpty),
+    test("listSubAgents skips an agent whose .meta.json is malformed"):
+      for
+        dir      <- ZIO.attempt(os.temp.dir())
+        subagents = dir / "sess" / "subagents"
+        _        <- ZIO.attempt(os.makeDir.all(subagents))
+        _        <- ZIO.attempt(os.write(subagents / "agent-1.jsonl", "{}"))
+        _        <- ZIO.attempt(
+                      os.write(subagents / "agent-1.meta.json", "{ not json")
+                    )
+        agents   <- index.listSubAgents(dir, "sess")
+      yield assertTrue(agents.isEmpty)
   )

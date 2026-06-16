@@ -21,7 +21,7 @@ class ZioConversationLogIndex private (
       if !os.exists(projectPath) then Seq.empty
       else
         os.list(projectPath)
-          .filter(_.last.endsWith(".jsonl"))
+          .filter(path => os.isFile(path) && path.last.endsWith(".jsonl"))
           .map(path => LogFileMetadataBuilder.fromStat(projectPath, path))
           .toSeq
 
@@ -46,7 +46,9 @@ class ZioConversationLogIndex private (
         os.list(subagentsDir)
           .filter: path =>
             val name = path.last
-            name.startsWith("agent-") && name.endsWith(".jsonl")
+            os.isFile(path) && name.startsWith("agent-") && name.endsWith(
+              ".jsonl"
+            )
           .flatMap: jsonlPath =>
             val metaPath =
               jsonlPath / os.up / s"${jsonlPath.last.stripSuffix(".jsonl")}.meta.json"
