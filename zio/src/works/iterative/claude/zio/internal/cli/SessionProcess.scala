@@ -144,13 +144,22 @@ object SessionProcess:
   /** Waits up to InitReadTimeout for the first message. If it is the init
     * SystemMessage, extracts the session ID; otherwise re-enqueues it so it
     * appears in the user's stream. On timeout the session ID stays "pending".
+    *
+    * The wait is forced `interruptible`: `timeout` completes by interrupting
+    * the losing `take` when the sleep wins, so it can only fire if the `take`
+    * is interruptible. A caller may run `start` inside an uninterruptible
+    * region (for example a forked request handler that inherits its parent's
+    * interrupt status); there an uninterruptible `take` could never be
+    * interrupted, the timeout would never fire, and a slow CLI init would hang
+    * forever.
     */
-  private def readInitMessage(
+  private[claude] def readInitMessage(
       messageQueue: Queue[Option[Message]],
       sessionIdRef: Ref[String]
   ): UIO[Unit] =
     messageQueue.take
       .timeout(InitReadTimeout)
+      .interruptible
       .flatMap:
         case None       => ZIO.unit
         case Some(None) => messageQueue.offer(None).unit

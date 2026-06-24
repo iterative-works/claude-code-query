@@ -156,5 +156,23 @@ object SessionTest extends ClaudeZioSpec:
       for
         session <- makeSession(alive = true, pendingError = None, sessionId = "abc")
         id      <- session.sessionId
-      yield assertTrue(id == "abc")
+      yield assertTrue(id == "abc"),
+    // Regression (PROC-589): readInitMessage's bounded wait must time out even when `start` runs in
+    // an uninterruptible region. `timeout` fires by interrupting the losing `take`; if the take is
+    // uninterruptible the timeout never completes and a slow CLI init hangs forever. Run it under
+    // ZIO.uninterruptible in a daemon and observe completion from an interruptible fiber, so a
+    // regression fails by the observer's timeout instead of hanging the suite.
+    test("readInitMessage times out on a silent init even inside an uninterruptible region"):
+      for
+        messageQueue <- Queue.unbounded[Option[Message]]
+        sessionIdRef <- Ref.make("pending")
+        done         <- Promise.make[Nothing, Unit]
+        _            <- ZIO
+                          .uninterruptible(SessionProcess.readInitMessage(messageQueue, sessionIdRef))
+                          .zipRight(done.succeed(()))
+                          .forkDaemon
+        completed    <- done.await.timeout(10.seconds)
+        id           <- sessionIdRef.get
+      yield assertTrue(completed.isDefined, id == "pending")
+    @@ TestAspect.withLiveClock
   )
