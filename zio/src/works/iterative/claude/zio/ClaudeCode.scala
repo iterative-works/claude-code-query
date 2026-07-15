@@ -7,10 +7,12 @@ import zio.*
 import zio.stream.ZStream
 import works.iterative.claude.core.cli.CLIArgumentBuilder
 import works.iterative.claude.core.{CLIError, ConfigurationError}
+import works.iterative.claude.core.log.ArchiveConfig
 import works.iterative.claude.core.model.*
 import works.iterative.claude.zio.internal.cli.{
   CLIDiscovery,
   ProcessManager,
+  SessionArchiveHook,
   SessionProcess
 }
 
@@ -49,17 +51,45 @@ object ClaudeCode:
   def queryResult(options: QueryOptions): IO[CLIError, String] =
     querySync(options).map(extractTextFromMessages)
 
-  /** Open a scoped multi-turn session backed by a long-lived CLI process. */
-  def session(options: SessionOptions): ZIO[Scope, CLIError, Session] =
-    resolveExecutable(options.pathToClaudeCodeExecutable)
-      .flatMap(SessionProcess.start(_, options))
+  /** Open a scoped session backed by a long-lived CLI process.
+    *
+    * When `archive` is set, the session mirrors the vendor transcript tree
+    * after each real result and on close — best-effort, so a mirror failure is
+    * logged and never breaks the session. Closing the session waits for the
+    * final mirror, bounded by
+    * [[works.iterative.claude.zio.internal.cli.SessionArchiveHook.CloseMirrorTimeout]]
+    * (after which it logs a warning and moves on). `eventsBufferSize` sizes the
+    * lossy `events` Hub (see [[Session.events]]); the default is conservative.
+    */
+  def session(
+      options: SessionOptions,
+      archive: Option[ArchiveConfig] = None,
+      eventsBufferSize: Int = SessionProcess.DefaultEventsBufferSize
+  ): ZIO[Scope, CLIError, Session] =
+    for
+      executablePath <- resolveExecutable(options.pathToClaudeCodeExecutable)
+      hook <- archiveHook(archive)
+      session <- SessionProcess.start(
+        executablePath,
+        options,
+        hook,
+        eventsBufferSize
+      )
+    yield session
+
+  private def archiveHook(
+      archive: Option[ArchiveConfig]
+  ): UIO[SessionArchiveHook] =
+    archive.fold(ZIO.succeed(SessionArchiveHook.none))(config =>
+      SessionArchiveHook.mirroring(config)
+    )
 
   // Mid-level operations - "How" we accomplish the high-level goals
 
   private[claude] def extractTextFromMessages(messages: List[Message]): String =
     messages
-      .collectFirst { case AssistantMessage(content) =>
-        content
+      .collectFirst { case assistant: AssistantMessage =>
+        assistant.content
           .collectFirst { case TextBlock(text) => text }
           .getOrElse("")
       }

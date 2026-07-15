@@ -21,9 +21,11 @@ object JsonParserTest extends ClaudeZioSpec:
       yield assertTrue(
         result.contains(AssistantMessage(List(TextBlock("hi"))))
       ),
-    test("returns None for valid JSON that is not a known message"):
+    test("valid JSON that is not a known message survives as UnknownMessage"):
       for result <- JsonParser.parseJsonLineWithContext("""{"foo":"bar"}""", 2)
-      yield assertTrue(result.isEmpty),
+      yield assertTrue(
+        result.exists(_.isInstanceOf[UnknownMessage])
+      ),
     test("fails with JsonParsingError carrying line context on malformed JSON"):
       for error <- JsonParser.parseJsonLineWithContext("{ not json", 5).flip
       yield assertTrue(error.lineNumber == 5, error.line == "{ not json"),

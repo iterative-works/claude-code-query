@@ -20,6 +20,51 @@ package object zio:
   val SystemMessage = works.iterative.claude.core.model.SystemMessage
   type ResultMessage = works.iterative.claude.core.model.ResultMessage
   val ResultMessage = works.iterative.claude.core.model.ResultMessage
+  type UnknownMessage = works.iterative.claude.core.model.UnknownMessage
+  val UnknownMessage = works.iterative.claude.core.model.UnknownMessage
+  type ControlResponse = works.iterative.claude.core.model.ControlResponse
+  val ControlResponse = works.iterative.claude.core.model.ControlResponse
+  type ControlRequest = works.iterative.claude.core.model.ControlRequest
+  val ControlRequest = works.iterative.claude.core.model.ControlRequest
+  type ControlRequestBody =
+    works.iterative.claude.core.model.ControlRequestBody
+  val ControlRequestBody = works.iterative.claude.core.model.ControlRequestBody
+  type MessageId = works.iterative.claude.core.model.MessageId
+  val MessageId = works.iterative.claude.core.model.MessageId
+  type SessionId = works.iterative.claude.core.model.SessionId
+  val SessionId = works.iterative.claude.core.model.SessionId
+  type RequestId = works.iterative.claude.core.model.RequestId
+  val RequestId = works.iterative.claude.core.model.RequestId
+  type ResultOrigin = works.iterative.claude.core.model.ResultOrigin
+  val ResultOrigin = works.iterative.claude.core.model.ResultOrigin
+  type PermissionDenial = works.iterative.claude.core.model.PermissionDenial
+  val PermissionDenial = works.iterative.claude.core.model.PermissionDenial
+  type ResultTimings = works.iterative.claude.core.model.ResultTimings
+  val ResultTimings = works.iterative.claude.core.model.ResultTimings
+
+  // Session surface types
+  type SessionState = works.iterative.claude.core.model.SessionState
+  val SessionState = works.iterative.claude.core.model.SessionState
+  type SessionEnd = works.iterative.claude.core.model.SessionEnd
+  val SessionEnd = works.iterative.claude.core.model.SessionEnd
+  type SessionInfo = works.iterative.claude.core.model.SessionInfo
+  val SessionInfo = works.iterative.claude.core.model.SessionInfo
+  type InterruptOutcome = works.iterative.claude.core.model.InterruptOutcome
+  val InterruptOutcome = works.iterative.claude.core.model.InterruptOutcome
+
+  // Structured user input
+  type UserInput = works.iterative.claude.core.model.UserInput
+  val UserInput = works.iterative.claude.core.model.UserInput
+  type ContextItem = works.iterative.claude.core.model.ContextItem
+  val ContextItem = works.iterative.claude.core.model.ContextItem
+  type Channel = works.iterative.claude.core.model.Channel
+  val Channel = works.iterative.claude.core.model.Channel
+
+  // Archive custody configuration
+  type ArchiveConfig = works.iterative.claude.core.log.ArchiveConfig
+  val ArchiveConfig = works.iterative.claude.core.log.ArchiveConfig
+
+  // Message content blocks
   type ContentBlock = works.iterative.claude.core.model.ContentBlock
   type TextBlock = works.iterative.claude.core.model.TextBlock
   val TextBlock = works.iterative.claude.core.model.TextBlock
@@ -56,6 +101,10 @@ package object zio:
     works.iterative.claude.core.EnvironmentValidationError
   type SessionProcessDied = works.iterative.claude.core.SessionProcessDied
   val SessionProcessDied = works.iterative.claude.core.SessionProcessDied
+  type SessionEndedBeforeRequest =
+    works.iterative.claude.core.SessionEndedBeforeRequest
+  val SessionEndedBeforeRequest =
+    works.iterative.claude.core.SessionEndedBeforeRequest
   type SessionClosedError = works.iterative.claude.core.SessionClosedError
   val SessionClosedError = works.iterative.claude.core.SessionClosedError
 
@@ -89,8 +138,8 @@ package object zio:
     works.iterative.claude.core.log.model.LastPromptLogEntry
   type RawLogEntry = works.iterative.claude.core.log.model.RawLogEntry
   val RawLogEntry = works.iterative.claude.core.log.model.RawLogEntry
-  type TokenUsage = works.iterative.claude.core.log.model.TokenUsage
-  val TokenUsage = works.iterative.claude.core.log.model.TokenUsage
+  type TokenUsage = works.iterative.claude.core.model.TokenUsage
+  val TokenUsage = works.iterative.claude.core.model.TokenUsage
   type LogFileMetadata = works.iterative.claude.core.log.model.LogFileMetadata
   val LogFileMetadata = works.iterative.claude.core.log.model.LogFileMetadata
   type SubAgentMetadata = works.iterative.claude.core.log.model.SubAgentMetadata

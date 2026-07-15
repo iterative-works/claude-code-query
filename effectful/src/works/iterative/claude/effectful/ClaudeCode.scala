@@ -51,8 +51,8 @@ object ClaudeCode:
   private def extractTextFromMessages(messages: List[Message]): String =
     messages
       .collectFirst:
-        case AssistantMessage(content) =>
-          content
+        case assistant: AssistantMessage =>
+          assistant.content
             .collectFirst:
               case TextBlock(text) => text
             .getOrElse("")

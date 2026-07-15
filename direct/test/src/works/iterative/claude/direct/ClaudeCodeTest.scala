@@ -103,18 +103,18 @@ class ClaudeCodeTest extends munit.FunSuite:
         case other => fail(s"Expected SystemMessage but got: $other")
 
       messages(1) match
-        case AssistantMessage(content) =>
-          assertEquals(content.length, 1)
-          content.head match
+        case assistant: AssistantMessage =>
+          assertEquals(assistant.content.length, 1)
+          assistant.content.head match
             case TextBlock(text) =>
               assertEquals(text, "Response to: Hello Claude!")
             case other => fail(s"Expected TextBlock but got: $other")
         case other => fail(s"Expected AssistantMessage but got: $other")
 
       messages(2) match
-        case ResultMessage(subtype, _, _, isError, _, _, _, _, _) =>
-          assertEquals(subtype, "conversation_result")
-          assertEquals(isError, false)
+        case rm: ResultMessage =>
+          assertEquals(rm.subtype, "conversation_result")
+          assertEquals(rm.isError, false)
         case other => fail(s"Expected ResultMessage but got: $other")
     }
   }

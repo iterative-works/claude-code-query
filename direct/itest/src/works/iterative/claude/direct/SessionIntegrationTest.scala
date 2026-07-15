@@ -58,26 +58,16 @@ class SessionIntegrationTest extends munit.FunSuite:
         assertEquals(messages.length, 2)
 
         messages.head match
-          case AssistantMessage(content) =>
-            val texts = content.collect { case TextBlock(t) => t }
+          case assistant: AssistantMessage =>
+            val texts = assistant.content.collect { case TextBlock(t) => t }
             assert(texts.exists(_.contains("The answer is 42")))
           case other => fail(s"Expected AssistantMessage, got: $other")
 
         messages.last match
-          case ResultMessage(
-                subtype,
-                _,
-                _,
-                isError,
-                _,
-                resultSessionId,
-                _,
-                _,
-                _
-              ) =>
-            assertEquals(subtype, "conversation_result")
-            assertEquals(isError, false)
-            assertEquals(resultSessionId, sessionId)
+          case rm: ResultMessage =>
+            assertEquals(rm.subtype, "conversation_result")
+            assertEquals(rm.isError, false)
+            assertEquals(rm.sessionId.value, sessionId)
           case other => fail(s"Expected ResultMessage, got: $other")
       finally session.close()
     }
@@ -323,12 +313,12 @@ class SessionIntegrationTest extends munit.FunSuite:
         val turn1Messages = session.stream().runToList()
         assertEquals(turn1Messages.length, 2)
         turn1Messages.head match
-          case AssistantMessage(content) =>
-            val texts = content.collect { case TextBlock(t) => t }
+          case assistant: AssistantMessage =>
+            val texts = assistant.content.collect { case TextBlock(t) => t }
             assert(texts.exists(_.contains("First turn answer")))
           case other => fail(s"Expected AssistantMessage, got: $other")
         turn1Messages.last match
-          case r: ResultMessage => assertEquals(r.sessionId, turn1SessionId)
+          case r: ResultMessage => assertEquals(r.sessionId.value, turn1SessionId)
           case other            => fail(s"Expected ResultMessage, got: $other")
 
         assertEquals(session.sessionId, turn1SessionId)
@@ -337,12 +327,12 @@ class SessionIntegrationTest extends munit.FunSuite:
         val turn2Messages = session.stream().runToList()
         assertEquals(turn2Messages.length, 2)
         turn2Messages.head match
-          case AssistantMessage(content) =>
-            val texts = content.collect { case TextBlock(t) => t }
+          case assistant: AssistantMessage =>
+            val texts = assistant.content.collect { case TextBlock(t) => t }
             assert(texts.exists(_.contains("Second turn answer")))
           case other => fail(s"Expected AssistantMessage, got: $other")
         turn2Messages.last match
-          case r: ResultMessage => assertEquals(r.sessionId, turn2SessionId)
+          case r: ResultMessage => assertEquals(r.sessionId.value, turn2SessionId)
           case other            => fail(s"Expected ResultMessage, got: $other")
 
         assertEquals(session.sessionId, turn2SessionId)

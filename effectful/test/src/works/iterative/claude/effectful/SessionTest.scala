@@ -375,7 +375,7 @@ class SessionTest extends CatsEffectSuite:
           )
           val resultMsg = msgs.last.asInstanceOf[ResultMessage]
           assertEquals(
-            resultMsg.sessionId,
+            resultMsg.sessionId.value,
             s"session-turn-$i",
             s"Turn $i: wrong session ID"
           )

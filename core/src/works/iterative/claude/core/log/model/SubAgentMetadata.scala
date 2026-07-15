@@ -7,5 +7,6 @@ case class SubAgentMetadata(
     agentId: String,
     agentType: Option[String],
     description: Option[String],
-    transcriptPath: os.Path
+    transcriptPath: os.Path,
+    toolUseId: Option[String] = None
 )

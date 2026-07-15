@@ -183,40 +183,30 @@ class ProcessManagerTest extends munit.FunSuite:
         case other => fail(s"Expected UserMessage but got: $other")
 
       messages(2) match
-        case AssistantMessage(content) =>
-          assertEquals(content.length, 1)
-          content.head match
+        case assistant: AssistantMessage =>
+          assertEquals(assistant.content.length, 1)
+          assistant.content.head match
             case TextBlock(text) => assertEquals(text, "Hello! How can I help?")
             case other           => fail(s"Expected TextBlock but got: $other")
         case other => fail(s"Expected AssistantMessage but got: $other")
 
       messages(3) match
-        case ResultMessage(
-              subtype,
-              durationMs,
-              durationApiMs,
-              isError,
-              numTurns,
-              sessionId,
-              _,
-              _,
-              _
-            ) =>
-          assertEquals(subtype, "conversation_result")
+        case rm: ResultMessage =>
+          assertEquals(rm.subtype, "conversation_result")
           assertEquals(
-            durationMs,
+            rm.durationMs,
             TestConstants.MockJsonValues.MOCK_DURATION_MS_STANDARD
           )
           assertEquals(
-            durationApiMs,
+            rm.durationApiMs,
             TestConstants.MockJsonValues.MOCK_DURATION_API_MS_STANDARD
           )
-          assertEquals(isError, false)
+          assertEquals(rm.isError, false)
           assertEquals(
-            numTurns,
+            rm.numTurns,
             TestConstants.MockJsonValues.MOCK_NUM_TURNS_SINGLE
           )
-          assertEquals(sessionId, TestConstants.MockJsonValues.MOCK_SESSION_ID)
+          assertEquals(rm.sessionId.value, TestConstants.MockJsonValues.MOCK_SESSION_ID)
         case other => fail(s"Expected ResultMessage but got: $other")
 
       // Verify: Should log process start and completion
@@ -563,9 +553,9 @@ class ProcessManagerTest extends munit.FunSuite:
 
       // Verify second message (AssistantMessage)
       messages(1) match
-        case AssistantMessage(content) =>
-          assertEquals(content.length, 1)
-          content.head match
+        case assistant: AssistantMessage =>
+          assertEquals(assistant.content.length, 1)
+          assistant.content.head match
             case TextBlock(text) => assertEquals(text, "Hello back!")
             case other           => fail(s"Expected TextBlock but got: $other")
         case other => fail(s"Expected AssistantMessage but got: $other")
@@ -1255,9 +1245,9 @@ class ProcessManagerTest extends munit.FunSuite:
       }
 
       messages(1) match {
-        case AssistantMessage(content) =>
-          assertEquals(content.length, 1)
-          content.head match {
+        case assistant: AssistantMessage =>
+          assertEquals(assistant.content.length, 1)
+          assistant.content.head match {
             case TextBlock(text) => assertEquals(text, "assistant-response-1")
             case other           => fail(s"Expected TextBlock but got: $other")
           }

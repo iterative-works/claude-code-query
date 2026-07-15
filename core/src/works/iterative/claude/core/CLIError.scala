@@ -59,5 +59,19 @@ case class SessionProcessDied(
       s"Session process exited unexpectedly with code $code. $stderr"
     case None => s"Session process is not alive. $stderr"
 
+/** A pending control request could not complete because the session ended
+  * first. Distinct from [[SessionProcessDied]] so a clean exit is not reported
+  * as an unexpected death.
+  */
+case class SessionEndedBeforeRequest(
+    exitCode: Option[Int],
+    stderr: String
+) extends CLIError:
+  val message = exitCode match
+    case Some(code) =>
+      s"Session ended (exit code $code) before the request completed. $stderr"
+    case None =>
+      s"Session ended before the request completed. $stderr"
+
 case class SessionClosedError(sessionId: String) extends CLIError:
   val message = s"Cannot send to closed session '$sessionId'"

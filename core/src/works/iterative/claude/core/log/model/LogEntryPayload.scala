@@ -3,7 +3,7 @@ package works.iterative.claude.core.log.model
 // PURPOSE: Sealed type hierarchy for conversation log entry payloads
 // PURPOSE: Represents all known entry types in Claude Code conversation log files
 
-import works.iterative.claude.core.model.ContentBlock
+import works.iterative.claude.core.model.{ContentBlock, TokenUsage}
 import io.circe.Json
 
 sealed trait LogEntryPayload

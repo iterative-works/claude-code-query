@@ -107,24 +107,9 @@ object ConversationLogParser:
         val content = parseContentBlocks(messageCursor)
         val model = messageCursor.get[String]("model").toOption
         val usage =
-          messageCursor.get[Json]("usage").toOption.flatMap(parseTokenUsage)
+          messageCursor.get[Json]("usage").toOption.flatMap(TokenUsage.fromJson)
         val requestId = cursor.get[String]("requestId").toOption
         AssistantLogEntry(content, model, usage, requestId)
-
-  private def parseTokenUsage(json: Json): Option[TokenUsage] =
-    val cursor = json.hcursor
-    for
-      inputTokens <- cursor.get[Int]("input_tokens").toOption
-      outputTokens <- cursor.get[Int]("output_tokens").toOption
-    yield TokenUsage(
-      inputTokens = inputTokens,
-      outputTokens = outputTokens,
-      cacheCreationInputTokens =
-        cursor.get[Int]("cache_creation_input_tokens").toOption,
-      cacheReadInputTokens =
-        cursor.get[Int]("cache_read_input_tokens").toOption,
-      serviceTier = cursor.get[String]("service_tier").toOption
-    )
 
   private def parseSystemPayload(
       cursor: HCursor,

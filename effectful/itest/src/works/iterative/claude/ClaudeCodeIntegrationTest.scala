@@ -47,9 +47,9 @@ class ClaudeCodeIntegrationTest extends CatsEffectSuite:
         }
         assert(assistantMessage.isDefined, "Should contain AssistantMessage")
         assistantMessage.get match
-          case AssistantMessage(content) =>
-            assertEquals(content.length, 1)
-            content.head match
+          case assistant: AssistantMessage =>
+            assertEquals(assistant.content.length, 1)
+            assistant.content.head match
               case TextBlock(text) => assertEquals(text, "4")
               case _               => fail("Expected TextBlock")
 
@@ -63,7 +63,7 @@ class ClaudeCodeIntegrationTest extends CatsEffectSuite:
             assertEquals(result.subtype, "query")
             assertEquals(result.isError, false)
             assertEquals(result.numTurns, 1)
-            assertEquals(result.sessionId, "test-session-123")
+            assertEquals(result.sessionId.value, "test-session-123")
             assertEquals(result.totalCostUsd, Some(0.001))
             assert(result.usage.isDefined)
 
@@ -102,9 +102,9 @@ class ClaudeCodeIntegrationTest extends CatsEffectSuite:
         }
         assert(assistantMessage.isDefined, "Should contain AssistantMessage")
         assistantMessage.get match
-          case AssistantMessage(content) =>
-            assertEquals(content.length, 1)
-            content.head match
+          case assistant: AssistantMessage =>
+            assertEquals(assistant.content.length, 1)
+            assistant.content.head match
               case TextBlock(text) => assertEquals(text, "6")
               case _               => fail("Expected TextBlock")
 
@@ -118,7 +118,7 @@ class ClaudeCodeIntegrationTest extends CatsEffectSuite:
             assertEquals(result.subtype, "query")
             assertEquals(result.isError, false)
             assertEquals(result.numTurns, 1)
-            assertEquals(result.sessionId, "test-session-123")
+            assertEquals(result.sessionId.value, "test-session-123")
             assertEquals(result.totalCostUsd, Some(0.001))
             assert(result.usage.isDefined)
 
@@ -350,9 +350,9 @@ class ClaudeCodeIntegrationTest extends CatsEffectSuite:
         assert(assistantMessage.isDefined, "Should contain AssistantMessage")
 
         assistantMessage.get match
-          case AssistantMessage(content) =>
-            assertEquals(content.length, 1)
-            content.head match
+          case assistant: AssistantMessage =>
+            assertEquals(assistant.content.length, 1)
+            assistant.content.head match
               case TextBlock(text) =>
                 assert(
                   text.contains("TEST_ENV_VAR is set to: test-value-123"),
@@ -395,9 +395,9 @@ class ClaudeCodeIntegrationTest extends CatsEffectSuite:
         assert(assistantMessage.isDefined, "Should contain AssistantMessage")
 
         assistantMessage.get match
-          case AssistantMessage(content) =>
-            assertEquals(content.length, 1)
-            content.head match
+          case assistant: AssistantMessage =>
+            assertEquals(assistant.content.length, 1)
+            assistant.content.head match
               case TextBlock(text) =>
                 assert(
                   text.contains("Environment inherited: PATH is present"),
@@ -429,9 +429,9 @@ class ClaudeCodeIntegrationTest extends CatsEffectSuite:
         assert(assistantMessage.isDefined, "Should contain AssistantMessage")
 
         assistantMessage.get match
-          case AssistantMessage(content) =>
-            assertEquals(content.length, 1)
-            content.head match
+          case assistant: AssistantMessage =>
+            assertEquals(assistant.content.length, 1)
+            assistant.content.head match
               case TextBlock(text) =>
                 assert(
                   text.contains("TEST_ENV_VAR is set to: custom-only-value"),
@@ -461,9 +461,9 @@ class ClaudeCodeIntegrationTest extends CatsEffectSuite:
         assert(assistantMessage.isDefined, "Should contain AssistantMessage")
 
         assistantMessage.get match
-          case AssistantMessage(content) =>
-            assertEquals(content.length, 1)
-            content.head match
+          case assistant: AssistantMessage =>
+            assertEquals(assistant.content.length, 1)
+            assistant.content.head match
               case TextBlock(text) =>
                 assert(
                   text.contains("TEST_ENV_VAR is set to: override-value"),

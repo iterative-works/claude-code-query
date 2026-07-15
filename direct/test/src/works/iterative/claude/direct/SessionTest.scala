@@ -404,7 +404,7 @@ class SessionTest extends munit.FunSuite:
             .collectFirst { case r: ResultMessage => r }
             .getOrElse(fail(s"Turn $i: expected ResultMessage"))
           assertEquals(
-            resultMsg.sessionId,
+            resultMsg.sessionId.value,
             s"session-turn-$i",
             s"Turn $i: wrong session ID in ResultMessage"
           )

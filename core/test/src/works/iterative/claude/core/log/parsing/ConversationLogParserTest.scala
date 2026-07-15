@@ -201,10 +201,10 @@ class ConversationLogParserTest extends FunSuite:
         assertEquals(requestId, Some("req-999"))
         usage match
           case Some(u) =>
-            assertEquals(u.inputTokens, 100)
-            assertEquals(u.outputTokens, 50)
-            assertEquals(u.cacheCreationInputTokens, Some(10))
-            assertEquals(u.cacheReadInputTokens, Some(5))
+            assertEquals(u.inputTokens, 100L)
+            assertEquals(u.outputTokens, 50L)
+            assertEquals(u.cacheCreationInputTokens, Some(10L))
+            assertEquals(u.cacheReadInputTokens, Some(5L))
             assertEquals(u.serviceTier, Some("standard"))
           case None => fail("Expected Some(TokenUsage)")
       case Some(entry) =>
@@ -509,10 +509,10 @@ class ConversationLogParserTest extends FunSuite:
               _
             )
           ) =>
-        assertEquals(usage.inputTokens, 200)
-        assertEquals(usage.outputTokens, 80)
-        assertEquals(usage.cacheCreationInputTokens, Some(30))
-        assertEquals(usage.cacheReadInputTokens, Some(15))
+        assertEquals(usage.inputTokens, 200L)
+        assertEquals(usage.outputTokens, 80L)
+        assertEquals(usage.cacheCreationInputTokens, Some(30L))
+        assertEquals(usage.cacheReadInputTokens, Some(15L))
         assertEquals(usage.serviceTier, Some("standard"))
       case Some(entry) =>
         fail(s"Expected AssistantLogEntry with usage, got: ${entry.payload}")
@@ -547,8 +547,8 @@ class ConversationLogParserTest extends FunSuite:
               _
             )
           ) =>
-        assertEquals(usage.inputTokens, 10)
-        assertEquals(usage.outputTokens, 5)
+        assertEquals(usage.inputTokens, 10L)
+        assertEquals(usage.outputTokens, 5L)
         assertEquals(usage.cacheCreationInputTokens, None)
         assertEquals(usage.cacheReadInputTokens, None)
         assertEquals(usage.serviceTier, None)

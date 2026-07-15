@@ -46,15 +46,15 @@ class SessionIntegrationTest extends CatsEffectSuite:
         yield
           assertEquals(messages.length, 2)
           messages.head match
-            case AssistantMessage(content) =>
-              val texts = content.collect { case TextBlock(t) => t }
+            case assistant: AssistantMessage =>
+              val texts = assistant.content.collect { case TextBlock(t) => t }
               assert(texts.exists(_.contains("The answer is 42")))
             case other => fail(s"Expected AssistantMessage, got: $other")
           messages.last match
             case r: ResultMessage =>
               assertEquals(r.subtype, "conversation_result")
               assertEquals(r.isError, false)
-              assertEquals(r.sessionId, sessionId)
+              assertEquals(r.sessionId.value, sessionId)
             case other => fail(s"Expected ResultMessage, got: $other")
       }
       .guarantee(IO { SessionMockCliScript.cleanup(script): Unit })
@@ -236,12 +236,12 @@ class SessionIntegrationTest extends CatsEffectSuite:
           turn1 <- session.stream.compile.toList
           _ = assertEquals(turn1.length, 2)
           _ = turn1.head match
-            case AssistantMessage(content) =>
-              val texts = content.collect { case TextBlock(t) => t }
+            case assistant: AssistantMessage =>
+              val texts = assistant.content.collect { case TextBlock(t) => t }
               assert(texts.exists(_.contains("First turn answer")))
             case other => fail(s"Expected AssistantMessage, got: $other")
           _ = turn1.last match
-            case r: ResultMessage => assertEquals(r.sessionId, turn1SessionId)
+            case r: ResultMessage => assertEquals(r.sessionId.value, turn1SessionId)
             case other => fail(s"Expected ResultMessage, got: $other")
           id1 <- session.sessionId
           _ = assertEquals(id1, turn1SessionId)
@@ -249,12 +249,12 @@ class SessionIntegrationTest extends CatsEffectSuite:
           turn2 <- session.stream.compile.toList
           _ = assertEquals(turn2.length, 2)
           _ = turn2.head match
-            case AssistantMessage(content) =>
-              val texts = content.collect { case TextBlock(t) => t }
+            case assistant: AssistantMessage =>
+              val texts = assistant.content.collect { case TextBlock(t) => t }
               assert(texts.exists(_.contains("Second turn answer")))
             case other => fail(s"Expected AssistantMessage, got: $other")
           _ = turn2.last match
-            case r: ResultMessage => assertEquals(r.sessionId, turn2SessionId)
+            case r: ResultMessage => assertEquals(r.sessionId.value, turn2SessionId)
             case other => fail(s"Expected ResultMessage, got: $other")
           id2 <- session.sessionId
           _ = assertEquals(id2, turn2SessionId)
