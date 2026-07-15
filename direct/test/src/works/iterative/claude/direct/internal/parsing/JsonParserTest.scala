@@ -348,6 +348,39 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
       StreamEventMessage.apply
     )
 
+    // Generator for UnknownMessage: a wire type the parser has no case for,
+    // carrying raw json whose "type" key matches messageType
+    val unknownMessageGen: Gen[UnknownMessage] = for {
+      messageType <- Gen.oneOf(
+        "rate_limit_event",
+        "hook_event",
+        "never_seen_before"
+      )
+      payload <- Gen.oneOf(
+        Gen.const(Json.Null),
+        safeTextGen.map(Json.fromString),
+        Gen.choose(0, 100000).map(Json.fromInt),
+        safeTextGen.map(s => Json.obj("nested" -> Json.fromString(s)))
+      )
+    } yield UnknownMessage(
+      messageType,
+      Json.obj(
+        "type" -> Json.fromString(messageType),
+        "payload" -> payload
+      )
+    )
+
+    // Generator for ControlResponse
+    val controlResponseGen: Gen[ControlResponse] = for {
+      requestId <- Gen.alphaNumStr.suchThat(_.nonEmpty)
+      subtype <- Gen.oneOf("success", "error")
+      payload <- Gen.oneOf(
+        Json.Null,
+        Json.obj("still_queued" -> Json.arr()),
+        Json.obj("message" -> Json.fromString("ok"))
+      )
+    } yield ControlResponse(requestId, subtype, payload)
+
     // Generator for any Message type
     val messageGen: Gen[Message] = Gen.oneOf(
       userMessageGen,
@@ -355,7 +388,9 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
       systemMessageGen,
       resultMessageGen,
       keepAliveGen,
-      streamEventGen
+      streamEventGen,
+      unknownMessageGen,
+      controlResponseGen
     )
 
     // Implicit Arbitrary instances
@@ -366,6 +401,8 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
     given Arbitrary[ResultMessage] = Arbitrary(resultMessageGen)
     given Arbitrary[KeepAliveMessage.type] = Arbitrary(keepAliveGen)
     given Arbitrary[StreamEventMessage] = Arbitrary(streamEventGen)
+    given Arbitrary[UnknownMessage] = Arbitrary(unknownMessageGen)
+    given Arbitrary[ControlResponse] = Arbitrary(controlResponseGen)
 
   test("should parse valid JSON messages with line context") {
     // Setup: Valid JSON message strings from CLI output
@@ -683,6 +720,46 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
         case other =>
           fail(
             s"Expected Right(Some(StreamEventMessage(...))) but got: $other for JSON: $jsonString"
+          )
+    }
+  }
+
+  property(
+    "should maintain idempotency for UnknownMessage parsing specifically"
+  ) {
+    import MessageGenerators.*
+    import JsonSerializationUtils.*
+
+    forAll(unknownMessageGen) { originalMessage =>
+      val jsonString = serializeMessage(originalMessage)
+      val parseResult = JsonParser.parseJsonLineWithContext(jsonString, 1)
+
+      parseResult match
+        case Right(Some(unknown: UnknownMessage)) =>
+          assertEquals(unknown, originalMessage)
+        case other =>
+          fail(
+            s"Expected Right(Some(UnknownMessage(...))) but got: $other for JSON: $jsonString"
+          )
+    }
+  }
+
+  property(
+    "should maintain idempotency for ControlResponse parsing specifically"
+  ) {
+    import MessageGenerators.*
+    import JsonSerializationUtils.*
+
+    forAll(controlResponseGen) { originalMessage =>
+      val jsonString = serializeMessage(originalMessage)
+      val parseResult = JsonParser.parseJsonLineWithContext(jsonString, 1)
+
+      parseResult match
+        case Right(Some(controlResponse: ControlResponse)) =>
+          assertEquals(controlResponse, originalMessage)
+        case other =>
+          fail(
+            s"Expected Right(Some(ControlResponse(...))) but got: $other for JSON: $jsonString"
           )
     }
   }
