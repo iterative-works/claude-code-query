@@ -1,0 +1,212 @@
+// PURPOSE: Tests the ZIO conversation archive over fixture session trees in temp directories
+// PURPOSE: Covers locate, entries (raw-tolerant), sub-agent join, and idempotent append-aware mirror
+
+package works.iterative.claude.zio.log
+
+import zio.*
+import zio.test.*
+import works.iterative.claude.core.log.ArchiveConfig
+import works.iterative.claude.core.log.SessionNotFound
+import works.iterative.claude.core.log.SubAgentNotFound
+import works.iterative.claude.core.log.model.RawLogEntry
+import works.iterative.claude.zio.internal.testing.ClaudeZioSpec
+
+object ZioConversationArchiveTest extends ClaudeZioSpec:
+
+  private val sessionId     = "0d43043b-1111-2222-3333-444455556666"
+  private val cwd           = os.Path("/home/tester/proj")
+  private val parentToolUse = "toolu_01RKfPARENT"
+
+  private val mainLine1 =
+    s"""{"type":"user","sessionId":"$sessionId","uuid":"u1","message":{"content":"first"}}"""
+  private val mainLine2 =
+    s"""{"type":"assistant","sessionId":"$sessionId","uuid":"u2","message":{"content":"reply","model":"claude"}}"""
+  private val mainUnknown =
+    s"""{"type":"vendor-future-type","sessionId":"$sessionId","uuid":"u3","surprise":42}"""
+  private val subAgentLine =
+    s"""{"type":"user","sessionId":"$sessionId","uuid":"a1","isSidechain":true,"message":{"content":"sub work"}}"""
+  private val subAgentMeta =
+    s"""{"agentType":"general-purpose","description":"probe","toolUseId":"$parentToolUse"}"""
+
+  private case class Fixture(
+      archive: ZioConversationArchive,
+      config: ArchiveConfig
+  )
+
+  /** Builds a ground-truth-shaped vendor tree and returns a fresh archive plus
+    * its config. `vendorProjectsDir` and `archiveDir` are separate temp dirs.
+    */
+  private def fixture: ZIO[Any, Throwable, Fixture] =
+    ZIO.attempt:
+      val vendorProjectsDir = os.temp.dir()
+      val archiveDir        = os.temp.dir()
+      val config            = ArchiveConfig(vendorProjectsDir, archiveDir, cwd)
+      val projectDir        = vendorProjectsDir / "-home-tester-proj"
+      os.write(
+        projectDir / s"$sessionId.jsonl",
+        Seq(mainLine1, mainLine2, mainUnknown).mkString("", "\n", "\n"),
+        createFolders = true
+      )
+      val subagents = projectDir / sessionId / "subagents"
+      os.write(subagents / "agent-abc.jsonl", subAgentLine + "\n",
+        createFolders = true)
+      os.write(subagents / "agent-abc.meta.json", subAgentMeta)
+      Fixture(ZioConversationArchive.make(config), config)
+
+  private def relFilesUnder(root: os.Path): Set[os.SubPath] =
+    if !os.exists(root) then Set.empty
+    else os.walk(root).filter(os.isFile).map(_.subRelativeTo(root)).toSet
+
+  /** Asserts every source file under the session tree has a byte-identical
+    * counterpart under the archive.
+    */
+  private def assertMirrorMatchesSource(config: ArchiveConfig): TestResult =
+    val projectDir = config.vendorProjectsDir / "-home-tester-proj"
+    val sourceRel =
+      relFilesUnder(projectDir).filter(rel =>
+        rel == os.sub / s"$sessionId.jsonl" || rel.segments.headOption
+          .contains(sessionId)
+      )
+    val identical = sourceRel.forall: rel =>
+      os.exists(config.archiveDir / rel) &&
+        java.util.Arrays.equals(
+          os.read.bytes(projectDir / rel),
+          os.read.bytes(config.archiveDir / rel)
+        )
+    assertTrue(sourceRel.nonEmpty, identical)
+
+  def spec = suite("ZioConversationArchive")(
+    test("forSession locates an existing session and misses an absent one"):
+      for
+        fx <- fixture
+        archive = fx.archive
+        found        <- archive.forSession(sessionId)
+        missing      <- archive.forSession("no-such-session")
+      yield assertTrue(
+        found.exists(_.sessionId == sessionId),
+        found.exists(_.mainTranscript.last == s"$sessionId.jsonl"),
+        missing.isEmpty
+      ),
+    test("entries streams main-thread entries and degrades unknown types to raw"):
+      for
+        fx <- fixture
+        archive = fx.archive
+        entries      <- archive.entries(sessionId).runCollect
+      yield assertTrue(
+        entries.map(_.uuid.getOrElse("")).toList == List("u1", "u2", "u3"),
+        entries.last.payload match
+          case RawLogEntry(entryType, _) => entryType == "vendor-future-type"
+          case _                         => false
+      ),
+    test("entries fails with SessionNotFound for an absent session"):
+      for
+        fx <- fixture
+        archive = fx.archive
+        result       <- archive.entries("no-such-session").runCollect.either
+      yield assertTrue(result == Left(SessionNotFound("no-such-session"))),
+    test("subagentEntries joins a sub-agent by its meta.json toolUseId"):
+      for
+        fx <- fixture
+        archive = fx.archive
+        entries      <- archive.subagentEntries(sessionId, parentToolUse).runCollect
+      yield assertTrue(
+        entries.map(_.uuid.getOrElse("")).toList == List("a1"),
+        entries.forall(_.isSidechain)
+      ),
+    test("subagentEntries fails when no sub-agent records the tool_use id"):
+      for
+        fx <- fixture
+        archive = fx.archive
+        result       <- archive
+                          .subagentEntries(sessionId, "toolu_UNKNOWN")
+                          .runCollect
+                          .either
+      yield assertTrue(
+        result == Left(SubAgentNotFound(sessionId, "toolu_UNKNOWN"))
+      ),
+    test("mirror fails with SessionNotFound for an absent session"):
+      for
+        fx <- fixture
+        archive = fx.archive
+        result       <- archive.mirror("no-such-session").either
+      yield assertTrue(result == Left(SessionNotFound("no-such-session"))),
+    test("mirror copies the whole tree byte-identically and reports it"):
+      for
+        fx <- fixture
+        archive = fx.archive
+        config  = fx.config
+        report            <- archive.mirror(sessionId)
+      yield assertTrue(
+        report.copied.size == 3,
+        report.extended.isEmpty,
+        report.refreshed.isEmpty,
+        report.skipped.isEmpty
+      ) && assertMirrorMatchesSource(config),
+    test("mirror is idempotent: a second run skips every file"):
+      for
+        fx <- fixture
+        archive = fx.archive
+        config  = fx.config
+        _                 <- archive.mirror(sessionId)
+        second            <- archive.mirror(sessionId)
+      yield assertTrue(
+        second.skipped.size == 3,
+        second.copied.isEmpty,
+        second.extended.isEmpty,
+        second.refreshed.isEmpty
+      ) && assertMirrorMatchesSource(config),
+    test("mirror appends when the source strictly extends the mirrored prefix"):
+      for
+        fx <- fixture
+        archive = fx.archive
+        config  = fx.config
+        _                 <- archive.mirror(sessionId)
+        projectDir = config.vendorProjectsDir / "-home-tester-proj"
+        _ <- ZIO.attempt(
+               os.write.append(
+                 projectDir / s"$sessionId.jsonl",
+                 mainLine2 + "\n"
+               )
+             )
+        report <- archive.mirror(sessionId)
+      yield assertTrue(
+        report.extended == Seq(os.sub / s"$sessionId.jsonl"),
+        report.refreshed.isEmpty
+      ) && assertMirrorMatchesSource(config),
+    test("mirror recopies when the source shrinks below the mirror"):
+      for
+        fx <- fixture
+        archive = fx.archive
+        config  = fx.config
+        _                 <- archive.mirror(sessionId)
+        projectDir = config.vendorProjectsDir / "-home-tester-proj"
+        _ <- ZIO.attempt(
+               os.write.over(projectDir / s"$sessionId.jsonl", mainLine1 + "\n")
+             )
+        report <- archive.mirror(sessionId)
+      yield assertTrue(
+        report.refreshed == Seq(os.sub / s"$sessionId.jsonl"),
+        report.extended.isEmpty
+      ) && assertMirrorMatchesSource(config),
+    test("mirror recopies when a grown source diverges from the mirrored prefix"):
+      for
+        fx <- fixture
+        archive = fx.archive
+        config  = fx.config
+        _                 <- archive.mirror(sessionId)
+        projectDir = config.vendorProjectsDir / "-home-tester-proj"
+        // Longer than the mirror, but the first bytes differ: not a true
+        // extension, so the append fast path must fall back to a full recopy.
+        _ <- ZIO.attempt(
+               os.write.over(
+                 projectDir / s"$sessionId.jsonl",
+                 "PREFIX-CHANGED\n" + mainLine1 + "\n" + mainLine2 + "\n" +
+                   mainUnknown + "\n"
+               )
+             )
+        report <- archive.mirror(sessionId)
+      yield assertTrue(
+        report.refreshed == Seq(os.sub / s"$sessionId.jsonl"),
+        report.extended.isEmpty
+      ) && assertMirrorMatchesSource(config)
+  )
