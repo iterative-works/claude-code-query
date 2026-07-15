@@ -30,7 +30,7 @@ object SessionIntegrationTest extends ClaudeZioSpec:
       val script = MockCliScript.sessionScript(initLine, List(assistantLine, resultLine))
       ZIO.scoped:
         for
-          session <- ClaudeCode.session(options(script))
+          session <- mockCliSession(options(script))
           result  <- session.sendAndAwait(input)
         yield assertTrue(
           result.sessionId.value == "sess-itest",
@@ -41,7 +41,7 @@ object SessionIntegrationTest extends ClaudeZioSpec:
       val script = MockCliScript.sessionScript(initLine, List(assistantLine, resultLine))
       ZIO.scoped:
         for
-          session <- ClaudeCode.session(options(script))
+          session <- mockCliSession(options(script))
           _       <- session.send(input)
           // Let the result land and fold BEFORE we ask for it.
           _       <- session.state.repeatUntil(_.resultsSeen > 0)
@@ -54,7 +54,7 @@ object SessionIntegrationTest extends ClaudeZioSpec:
         MockCliScript.sessionScript(initLine, List(notificationLine, resultLine))
       ZIO.scoped:
         for
-          session <- ClaudeCode.session(options(script))
+          session <- mockCliSession(options(script))
           result  <- session.sendAndAwait(input)
           state   <- session.state
         yield assertTrue(
@@ -66,7 +66,7 @@ object SessionIntegrationTest extends ClaudeZioSpec:
       val script = MockCliScript.mergedTurnScript(initLine, List(assistantLine, resultLine))
       ZIO.scoped:
         for
-          session <- ClaudeCode.session(options(script))
+          session <- mockCliSession(options(script))
           s0      <- session.state
           _       <- session.send(input)
           _       <- session.send(UserInput("second"))
@@ -85,7 +85,7 @@ object SessionIntegrationTest extends ClaudeZioSpec:
         MockCliScript.delayedTurnScript(initLine, List(resultLine), delaySeconds = 2)
       ZIO.scoped:
         for
-          session <- ClaudeCode.session(options(script))
+          session <- mockCliSession(options(script))
           _       <- session.send(input)
           state   <- session.state // read right after send returns
         yield assertTrue(state.resultsSeen == 0L),
@@ -99,7 +99,7 @@ object SessionIntegrationTest extends ClaudeZioSpec:
       )
       ZIO.scoped:
         for
-          session <- ClaudeCode.session(options(script))
+          session <- mockCliSession(options(script))
           _       <- session.sendAndAwait(structured)
           written <- ZIO.attemptBlocking(os.read(capture)).orDie
         yield
@@ -125,7 +125,7 @@ object SessionIntegrationTest extends ClaudeZioSpec:
       val script = MockCliScript.sessionScript(initLine, List(assistantLine, resultLine))
       ZIO.scoped:
         for
-          session <- ClaudeCode.session(options(script))
+          session <- mockCliSession(options(script))
           // Compare only the turn's messages: the init system line is emitted
           // at process startup and races the subscriptions, so a subscriber
           // may or may not catch it without affecting broadcast semantics.
@@ -155,7 +155,7 @@ object SessionIntegrationTest extends ClaudeZioSpec:
       val script = MockCliScript.crashMidTurnScript(initLine, assistantLine)
       ZIO.scoped:
         for
-          session <- ClaudeCode.session(options(script))
+          session <- mockCliSession(options(script))
           drained <- session.stateChanges.runDrain.fork
           _       <- session.send(input)
           _       <- session.terminated
@@ -172,7 +172,7 @@ object SessionIntegrationTest extends ClaudeZioSpec:
       )
       ZIO.scoped:
         for
-          session <- ClaudeCode.session(options(script))
+          session <- mockCliSession(options(script))
           _       <- session.send(input)
           end     <- session.terminated
         yield assertTrue(
@@ -188,7 +188,7 @@ object SessionIntegrationTest extends ClaudeZioSpec:
       )
       ZIO.scoped:
         for
-          session <- ClaudeCode.session(options(script))
+          session <- mockCliSession(options(script))
           result  <- session.sendAndAwait(input)
           state   <- session.state
         yield assertTrue(!result.isError, state.resultsSeen == 1L),
@@ -198,7 +198,7 @@ object SessionIntegrationTest extends ClaudeZioSpec:
       val script = MockCliScript.sessionScript(initLine, List(updatedResult))
       ZIO.scoped:
         for
-          session <- ClaudeCode.session(options(script))
+          session <- mockCliSession(options(script))
           before  <- session.info
           _       <- session.sendAndAwait(input)
           after   <- session.info
@@ -217,7 +217,7 @@ object SessionIntegrationTest extends ClaudeZioSpec:
         )
       ZIO.scoped:
         for
-          session <- ClaudeCode.session(options(script), archive = Some(archive))
+          session <- mockCliSession(options(script), archive = Some(archive))
           result  <- session.sendAndAwait(input)
         yield assertTrue(!result.isError)
   ) @@ TestAspect.withLiveClock @@ TestAspect.timeout(Duration.fromSeconds(60))

@@ -40,7 +40,7 @@ object SessionErrorIntegrationTest extends ClaudeZioSpec:
       val script = MockCliScript.crashMidTurnScript(initLine, partialLine, exitCode = 3)
       ZIO.scoped:
         for
-          session <- ClaudeCode.session(options(script))
+          session <- mockCliSession(options(script))
           _       <- session.send(input)
           error   <- session.awaitResultAfter(0).flip
           end     <- session.terminated
@@ -54,7 +54,7 @@ object SessionErrorIntegrationTest extends ClaudeZioSpec:
       val script = MockCliScript.queryScript(Nil, exitCode = 1)
       ZIO.scoped:
         for
-          session <- ClaudeCode.session(options(script))
+          session <- mockCliSession(options(script))
           error   <- sendUntilDead(session, remaining = 100)
         yield assertTrue(error.isInstanceOf[SessionProcessDied])
   ) @@ TestAspect.withLiveClock @@ TestAspect.timeout(Duration.fromSeconds(30))

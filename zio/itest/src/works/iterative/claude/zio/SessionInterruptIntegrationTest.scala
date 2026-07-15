@@ -32,7 +32,7 @@ object SessionInterruptIntegrationTest extends ClaudeZioSpec:
       )
       ZIO.scoped:
         for
-          session  <- ClaudeCode.session(options(script))
+          session  <- mockCliSession(options(script))
           outcome  <- session.interrupt
           // The interrupted turn's error result (origin absent) bumps resultsSeen.
           _        <- session.state.repeatUntil(_.resultsSeen > 0)
@@ -51,7 +51,7 @@ object SessionInterruptIntegrationTest extends ClaudeZioSpec:
       val script = MockCliScript.crashMidTurnScript(initLine, assistantLine, exitCode = 0)
       ZIO.scoped:
         for
-          session <- ClaudeCode.session(options(script))
+          session <- mockCliSession(options(script))
           error   <- session.interrupt.flip
         yield assertTrue(
           error match
