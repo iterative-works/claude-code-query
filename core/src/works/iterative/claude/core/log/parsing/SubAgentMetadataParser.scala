@@ -1,5 +1,5 @@
 // PURPOSE: Pure parser for sub-agent .meta.json sidecar files into SubAgentMetadata
-// PURPOSE: Returns None only for null JSON input; agentType and description are optional fields
+// PURPOSE: Returns None only for null JSON input; agentType, description, toolUseId are optional
 
 package works.iterative.claude.core.log.parsing
 
@@ -14,5 +14,6 @@ object SubAgentMetadataParser:
         agentId = transcriptPath.last.stripSuffix(".jsonl"),
         agentType = json.hcursor.get[String]("agentType").toOption,
         description = json.hcursor.get[String]("description").toOption,
-        transcriptPath = transcriptPath
+        transcriptPath = transcriptPath,
+        toolUseId = json.hcursor.get[String]("toolUseId").toOption
       )
