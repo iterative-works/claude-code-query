@@ -5,6 +5,7 @@ package works.iterative.claude.zio
 
 import zio.*
 import zio.test.*
+import works.iterative.claude.core.SessionEndedBeforeRequest
 import works.iterative.claude.core.model.*
 import works.iterative.claude.zio.internal.testing.{ClaudeZioSpec, MockCliScript}
 
@@ -42,5 +43,19 @@ object SessionInterruptIntegrationTest extends ClaudeZioSpec:
           outcome == InterruptOutcome(Nil),
           afterInt.lastResult.exists(_.isError),
           !followUp.isError
+        ),
+    test("a pending interrupt whose process exits cleanly fails with an ended-before-request error"):
+      // The script consumes the control_request and exits 0 without answering,
+      // so the pending request is drained on end. A clean exit must not read as
+      // an unexpected death.
+      val script = MockCliScript.crashMidTurnScript(initLine, assistantLine, exitCode = 0)
+      ZIO.scoped:
+        for
+          session <- ClaudeCode.session(options(script))
+          error   <- session.interrupt.flip
+        yield assertTrue(
+          error match
+            case SessionEndedBeforeRequest(Some(0), _) => true
+            case _                                     => false
         )
   ) @@ TestAspect.withLiveClock @@ TestAspect.timeout(Duration.fromSeconds(30))

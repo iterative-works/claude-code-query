@@ -11,6 +11,7 @@ import works.iterative.claude.core.{
   CLIError,
   ProcessExecutionError,
   ProcessTimeoutError,
+  SessionEndedBeforeRequest,
   SessionProcessDied
 }
 import works.iterative.claude.core.model.*
@@ -38,6 +39,14 @@ object SessionProcess:
 
   private[cli] val InterruptTimeout = 30.seconds
 
+  /** How many trailing stderr lines to retain for a death diagnostic. */
+  private val StderrTailSize = 20
+
+  /** How long `recordEnd` waits for the stderr reader to drain the dead
+    * process's remaining lines before building the death error.
+    */
+  private val StderrDrainTimeout = 5.seconds
+
   /** The correlated effect handles the single reader fiber owns and the session
     * also reads: the message and state Hubs, the readable state, the captured
     * session id, the id-known and termination signals, the pending control-request
@@ -52,8 +61,12 @@ object SessionProcess:
       idKnown: Promise[Nothing, Unit],
       terminated: Promise[Nothing, SessionEnd],
       pendingRequests: Ref[Map[RequestId, Promise[CLIError, ControlResponse]]],
-      aliveRef: Ref[Boolean]
-  )
+      aliveRef: Ref[Boolean],
+      stderrTail: Ref[Vector[String]],
+      stderrDrained: Promise[Nothing, Unit]
+  ):
+    /** The retained stderr tail rendered as one string for a death diagnostic. */
+    def stderrText: UIO[String] = stderrTail.get.map(_.mkString("\n"))
 
   def start(
       executablePath: String,
@@ -75,6 +88,8 @@ object SessionProcess:
         Ref.make(Map.empty[RequestId, Promise[CLIError, ControlResponse]])
       requestCounter <- Ref.make(0L)
       aliveRef <- Ref.make(true)
+      stderrTail <- Ref.make(Vector.empty[String])
+      stderrDrained <- Promise.make[Nothing, Unit]
       context = ReaderContext(
         eventsHub,
         stateChangesHub,
@@ -83,12 +98,14 @@ object SessionProcess:
         idKnown,
         terminated,
         pendingRequests,
-        aliveRef
+        aliveRef,
+        stderrTail,
+        stderrDrained
       )
       process <- buildCommand(executablePath, args, options, stdinQueue).run
         .mapError(toSessionError(_, command))
       _ <- startReader(process, context, archiveHook).forkScoped
-      _ <- captureStderr(process).forkScoped
+      _ <- captureStderr(process, context).forkScoped
       // Finalizers run in reverse registration order, so registering the kill
       // last makes it run first on teardown: killing the process makes the
       // pipes hit EOF, letting the forked reader finish and the stdin pump
@@ -144,7 +161,9 @@ object SessionProcess:
       .collect { case Some(message) => message }
       .mapZIO(message => handleMessage(message, context, archiveHook))
       .runDrain
-      .catchAll(_ => ZIO.unit)
+      .catchAll(cause =>
+        ZIO.logWarning(s"Session stdout reader stream failed: $cause")
+      )
       .zipRight(recordEnd(process, context, archiveHook))
 
   private def handleMessage(
@@ -242,13 +261,18 @@ object SessionProcess:
       _ <- context.aliveRef.set(false)
       exit <- process.exitCode.either
       exitCode = exit.toOption.map(_.code)
+      // Wait briefly for the stderr reader to drain the dead process's tail so
+      // the death error can carry it; proceed with whatever is captured on
+      // timeout rather than blocking end indefinitely.
+      _ <- context.stderrDrained.await.timeout(StderrDrainTimeout)
+      stderr <- context.stderrText
       error = exitCode.collect:
-        case code if code != 0 => SessionProcessDied(Some(code), "")
+        case code if code != 0 => SessionProcessDied(Some(code), stderr)
       end = SessionEnd(exitCode, error)
       endState <- context.stateRef.updateAndGet(SessionState.ended(_, end))
       _ <- context.stateChangesHub.publish(endState)
       _ <- context.terminated.succeed(end)
-      _ <- failPendingRequests(context.pendingRequests, error, exitCode)
+      _ <- failPendingRequests(context.pendingRequests, error, exitCode, stderr)
       _ <- context.sessionIdRef.get.flatMap:
         case Some(id) => archiveHook.onClose(id)
         case None     => ZIO.unit
@@ -259,18 +283,33 @@ object SessionProcess:
   private def failPendingRequests(
       pendingRequests: Ref[Map[RequestId, Promise[CLIError, ControlResponse]]],
       error: Option[CLIError],
-      exitCode: Option[Int]
+      exitCode: Option[Int],
+      stderr: String
   ): UIO[Unit] =
     pendingRequests
       .getAndSet(Map.empty)
       .flatMap: pending =>
-        val failure = error.getOrElse(SessionProcessDied(exitCode, ""))
+        // A non-zero death carries its own error; a clean exit that still had a
+        // request in flight ended before that request could complete — which is
+        // not an unexpected death.
+        val failure =
+          error.getOrElse(SessionEndedBeforeRequest(exitCode, stderr))
         ZIO.foreachDiscard(pending.values)(_.fail(failure))
 
-  private def captureStderr(process: Process): UIO[Unit] =
+  /** Reads stderr, retaining the last [[StderrTailSize]] lines for a death
+    * diagnostic and logging each at debug. Signals `stderrDrained` when the
+    * stream ends so `recordEnd` can read a complete tail.
+    */
+  private def captureStderr(process: Process, context: ReaderContext): UIO[Unit] =
     process.stderr.linesStream
-      .foreach(line => ZIO.logDebug(s"session stderr: $line"))
-      .catchAll(_ => ZIO.unit)
+      .foreach: line =>
+        context.stderrTail.update(tail =>
+          (tail :+ line).takeRight(StderrTailSize)
+        ) *> ZIO.logDebug(s"session stderr: $line")
+      .catchAll(cause =>
+        ZIO.logWarning(s"Session stderr reader stream failed: $cause")
+      )
+      .ensuring(context.stderrDrained.succeed(()))
 
   private def toSessionError(
       error: CommandError,
@@ -333,8 +372,11 @@ private final class SessionImpl(
             sessionIdRef.get.flatMap: idOpt =>
               val line =
                 SessionStdin.userInputLine(input, idOpt.map(_.value).getOrElse(""))
-              ZIO.logDebug(s"Writing user input to stdin: ${line.trim}")
-                *> offer(line)
+              // Never log the user's text or context — only a structural summary.
+              ZIO.logDebug(
+                s"Writing user input to stdin (${UserInput.encode(input).size} blocks, " +
+                  s"channel=${input.channel}, sessionIdKnown=${idOpt.isDefined})"
+              ) *> offer(line)
 
   def interrupt: IO[CLIError, InterruptOutcome] =
     aliveRef.get.flatMap:
@@ -437,10 +479,18 @@ private final class SessionImpl(
     stateRef.get.flatMap: current =>
       current.ended match
         case Some(end) => failEnd(end)
-        case None      => ZIO.fail(SessionProcessDied(None, ""))
+        case None      =>
+          context.stderrText.flatMap(s =>
+            ZIO.fail(SessionProcessDied(None, s))
+          )
 
   private def failEnd(end: SessionEnd): IO[CLIError, Nothing] =
-    ZIO.fail(end.error.getOrElse(SessionProcessDied(end.exitCode, "")))
+    end.error match
+      case Some(err) => ZIO.fail(err)
+      case None      =>
+        context.stderrText.flatMap(s =>
+          ZIO.fail(SessionProcessDied(end.exitCode, s))
+        )
 
   private def stillQueued(response: ControlResponse): List[String] =
     response.payload.hcursor

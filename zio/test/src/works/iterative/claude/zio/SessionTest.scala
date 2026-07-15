@@ -49,6 +49,8 @@ object SessionTest extends ClaudeZioSpec:
         Ref.make(Map.empty[RequestId, Promise[CLIError, ControlResponse]])
       requestCounter  <- Ref.make(0L)
       aliveRef        <- Ref.make(alive)
+      stderrTail      <- Ref.make(Vector.empty[String])
+      stderrDrained   <- Promise.make[Nothing, Unit]
       context = SessionProcess.ReaderContext(
         eventsHub,
         stateChangesHub,
@@ -57,7 +59,9 @@ object SessionTest extends ClaudeZioSpec:
         idKnown,
         terminated,
         pendingRequests,
-        aliveRef
+        aliveRef,
+        stderrTail,
+        stderrDrained
       )
     yield Rig(
       SessionProcess.make(stdinQueue, context, requestCounter),
@@ -136,6 +140,26 @@ object SessionTest extends ClaudeZioSpec:
         blocks.size > 1,
         texts.last == "hello </interactive>"
       ),
+    test("send logs only a structural summary, never the user's text or context"):
+      val secretText    = "my password is hunter2"
+      val secretContext = "topsecret-value"
+      for
+        r    <- rig(sessionId = Some(SessionId("sess-1")))
+        _    <- r.session.send(
+                  UserInput(
+                    secretText,
+                    List(ContextItem.Labeled("k", secretContext))
+                  )
+                )
+        _    <- takeLine(r.stdinQueue)
+        logs <- ZTestLogger.logOutput
+      yield
+        val logged = logs.map(_.message()).mkString("\n")
+        assertTrue(
+          !logged.contains(secretText),
+          !logged.contains(secretContext),
+          logged.contains("blocks")
+        ),
     test("send is fire-and-forget: it returns without advancing resultsSeen"):
       for
         r     <- rig()

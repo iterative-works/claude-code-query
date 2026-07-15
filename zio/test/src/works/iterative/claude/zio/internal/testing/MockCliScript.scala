@@ -137,11 +137,13 @@ object MockCliScript:
   def crashMidTurnScript(
       initMessage: String,
       partialMessage: String,
-      exitCode: Int = 1
+      exitCode: Int = 1,
+      stderr: Option[String] = None
   ): os.Path =
     val builder = new StringBuilder("#!/bin/bash\n")
     builder.append(s"echo '${escape(initMessage)}'\n")
     builder.append("read -r _line\n")
     builder.append(s"echo '${escape(partialMessage)}'\n")
+    stderr.foreach(line => builder.append(s"echo '${escape(line)}' >&2\n"))
     builder.append(s"exit $exitCode\n")
     writeScript(builder.toString)

@@ -99,6 +99,10 @@ package object zio:
     works.iterative.claude.core.EnvironmentValidationError
   type SessionProcessDied = works.iterative.claude.core.SessionProcessDied
   val SessionProcessDied = works.iterative.claude.core.SessionProcessDied
+  type SessionEndedBeforeRequest =
+    works.iterative.claude.core.SessionEndedBeforeRequest
+  val SessionEndedBeforeRequest =
+    works.iterative.claude.core.SessionEndedBeforeRequest
   type SessionClosedError = works.iterative.claude.core.SessionClosedError
   val SessionClosedError = works.iterative.claude.core.SessionClosedError
 

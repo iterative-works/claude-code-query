@@ -5,6 +5,7 @@ package works.iterative.claude.zio
 
 import zio.*
 import zio.test.*
+import works.iterative.claude.core.SessionProcessDied
 import works.iterative.claude.core.model.*
 import works.iterative.claude.zio.internal.testing.{ClaudeZioSpec, MockCliScript}
 
@@ -158,6 +159,24 @@ object SessionIntegrationTest extends ClaudeZioSpec:
           // here would leave `done` empty.
           done    <- drained.join.timeout(5.seconds)
         yield assertTrue(done.isDefined),
+    test("a process that writes stderr then dies surfaces that stderr in the death error"):
+      val script = MockCliScript.crashMidTurnScript(
+        initLine,
+        assistantLine,
+        exitCode = 3,
+        stderr = Some("fatal: mock boom")
+      )
+      ZIO.scoped:
+        for
+          session <- ClaudeCode.session(options(script))
+          _       <- session.send(input)
+          end     <- session.terminated
+        yield assertTrue(
+          end.error.exists:
+            case died: SessionProcessDied =>
+              died.exitCode.contains(3) && died.stderr.contains("fatal: mock boom")
+            case _ => false
+        ),
     test("skips a malformed JSON line mid-turn and still completes the turn"):
       val script = MockCliScript.sessionScript(
         initLine,
