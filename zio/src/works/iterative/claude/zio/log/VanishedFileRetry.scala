@@ -28,8 +28,9 @@ object VanishedFileRetry:
         case ArchiveIOError(_, cause) if !seen(cause) =>
           loop(cause, seen + cur)
         case _ =>
-          val next = cur.getCause
-          if next != null && !seen(next) then loop(next, seen + cur) else false
+          Option(cur.getCause) match
+            case Some(next) if !seen(next) => loop(next, seen + cur)
+            case _                         => false
     loop(t, Set.empty)
 
   /** Runs `read` against `path`. If it fails because the file vanished,
