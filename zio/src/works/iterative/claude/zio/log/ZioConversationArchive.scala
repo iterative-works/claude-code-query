@@ -7,13 +7,13 @@ import zio.*
 import zio.stream.*
 import works.iterative.claude.core.log.ArchiveConfig
 import works.iterative.claude.core.log.ArchiveError
-import works.iterative.claude.core.log.ArchiveIOError
+import works.iterative.claude.core.log.ArchiveError.ArchiveIOError
+import works.iterative.claude.core.log.ArchiveError.SessionNotFound
+import works.iterative.claude.core.log.ArchiveError.SubAgentNotFound
 import works.iterative.claude.core.log.ArchivePaths
 import works.iterative.claude.core.log.ConversationArchive
 import works.iterative.claude.core.log.MirrorAction
 import works.iterative.claude.core.log.MirrorPlanner
-import works.iterative.claude.core.log.SessionNotFound
-import works.iterative.claude.core.log.SubAgentNotFound
 import works.iterative.claude.core.log.model.ConversationLogEntry
 import works.iterative.claude.core.log.model.MirrorReport
 import works.iterative.claude.core.log.model.SessionRecord
@@ -31,16 +31,15 @@ class ZioConversationArchive private (config: ArchiveConfig)
   private val index = ZioConversationLogIndex.make(None, os.home)
 
   def forSession(sessionId: String): IO[ArchiveError, Option[SessionRecord]] =
-    ZIO
-      .attemptBlocking:
-        val main = ArchivePaths.mainTranscript(config, sessionId)
-        Option.when(os.exists(main) && os.isFile(main)):
-          SessionRecord(
-            sessionId,
-            main,
-            ArchivePaths.treeDir(config, sessionId)
-          )
-      .mapError(toArchiveError)
+    for
+      main <- ZIO.fromEither(ArchivePaths.mainTranscript(config, sessionId))
+      tree <- ZIO.fromEither(ArchivePaths.treeDir(config, sessionId))
+      record <- ZIO
+        .attemptBlocking:
+          Option.when(os.exists(main) && os.isFile(main)):
+            SessionRecord(sessionId, main, tree)
+        .mapError(toArchiveError)
+    yield record
 
   def entries(sessionId: String): EntryStream =
     ZStream.unwrap:
@@ -73,12 +72,16 @@ class ZioConversationArchive private (config: ArchiveConfig)
       sessionId: String,
       parentToolUseId: String
   ): IO[ArchiveError, Option[os.Path]] =
-    index
-      .listSubAgents(ArchivePaths.projectDir(config), sessionId)
-      .mapError(toArchiveError)
-      .map(
-        _.find(_.toolUseId.contains(parentToolUseId)).map(_.transcriptPath)
-      )
+    for
+      _ <- ZIO.fromEither(ArchivePaths.validateId(sessionId))
+      _ <- ZIO.fromEither(ArchivePaths.validateId(parentToolUseId))
+      located <- index
+        .listSubAgents(ArchivePaths.projectDir(config), sessionId)
+        .mapError(toArchiveError)
+        .map(
+          _.find(_.toolUseId.contains(parentToolUseId)).map(_.transcriptPath)
+        )
+    yield located
 
   private def runMirror(record: SessionRecord): MirrorReport =
     val projectDir = ArchivePaths.projectDir(config)
@@ -161,14 +164,10 @@ class ZioConversationArchive private (config: ArchiveConfig)
     t match
       case archive: ArchiveError => archive
       case other                 =>
-        ArchiveIOError(Option(other.getMessage).getOrElse(""), other)
+        ArchiveIOError(failureMessage(other), other)
 
 object ZioConversationArchive:
 
   /** Creates an archive over the given configuration. */
   def apply(config: ArchiveConfig): ZioConversationArchive =
-    new ZioConversationArchive(config)
-
-  /** Test seam matching [[ZioConversationLogIndex.make]]. */
-  def make(config: ArchiveConfig): ZioConversationArchive =
     new ZioConversationArchive(config)

@@ -6,8 +6,9 @@ package works.iterative.claude.zio.log
 import zio.*
 import zio.test.*
 import works.iterative.claude.core.log.ArchiveConfig
-import works.iterative.claude.core.log.SessionNotFound
-import works.iterative.claude.core.log.SubAgentNotFound
+import works.iterative.claude.core.log.ArchiveError
+import works.iterative.claude.core.log.ArchiveError.SessionNotFound
+import works.iterative.claude.core.log.ArchiveError.SubAgentNotFound
 import works.iterative.claude.core.log.model.RawLogEntry
 import works.iterative.claude.zio.internal.testing.ClaudeZioSpec
 
@@ -51,7 +52,7 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
       os.write(subagents / "agent-abc.jsonl", subAgentLine + "\n",
         createFolders = true)
       os.write(subagents / "agent-abc.meta.json", subAgentMeta)
-      Fixture(ZioConversationArchive.make(config), config)
+      Fixture(ZioConversationArchive(config), config)
 
   private def relFilesUnder(root: os.Path): Set[os.SubPath] =
     if !os.exists(root) then Set.empty
@@ -76,6 +77,29 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
     assertTrue(sourceRel.nonEmpty, identical)
 
   def spec = suite("ZioConversationArchive")(
+    test("rejects a traversing session id rather than resolving outside the project"):
+      val traversals = List("../x", "a/b", "..", "", "a\\b", "/etc/passwd")
+      for
+        fx <- fixture
+        archive = fx.archive
+        located <- ZIO.foreach(traversals)(id => archive.forSession(id).either)
+        mirrored <- ZIO.foreach(traversals)(id => archive.mirror(id).either)
+      yield
+        def allRejected(results: List[Either[ArchiveError, ?]]): Boolean =
+          results.forall:
+            case Left(ArchiveError.InvalidSessionId(_)) => true
+            case _                                      => false
+        assertTrue(allRejected(located), allRejected(mirrored)),
+    test("rejects a traversing sub-agent id rather than reaching outside the project"):
+      for
+        fx <- fixture
+        archive = fx.archive
+        bySession <- archive.subagentEntries("../x", parentToolUse).runCollect.either
+        byTool    <- archive.subagentEntries(sessionId, "../x").runCollect.either
+      yield assertTrue(
+        bySession == Left(ArchiveError.InvalidSessionId("../x")),
+        byTool == Left(ArchiveError.InvalidSessionId("../x"))
+      ),
     test("forSession locates an existing session and misses an absent one"):
       for
         fx <- fixture
