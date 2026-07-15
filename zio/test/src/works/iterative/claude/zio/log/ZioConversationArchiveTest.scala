@@ -1,5 +1,10 @@
 // PURPOSE: Tests the ZIO conversation archive over fixture session trees in temp directories
 // PURPOSE: Covers locate, entries (raw-tolerant), sub-agent join, and idempotent append-aware mirror
+//
+// These tests build fixtures in a fresh per-test temp directory on purpose — a
+// file adapter is what is under test, there is no network, and each test gets an
+// isolated dir. This is the sanctioned exception to the no-filesystem-in-unit-
+// tests policy.
 
 package works.iterative.claude.zio.log
 
