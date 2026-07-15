@@ -493,6 +493,34 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
         page.entries.map(_.uuid.getOrElse("")).toList == List("u1", "u2", "u3"),
         page.older.isEmpty
       ),
+    test("lastEntries rejects a non-positive page size before locating"):
+      for
+        fx <- fixture
+        archive = fx.archive
+        zero <- archive.lastEntries(SessionId(sessionId), 0).either
+        neg  <- archive.lastEntries(SessionId(sessionId), -3).either
+      yield assertTrue(
+        zero == Left(ArchiveError.InvalidPageSize(0)),
+        neg == Left(ArchiveError.InvalidPageSize(-3))
+      ),
+    test("lastEntries rejects an absurd page size above the contract maximum"):
+      for
+        fx <- fixture
+        archive = fx.archive
+        tooBig = works.iterative.claude.core.log.PageSize.Max + 1
+        result <- archive.lastEntries(SessionId(sessionId), tooBig).either
+      yield assertTrue(result == Left(ArchiveError.InvalidPageSize(tooBig))),
+    test("entriesBefore rejects a non-positive page size"):
+      for
+        fx <- fixture
+        archive = fx.archive
+        page1 <- archive.lastEntries(SessionId(sessionId), 1)
+        result <- ZIO.foreach(page1.older)(t =>
+          archive.entriesBefore(t, 0).either
+        )
+      yield assertTrue(
+        result.contains(Left(ArchiveError.InvalidPageSize(0)))
+      ),
     test("lastEntries fails with SessionNotFound for an absent session"):
       for
         fx <- fixture

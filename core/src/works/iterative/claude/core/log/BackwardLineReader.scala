@@ -38,6 +38,20 @@ object BackwardLineReader:
     */
   final case class Tail(lines: Vector[String], older: Option[Long])
 
+  /** Signals that scanning back from the region end reached `scannedBytes`
+    * without exposing enough line boundaries to bound the requested page. The
+    * region carries a line longer than the scan budget, so it is corrupt or
+    * oversized and cannot be paged.
+    */
+  final case class ScanBudgetExceeded(scannedBytes: Long)
+
+  /** A conservative default scan-back budget: a page read never buffers more
+    * than this many bytes looking for its line boundaries. A well-formed JSONL
+    * transcript's lines are far smaller than this, so only a corrupt or
+    * oversized-line region ever hits it.
+    */
+  val DefaultScanBudgetBytes: Long = 32L * 1024 * 1024
+
   /** Extracts up to `limit` complete lines ending at `regionEnd`.
     *
     * @param regionEnd
@@ -48,66 +62,100 @@ object BackwardLineReader:
     *   tail
     * @param blockSize
     *   how many bytes to pull per backward read; must be positive
+    * @param maxScanBytes
+    *   the most bytes the backward scan may buffer before giving up; a region
+    *   whose page needs more than this yields [[ScanBudgetExceeded]] rather
+    *   than reading unbounded bytes
     * @param readBlock
     *   a pure view of the underlying append-only file returning the bytes in
     *   `[offset, offset + length)`; the reader only ever asks for ranges within
     *   `[0, regionEnd)`
+    * @return
+    *   the page of trailing lines, or [[ScanBudgetExceeded]] when the scan
+    *   budget was reached before the page's boundaries were found
     */
   def lastLines(
       regionEnd: Long,
       limit: Int,
       blockSize: Int,
+      maxScanBytes: Long,
       readBlock: (Long, Int) => Array[Byte]
-  ): Tail =
-    if limit <= 0 || regionEnd <= 0 then Tail(Vector.empty, None)
+  ): Either[ScanBudgetExceeded, Tail] =
+    if limit <= 0 || regionEnd <= 0 then Right(Tail(Vector.empty, None))
     else
-      val newline = '\n'.toByte
       // Grow the buffer backward until it holds one more newline than requested
-      // (so the oldest line's start is known) or the region start is reached.
-      val (curStart, buffer) =
-        readBackTo(regionEnd, Array.emptyByteArray, limit, blockSize, readBlock)
+      // (so the oldest line's start is known), the region start is reached, or
+      // the scan budget is spent.
+      readBackTo(
+        regionEnd,
+        Nil,
+        0,
+        regionEnd,
+        limit,
+        blockSize,
+        maxScanBytes,
+        readBlock
+      ).map: (curStart, buffer) =>
+        val newline = '\n'.toByte
 
-      // Absolute file offsets of every newline now in the buffer, ascending.
-      val newlineOffsets =
-        buffer.indices.iterator
-          .filter(i => buffer(i) == newline)
-          .map(i => curStart + i)
-          .toVector
+        // Absolute file offsets of every newline now in the buffer, ascending.
+        val newlineOffsets =
+          buffer.indices.iterator
+            .filter(i => buffer(i) == newline)
+            .map(i => curStart + i)
+            .toVector
 
-      val chosen = newlineOffsets.takeRight(limit)
-      val beforeOldest = newlineOffsets.size - chosen.size - 1
-      val startOfOldest =
-        if beforeOldest >= 0 then newlineOffsets(beforeOldest) + 1 else 0L
+        val chosen = newlineOffsets.takeRight(limit)
+        val beforeOldest = newlineOffsets.size - chosen.size - 1
+        val startOfOldest =
+          if beforeOldest >= 0 then newlineOffsets(beforeOldest) + 1 else 0L
 
-      // Each chosen newline ends a line; that line starts just after the
-      // previous chosen newline, or at the oldest line's start for the first.
-      val starts = startOfOldest +: chosen.dropRight(1).map(_ + 1)
-      val lines = starts
-        .zip(chosen)
-        .map: (start, end) =>
-          decodeLine(buffer, (start - curStart).toInt, (end - curStart).toInt)
+        // Each chosen newline ends a line; that line starts just after the
+        // previous chosen newline, or at the oldest line's start for the first.
+        val starts = startOfOldest +: chosen.dropRight(1).map(_ + 1)
+        val lines = starts
+          .zip(chosen)
+          .map: (start, end) =>
+            decodeLine(buffer, (start - curStart).toInt, (end - curStart).toInt)
 
-      Tail(lines, Option.when(startOfOldest > 0)(startOfOldest))
+        Tail(lines, Option.when(startOfOldest > 0)(startOfOldest))
 
-  /** Reads earlier blocks, prepending each, until the accumulated buffer holds
-    * more than `limit` newlines (enough to bound `limit` complete lines and
-    * know the oldest one's start) or the region start is reached. Returns the
-    * buffer and the file offset it now begins at.
+  /** Reads earlier blocks, accumulating each in file order, until the buffer
+    * holds more than `limit` newlines (enough to bound `limit` complete lines
+    * and know the oldest one's start) or the region start is reached. Fails
+    * with [[ScanBudgetExceeded]] when `maxScanBytes` is spent first. Blocks are
+    * concatenated once at the end, so total copying stays linear in the bytes
+    * scanned. Returns the buffer and the file offset it now begins at.
     */
   @annotation.tailrec
   private def readBackTo(
       curStart: Long,
-      buffer: Array[Byte],
+      blocks: List[Array[Byte]],
+      newlines: Int,
+      regionEnd: Long,
       limit: Int,
       blockSize: Int,
+      maxScanBytes: Long,
       readBlock: (Long, Int) => Array[Byte]
-  ): (Long, Array[Byte]) =
-    if curStart <= 0 || buffer.count(_ == '\n'.toByte) > limit then
-      (curStart, buffer)
+  ): Either[ScanBudgetExceeded, (Long, Array[Byte])] =
+    if newlines > limit || curStart <= 0 then
+      Right((curStart, Array.concat(blocks*)))
+    else if regionEnd - curStart >= maxScanBytes then
+      Left(ScanBudgetExceeded(regionEnd - curStart))
     else
       val newStart = math.max(0L, curStart - blockSize)
       val block = readBlock(newStart, (curStart - newStart).toInt)
-      readBackTo(newStart, block ++ buffer, limit, blockSize, readBlock)
+      val added = block.count(_ == '\n'.toByte)
+      readBackTo(
+        newStart,
+        block :: blocks,
+        newlines + added,
+        regionEnd,
+        limit,
+        blockSize,
+        maxScanBytes,
+        readBlock
+      )
 
   /** Decodes `buffer[from, until)` as a UTF-8 line, dropping one trailing `\r`.
     */

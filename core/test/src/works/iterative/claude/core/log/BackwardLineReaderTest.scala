@@ -22,8 +22,23 @@ class BackwardLineReaderTest extends FunSuite:
   private def image(text: String): Image =
     new Image(text.getBytes(UTF_8))
 
+  // A budget far larger than any fixture here, so the scan never gives up.
+  private val ampleBudget = 1L << 20
+
   private def tail(img: Image, limit: Int, blockSize: Int): BackwardLineReader.Tail =
-    BackwardLineReader.lastLines(img.size, limit, blockSize, img.read)
+    BackwardLineReader.lastLines(img.size, limit, blockSize, ampleBudget, img.read) match
+      case Right(t) => t
+      case Left(e)  => fail(s"unexpected scan-budget overflow at ${e.scannedBytes}")
+
+  private def page(
+      regionEnd: Long,
+      limit: Int,
+      blockSize: Int,
+      img: Image
+  ): BackwardLineReader.Tail =
+    BackwardLineReader.lastLines(regionEnd, limit, blockSize, ampleBudget, img.read) match
+      case Right(t) => t
+      case Left(e)  => fail(s"unexpected scan-budget overflow at ${e.scannedBytes}")
 
   test("empty file yields no lines and no older cursor"):
     val img = image("")
@@ -99,19 +114,59 @@ class BackwardLineReaderTest extends FunSuite:
 
   test("paging backward with the older cursor walks the whole file"):
     val img = image("a\nb\nc\nd\ne\n")
-    val page1 = BackwardLineReader.lastLines(img.size, 2, 3, img.read)
+    val page1 = page(img.size, 2, 3, img)
     assertEquals(page1.lines, Vector("d", "e"))
-    val page2 =
-      BackwardLineReader.lastLines(page1.older.get, 2, 3, img.read)
+    val page2 = page(page1.older.get, 2, 3, img)
     assertEquals(page2.lines, Vector("b", "c"))
-    val page3 =
-      BackwardLineReader.lastLines(page2.older.get, 2, 3, img.read)
+    val page3 = page(page2.older.get, 2, 3, img)
     assertEquals(page3.lines, Vector("a"))
     assertEquals(page3.older, None)
 
   test("a non-positive limit yields an empty tail"):
     val img = image("a\nb\n")
     assertEquals(tail(img, limit = 0, blockSize = 4).lines, Vector.empty)
+
+  test("a torn trailing segment is excluded, then older pages walk without dup"):
+    // A live append in progress ("half-writ") plus multi-page backward walking:
+    // the torn tail is never a page line, and no earlier line is skipped or
+    // duplicated across the seams.
+    val img   = image("a\nb\nc\nhalf-writ")
+    val page1 = page(img.size, 1, 3, img)
+    assertEquals(page1.lines, Vector("c"))
+    val page2 = page(page1.older.get, 1, 3, img)
+    assertEquals(page2.lines, Vector("b"))
+    val page3 = page(page2.older.get, 1, 3, img)
+    assertEquals(page3.lines, Vector("a"))
+    assertEquals(page3.older, None)
+
+  test("an empty line between two newlines round-trips as an empty string"):
+    val img = image("a\n\nb\n")
+    val t   = tail(img, limit = 3, blockSize = 2)
+    assertEquals(t.lines, Vector("a", "", "b"))
+
+  test("a line that is only a carriage return round-trips as an empty string"):
+    // The lone "\r" is a line terminated by "\n"; the trailing CR is stripped,
+    // leaving an empty line rather than a one-character one.
+    val img = image("a\n\r\nb\n")
+    val t   = tail(img, limit = 3, blockSize = 2)
+    assertEquals(t.lines, Vector("a", "", "b"))
+
+  test("a page whose lines exceed the scan budget fails rather than buffering all"):
+    // No newline within the budget from the region end: the region is corrupt
+    // or carries an oversized line, so the scan gives up instead of reading on.
+    val img = image("x" * 200 + "\n")
+    val result =
+      BackwardLineReader.lastLines(img.size, 1, 8, maxScanBytes = 16, img.read)
+    assert(result.isLeft, s"expected a budget overflow, got $result")
+    result.left.foreach(e => assert(e.scannedBytes >= 16))
+    // It stopped early: it never scanned back to byte 0.
+    assert(img.reads.map(_._1).forall(_ > 0))
+
+  test("a page within the scan budget still succeeds"):
+    val img = image("a\nb\nc\n")
+    val result =
+      BackwardLineReader.lastLines(img.size, 2, 2, maxScanBytes = 1024, img.read)
+    assertEquals(result.map(_.lines), Right(Vector("b", "c")))
 
   test("tailing a huge file reads only near the end, never byte 0"):
     val body = (1 to 10000).map(i => s"line-$i").mkString("", "\n", "\n")

@@ -17,6 +17,7 @@ import works.iterative.claude.core.log.ByteRangeReader
 import works.iterative.claude.core.log.ConversationArchive
 import works.iterative.claude.core.log.MirrorAction
 import works.iterative.claude.core.log.MirrorPlanner
+import works.iterative.claude.core.log.PageSize
 import works.iterative.claude.core.log.TranscriptPage
 import works.iterative.claude.core.log.model.ConversationLogEntry
 import works.iterative.claude.core.log.model.EntryPage
@@ -57,16 +58,18 @@ class ZioConversationArchive private (config: ArchiveConfig)
       sessionId: SessionId,
       limit: Int
   ): IO[ArchiveError, EntryPage] =
-    locate(sessionId).flatMap:
-      case Some(record) =>
-        readPage(sessionId, record.mainTranscript, None, limit)
-      case None => ZIO.fail(SessionNotFound(sessionId.value))
+    ZIO.fromEither(PageSize.validate(limit)) *>
+      locate(sessionId).flatMap:
+        case Some(record) =>
+          readPage(sessionId, record.mainTranscript, None, limit)
+        case None => ZIO.fail(SessionNotFound(sessionId.value))
 
   def entriesBefore(
       token: PageToken,
       limit: Int
   ): IO[ArchiveError, EntryPage] =
     for
+      _ <- ZIO.fromEither(PageSize.validate(limit))
       current <- resolveMainTranscript(token.sessionId)
       page <- current match
         case Some(path) if path == token.source =>
@@ -125,10 +128,11 @@ class ZioConversationArchive private (config: ArchiveConfig)
     ZIO
       .attemptBlocking:
         val regionEnd = endOffset.getOrElse(os.size(path))
-        val tail = BackwardLineReader.lastLines(
+        BackwardLineReader.lastLines(
           regionEnd,
           limit,
           tailBlockSize,
+          BackwardLineReader.DefaultScanBudgetBytes,
           (offset, length) =>
             ByteRangeReader.readFully(
               offset,
@@ -136,8 +140,12 @@ class ZioConversationArchive private (config: ArchiveConfig)
               (at, count) => os.read.bytes(path, at, count)
             )
         )
-        TranscriptPage.fromTail(sessionId, path, tail)
       .mapError(toArchiveError)
+      .flatMap:
+        case Right(tail) =>
+          ZIO.succeed(TranscriptPage.fromTail(sessionId, path, tail))
+        case Left(_) =>
+          ZIO.fail(ArchiveError.CorruptTranscript(sessionId.value))
 
   private def transcriptStream(path: os.Path): EntryStream =
     reader.stream(path).mapError(toArchiveError)
