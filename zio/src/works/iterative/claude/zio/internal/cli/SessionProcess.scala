@@ -49,9 +49,10 @@ object SessionProcess:
 
   /** The correlated effect handles the single reader fiber owns and the session
     * also reads: the message and state Hubs, the readable state, the captured
-    * session id, the id-known and termination signals, the pending control-request
-    * registry, and the alive flag. Bundled so a new piece of reader state is one
-    * field, not another parameter on every private function.
+    * session id, the id-known and termination signals, the pending
+    * control-request registry, and the alive flag. Bundled so a new piece of
+    * reader state is one field, not another parameter on every private
+    * function.
     */
   private[claude] final case class ReaderContext(
       eventsHub: Hub[Message],
@@ -65,7 +66,8 @@ object SessionProcess:
       stderrTail: Ref[Vector[String]],
       stderrDrained: Promise[Nothing, Unit]
   ):
-    /** The retained stderr tail rendered as one string for a death diagnostic. */
+    /** The retained stderr tail rendered as one string for a death diagnostic.
+      */
     def stderrText: UIO[String] = stderrTail.get.map(_.mkString("\n"))
 
   def start(
@@ -207,7 +209,7 @@ object SessionProcess:
   ): UIO[Unit] =
     sessionIdRef.get.flatMap:
       case Some(current) if current == id => ZIO.unit
-      case _ =>
+      case _                              =>
         sessionIdRef.set(Some(id))
           *> idKnown.succeed(()).unit
           *> ZIO.logInfo(s"Session named: $id")
@@ -300,7 +302,10 @@ object SessionProcess:
     * diagnostic and logging each at debug. Signals `stderrDrained` when the
     * stream ends so `recordEnd` can read a complete tail.
     */
-  private def captureStderr(process: Process, context: ReaderContext): UIO[Unit] =
+  private def captureStderr(
+      process: Process,
+      context: ReaderContext
+  ): UIO[Unit] =
     process.stderr.linesStream
       .foreach: line =>
         context.stderrTail.update(tail =>
@@ -329,8 +334,8 @@ object SessionProcess:
       List("control_request", "interrupt")
     )
 
-/** Session backed by a stdin queue, the reader's shared channels, and a
-  * request counter.
+/** Session backed by a stdin queue, the reader's shared channels, and a request
+  * counter.
   */
 private final class SessionImpl(
     stdinQueue: Queue[Chunk[Byte]],
@@ -371,7 +376,10 @@ private final class SessionImpl(
             // the id is known.
             sessionIdRef.get.flatMap: idOpt =>
               val line =
-                SessionStdin.userInputLine(input, idOpt.map(_.value).getOrElse(""))
+                SessionStdin.userInputLine(
+                  input,
+                  idOpt.map(_.value).getOrElse("")
+                )
               // Never log the user's text or context — only a structural summary.
               ZIO.logDebug(
                 s"Writing user input to stdin (${UserInput.encode(input).size} blocks, " +
@@ -398,7 +406,8 @@ private final class SessionImpl(
           alive <- aliveRef.get
           request = ControlRequest(requestId, ControlRequestBody.Interrupt)
           outcome <-
-            if !alive then pendingRequests.update(_ - requestId) *> failProcessGone
+            if !alive then
+              pendingRequests.update(_ - requestId) *> failProcessGone
             else
               (offer(SessionStdin.controlRequestLine(request))
                 *> promise.await.timeoutFail(
@@ -461,28 +470,27 @@ private final class SessionImpl(
     * The race is forced `interruptible`: a caller may run within an
     * uninterruptible region (e.g. a forked request handler that inherits its
     * parent's interrupt status), and `raceFirst` completes only once it can
-    * interrupt the losing branch — an uninterruptible losing `await` would wedge
-    * it forever. This is the same hazard commit 21594a3 fixed for the init read.
+    * interrupt the losing branch — an uninterruptible losing `await` would
+    * wedge it forever. This is the same hazard commit 21594a3 fixed for the
+    * init read.
     */
   private def requireSessionId: IO[CLIError, SessionId] =
     sessionIdRef.get.flatMap:
       case Some(id) => ZIO.succeed(id)
       case None     =>
-        idKnown.await
-          .raceFirst(context.terminated.await.flatMap(failEnd))
-          .interruptible
-        *> sessionIdRef.get.flatMap:
-          case Some(id) => ZIO.succeed(id)
-          case None     => failProcessGone
+        for
+          _ <- idKnown.await
+            .raceFirst(context.terminated.await.flatMap(failEnd))
+            .interruptible
+          id <- sessionIdRef.get.someOrElseZIO(failProcessGone)
+        yield id
 
   private def failProcessGone: IO[CLIError, Nothing] =
     stateRef.get.flatMap: current =>
       current.ended match
         case Some(end) => failEnd(end)
         case None      =>
-          context.stderrText.flatMap(s =>
-            ZIO.fail(SessionProcessDied(None, s))
-          )
+          context.stderrText.flatMap(s => ZIO.fail(SessionProcessDied(None, s)))
 
   private def failEnd(end: SessionEnd): IO[CLIError, Nothing] =
     end.error match
