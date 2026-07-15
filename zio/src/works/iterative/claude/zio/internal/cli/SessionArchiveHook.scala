@@ -34,16 +34,35 @@ object SessionArchiveHook:
   val none: SessionArchiveHook =
     SessionArchiveHook(_ => ZIO.unit, _ => ZIO.unit)
 
-  /** A hook that mirrors the session tree into the configured archive. A mirror
-    * failure is logged as a warning and swallowed.
+  /** Upper bound on how long `onClose` waits for the final mirror before it
+    * logs a warning and moves on, so releasing an archive-configured session's
+    * scope cannot block indefinitely on a slow filesystem copy.
+    */
+  val CloseMirrorTimeout: Duration = 30.seconds
+
+  /** Runs a scheduled mirror in the background — the production behaviour. */
+  private val forkDaemonRunner: UIO[Unit] => UIO[Unit] = _.forkDaemon.unit
+
+  /** A hook that mirrors the session tree into the configured archive. Failures
+    * are logged as warnings and swallowed: a whole-mirror failure and any
+    * per-file failures within an otherwise-successful report are both surfaced
+    * only as logs, so mirroring can never break the session.
     *
     * A single permit serialises mirrors so two never run concurrently (and so
-    * never corrupt the append-in-place copy). `afterResult` runs its mirror on
-    * a background fiber and skips when one is already in flight, so it never
-    * blocks the reader and completed turns cannot pile up. `onClose` takes the
-    * permit, waiting for any in-flight mirror before running the final one.
+    * never corrupt the append-in-place copy). `afterResult` hands its mirror to
+    * `background` (forking a daemon fiber in production) and skips when one is
+    * already in flight, so it never blocks the reader and completed turns
+    * cannot pile up. `onClose` takes the permit, waiting for any in-flight
+    * mirror before running the final one, bounded by [[CloseMirrorTimeout]].
+    *
+    * @param background
+    *   how a scheduled `afterResult` mirror is run; the default forks a daemon
+    *   fiber. A test may pass `identity` to run it synchronously.
     */
-  def mirroring(config: ArchiveConfig): UIO[SessionArchiveHook] =
+  def mirroring(
+      config: ArchiveConfig,
+      background: UIO[Unit] => UIO[Unit] = forkDaemonRunner
+  ): UIO[SessionArchiveHook] =
     Semaphore
       .make(1)
       .map: permit =>
@@ -51,13 +70,29 @@ object SessionArchiveHook:
         def mirror(sessionId: SessionId): UIO[Unit] =
           archive
             .mirror(sessionId)
+            .flatMap: report =>
+              ZIO.when(report.failed.nonEmpty):
+                ZIO.logWarning(
+                  s"Session archive mirror for '${sessionId.value}' had " +
+                    s"${report.failed.size} failed file(s): " +
+                    report.failed.map(_._1).mkString(", ")
+                )
             .unit
             .catchAll: error =>
               ZIO.logWarning(
                 s"Session archive mirror failed for '${sessionId.value}': ${error.message}"
               )
         def afterResult(sessionId: SessionId): UIO[Unit] =
-          permit.tryWithPermit(mirror(sessionId)).forkDaemon.unit
+          background(permit.tryWithPermit(mirror(sessionId)).unit)
         def onClose(sessionId: SessionId): UIO[Unit] =
-          permit.withPermit(mirror(sessionId))
+          permit
+            .withPermit(mirror(sessionId))
+            .timeout(CloseMirrorTimeout)
+            .flatMap:
+              case Some(_) => ZIO.unit
+              case None    =>
+                ZIO.logWarning(
+                  s"Session archive final mirror for '${sessionId.value}' timed out " +
+                    s"after ${CloseMirrorTimeout.toSeconds}s; moving on"
+                )
         SessionArchiveHook(afterResult, onClose)

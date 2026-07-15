@@ -55,8 +55,11 @@ object ClaudeCode:
     *
     * When `archive` is set, the session mirrors the vendor transcript tree
     * after each real result and on close — best-effort, so a mirror failure is
-    * logged and never breaks the session. `eventsBufferSize` sizes the lossy
-    * `events` Hub (see [[Session.events]]); the default is conservative.
+    * logged and never breaks the session. Closing the session waits for the
+    * final mirror, bounded by
+    * [[works.iterative.claude.zio.internal.cli.SessionArchiveHook.CloseMirrorTimeout]]
+    * (after which it logs a warning and moves on). `eventsBufferSize` sizes the
+    * lossy `events` Hub (see [[Session.events]]); the default is conservative.
     */
   def session(
       options: SessionOptions,
@@ -77,8 +80,8 @@ object ClaudeCode:
   private def archiveHook(
       archive: Option[ArchiveConfig]
   ): UIO[SessionArchiveHook] =
-    archive.fold(ZIO.succeed(SessionArchiveHook.none))(
-      SessionArchiveHook.mirroring
+    archive.fold(ZIO.succeed(SessionArchiveHook.none))(config =>
+      SessionArchiveHook.mirroring(config)
     )
 
   // Mid-level operations - "How" we accomplish the high-level goals

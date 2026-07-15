@@ -32,7 +32,10 @@ import works.iterative.claude.core.model.{
   * than narrowing it.
   *
   * The session is acquired within a `Scope`, whose finalizers shut down the
-  * process on both normal exit and error.
+  * process on both normal exit and error. When an archive is configured,
+  * closing the scope also waits for the final transcript mirror, bounded by a
+  * close timeout (see [[ClaudeCode.session]]); a caller that needs release to
+  * be prompt can fork it.
   */
 trait Session:
 
