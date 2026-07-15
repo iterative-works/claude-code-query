@@ -351,6 +351,42 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
           followLinks = false
         )
       ),
+    test("mirror does not dereference a symlinked main transcript"):
+      for
+        fx <- fixture
+        archive = fx.archive
+        config  = fx.config
+        linkedId = "sess-linked"
+        _ <- ZIO.attempt:
+               val secret = os.temp.dir() / "secret.jsonl"
+               os.write(secret, "TOP SECRET MAIN\n")
+               val projectDir = config.vendorProjectsDir / "-home-tester-proj"
+               os.symlink(projectDir / s"$linkedId.jsonl", secret)
+        report <- archive.mirror(SessionId(linkedId))
+      yield assertTrue(
+        // The symlinked main transcript is neither planned nor copied.
+        report.copied.isEmpty,
+        !os.exists(config.archiveDir / s"$linkedId.jsonl", followLinks = false)
+      ),
+    test("mirror does not walk a symlinked session tree directory"):
+      for
+        fx <- fixture
+        archive = fx.archive
+        config  = fx.config
+        treeLinkedId = "sess-treelink"
+        _ <- ZIO.attempt:
+               val outside = os.temp.dir()
+               os.write(outside / "loot.jsonl", "OUTSIDE THE TREE\n")
+               val projectDir = config.vendorProjectsDir / "-home-tester-proj"
+               os.write(projectDir / s"$treeLinkedId.jsonl", "main line\n")
+               os.symlink(projectDir / treeLinkedId, outside)
+        report <- archive.mirror(SessionId(treeLinkedId))
+      yield assertTrue(
+        // Only the real main transcript is mirrored; the symlinked tree root
+        // is not walked, so nothing behind it reaches the archive.
+        report.copied == Seq(os.sub / s"$treeLinkedId.jsonl"),
+        !os.exists(config.archiveDir / treeLinkedId, followLinks = false)
+      ),
     test("mirror restricts the archive directory tree to owner-only on POSIX"):
       for
         fx <- fixture

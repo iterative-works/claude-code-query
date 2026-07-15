@@ -141,19 +141,25 @@ class ZioConversationArchive private (config: ArchiveConfig)
     !os.isLink(path) && os.isFile(path)
 
   private def sourceFiles(record: SessionRecord): Seq[os.Path] =
-    val tree =
-      if os.exists(record.treeDir) then
-        os.walk(record.treeDir).filter(regularFile)
-      else Seq.empty
-    record.mainTranscript +: tree
+    val main = Option.when(regularFile(record.mainTranscript))(
+      record.mainTranscript
+    )
+    main.toSeq ++ walkRegularFiles(record.treeDir)
 
   private def mirrorFiles(record: SessionRecord): Seq[os.Path] =
     val main = config.archiveDir / s"${record.sessionId.value}.jsonl"
     val tree = config.archiveDir / record.sessionId.value
-    val mainFiles = if os.exists(main) then Seq(main) else Seq.empty
-    val treeFiles =
-      if os.exists(tree) then os.walk(tree).filter(regularFile) else Seq.empty
-    mainFiles ++ treeFiles
+    val mainFiles = if regularFile(main) then Seq(main) else Seq.empty
+    mainFiles ++ walkRegularFiles(tree)
+
+  /** Regular files under `root`, excluding symlinks at every level — including
+    * `root` itself: `os.walk` dereferences a symlinked root regardless of
+    * `followLinks`, and entries behind it then report as regular files.
+    */
+  private def walkRegularFiles(root: os.Path): Seq[os.Path] =
+    if os.exists(root) && !os.isLink(root) then
+      os.walk(root).filter(regularFile)
+    else Seq.empty
 
   private def listing(
       files: Seq[os.Path],

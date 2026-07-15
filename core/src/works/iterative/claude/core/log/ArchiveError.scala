@@ -34,6 +34,9 @@ enum ArchiveError extends Throwable:
       s"No sub-agent joined by tool_use id '$parentToolUseId' in session '$sessionId'"
     case ArchiveIOError(detail, _) => detail
     case InvalidSessionId(value)   =>
-      s"Rejected id '$value': not an accepted session id shape"
+      // The rejected value is attacker-shaped by definition: strip control
+      // characters and bound the length before it reaches any log line.
+      val printable = value.filter(c => c >= ' ' && c != '\u007f').take(40)
+      s"Rejected id '$printable': not an accepted session id shape"
 
   override def getMessage: String = message
