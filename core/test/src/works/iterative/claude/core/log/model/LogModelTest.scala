@@ -20,8 +20,8 @@ class LogModelTest extends FunSuite:
       cacheReadInputTokens = None,
       serviceTier = None
     )
-    assertEquals(usage.inputTokens, 100)
-    assertEquals(usage.outputTokens, 50)
+    assertEquals(usage.inputTokens, 100L)
+    assertEquals(usage.outputTokens, 50L)
 
   test("TokenUsage should hold optional cache token counts"):
     val usage = TokenUsage(
@@ -31,8 +31,8 @@ class LogModelTest extends FunSuite:
       cacheReadInputTokens = Some(15),
       serviceTier = Some("standard")
     )
-    assertEquals(usage.cacheCreationInputTokens, Some(30))
-    assertEquals(usage.cacheReadInputTokens, Some(15))
+    assertEquals(usage.cacheCreationInputTokens, Some(30L))
+    assertEquals(usage.cacheReadInputTokens, Some(15L))
     assertEquals(usage.serviceTier, Some("standard"))
 
   // LogEntryPayload variant tests

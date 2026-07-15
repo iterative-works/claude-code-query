@@ -282,6 +282,37 @@ class JsonParserTotalityTest extends FunSuite:
         assertEquals(rm.origin, Some(ResultOrigin.Other("null")))
       case other => fail(s"Expected ResultMessage, got: $other")
 
+  test("usage token counts beyond Int range parse without loss"):
+    val bigUsage = """{
+      "type": "result",
+      "subtype": "success",
+      "is_error": false,
+      "duration_ms": 1,
+      "duration_api_ms": 1,
+      "num_turns": 1,
+      "usage": {
+        "input_tokens": 3000000000,
+        "output_tokens": 12,
+        "cache_read_input_tokens": 4000000000
+      },
+      "session_id": "s-1"
+    }"""
+    JsonParser.parseMessage(parseJson(bigUsage)) match
+      case rm: ResultMessage =>
+        assertEquals(
+          rm.usage,
+          Some(
+            TokenUsage(
+              inputTokens = 3000000000L,
+              outputTokens = 12,
+              cacheCreationInputTokens = None,
+              cacheReadInputTokens = Some(4000000000L),
+              serviceTier = None
+            )
+          )
+        )
+      case other => fail(s"Expected ResultMessage, got: $other")
+
   test("result with usage present but token counts missing parses usage as None"):
     val emptyUsage = """{
       "type": "result",

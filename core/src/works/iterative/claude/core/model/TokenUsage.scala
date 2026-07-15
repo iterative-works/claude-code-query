@@ -6,10 +6,10 @@ package works.iterative.claude.core.model
 import io.circe.Json
 
 case class TokenUsage(
-    inputTokens: Int,
-    outputTokens: Int,
-    cacheCreationInputTokens: Option[Int],
-    cacheReadInputTokens: Option[Int],
+    inputTokens: Long,
+    outputTokens: Long,
+    cacheCreationInputTokens: Option[Long],
+    cacheReadInputTokens: Option[Long],
     serviceTier: Option[String]
 )
 
@@ -18,14 +18,14 @@ object TokenUsage:
   def fromJson(json: Json): Option[TokenUsage] =
     val cursor = json.hcursor
     for
-      inputTokens <- cursor.get[Int]("input_tokens").toOption
-      outputTokens <- cursor.get[Int]("output_tokens").toOption
+      inputTokens <- cursor.get[Long]("input_tokens").toOption
+      outputTokens <- cursor.get[Long]("output_tokens").toOption
     yield TokenUsage(
       inputTokens = inputTokens,
       outputTokens = outputTokens,
       cacheCreationInputTokens =
-        cursor.get[Int]("cache_creation_input_tokens").toOption,
+        cursor.get[Long]("cache_creation_input_tokens").toOption,
       cacheReadInputTokens =
-        cursor.get[Int]("cache_read_input_tokens").toOption,
+        cursor.get[Long]("cache_read_input_tokens").toOption,
       serviceTier = cursor.get[String]("service_tier").toOption
     )

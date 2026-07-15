@@ -248,10 +248,10 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
 
     // Generator for TokenUsage
     val tokenUsageGen: Gen[TokenUsage] = for {
-      inputTokens <- Gen.choose(0, 100000)
-      outputTokens <- Gen.choose(0, 100000)
-      cacheCreation <- Gen.option(Gen.choose(0, 100000))
-      cacheRead <- Gen.option(Gen.choose(0, 100000))
+      inputTokens <- Gen.choose(0L, 5000000000L)
+      outputTokens <- Gen.choose(0L, 5000000000L)
+      cacheCreation <- Gen.option(Gen.choose(0L, 5000000000L))
+      cacheRead <- Gen.option(Gen.choose(0L, 5000000000L))
       serviceTier <- Gen.option(Gen.oneOf("standard", "priority"))
     } yield TokenUsage(
       inputTokens,

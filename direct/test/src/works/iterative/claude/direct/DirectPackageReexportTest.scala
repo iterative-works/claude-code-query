@@ -68,8 +68,8 @@ class DirectPackageReexportTest extends FunSuite:
 
   test("direct.* re-exports TokenUsage"):
     val usage = TokenUsage(100, 50, None, None, None)
-    assertEquals(usage.inputTokens, 100)
-    assertEquals(usage.outputTokens, 50)
+    assertEquals(usage.inputTokens, 100L)
+    assertEquals(usage.outputTokens, 50L)
 
   test("direct.* re-exports the wire message model additions"):
     val id = MessageId("uuid-1")

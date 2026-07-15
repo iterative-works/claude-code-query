@@ -83,7 +83,7 @@ class EffectfulPackageReexportTest extends CatsEffectSuite:
 
   test("effectful.* re-exports TokenUsage"):
     val usage = TokenUsage(100, 50, None, None, None)
-    assertEquals(usage.inputTokens, 100)
+    assertEquals(usage.inputTokens, 100L)
 
   test("effectful.* re-exports the wire message model additions"):
     val id = MessageId("uuid-1")
