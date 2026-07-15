@@ -75,9 +75,11 @@ object SessionE2ETest extends ClaudeZioSpec:
           session <- ClaudeCode.session(SessionOptions.defaults)
           before  <- session.state
           // Start a slow turn, then interrupt it mid-flight.
+          // A long generation keeps the turn reliably in flight at interrupt
+          // time; a short task can finish before the interrupt lands.
           _       <- session.send(
                        userInput(
-                         "Count slowly from 1 to 100, one number per line, pausing between each."
+                         "Write a very long story, at least 3000 words, about a lighthouse keeper. Do not stop early."
                        )
                      )
           _       <- ZIO.sleep(3.seconds)

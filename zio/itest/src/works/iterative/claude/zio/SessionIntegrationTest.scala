@@ -125,8 +125,16 @@ object SessionIntegrationTest extends ClaudeZioSpec:
       ZIO.scoped:
         for
           session <- ClaudeCode.session(options(script))
+          // Compare only the turn's messages: the init system line is emitted
+          // at process startup and races the subscriptions, so a subscriber
+          // may or may not catch it without affecting broadcast semantics.
           collect  =
-            session.events.takeUntil(_.isInstanceOf[ResultMessage]).runCollect
+            session.events
+              .filter(m =>
+                m.isInstanceOf[AssistantMessage] || m.isInstanceOf[ResultMessage]
+              )
+              .takeUntil(_.isInstanceOf[ResultMessage])
+              .runCollect
           sub1    <- collect.fork
           sub2    <- collect.fork
           _       <- ZIO.sleep(200.millis) // both subscriptions active before send
