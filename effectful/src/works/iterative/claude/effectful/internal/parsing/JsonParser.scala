@@ -27,7 +27,7 @@ object JsonParser:
           logger.debug(
             s"Successfully parsed JSON message at line $lineNumber"
           ) *>
-            IO.pure(Right(CoreJsonParser.parseMessage(json)))
+            IO.pure(Right(Some(CoreJsonParser.parseMessage(json))))
         case Left(error) =>
           logger.error(
             s"JSON parsing error at line $lineNumber: ${error.getMessage}"

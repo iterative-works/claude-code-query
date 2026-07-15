@@ -10,7 +10,8 @@ import works.iterative.claude.core.model.{
   SystemMessage,
   ResultMessage,
   KeepAliveMessage,
-  StreamEventMessage
+  StreamEventMessage,
+  UnknownMessage
 }
 import works.iterative.claude.core.parsing.{JsonParser as CoreJsonParser}
 import works.iterative.claude.direct.Logger
@@ -64,7 +65,7 @@ object JsonParser:
       lineNumber: Int
   ): Either[JsonParsingError, Option[Message]] =
     parseJsonString(line) match
-      case Right(json)      => Right(CoreJsonParser.parseMessage(json))
+      case Right(json)      => Right(Some(CoreJsonParser.parseMessage(json)))
       case Left(parseError) =>
         Left(JsonParsingError(line, lineNumber, parseError))
 
@@ -78,7 +79,7 @@ object JsonParser:
       case Right(json) =>
         val message = CoreJsonParser.parseMessage(json)
         logParsingResult(message, lineNumber)
-        Right(message)
+        Right(Some(message))
       case Left(parseError) =>
         logParsingError(parseError, lineNumber)
         Left(JsonParsingError(line, lineNumber, parseError))
@@ -87,17 +88,13 @@ object JsonParser:
   private def parseJsonString(line: String) = parser.parse(line)
 
   /** Log the result of message parsing */
-  private def logParsingResult(message: Option[Message], lineNumber: Int)(using
+  private def logParsingResult(message: Message, lineNumber: Int)(using
       logger: Logger
   ): Unit =
-    message match
-      case Some(msg) =>
-        val messageType = extractMessageType(msg)
-        logger.debug(
-          s"Successfully parsed message of type $messageType at line $lineNumber"
-        )
-      case None =>
-        logger.debug(s"Parsed JSON but no message created at line $lineNumber")
+    val messageType = extractMessageType(message)
+    logger.debug(
+      s"Successfully parsed message of type $messageType at line $lineNumber"
+    )
 
   /** Log parsing error */
   private def logParsingError(
@@ -111,9 +108,10 @@ object JsonParser:
   /** Extract message type for logging purposes */
   private def extractMessageType(message: Message): String =
     message match
-      case _: UserMessage        => "user"
-      case _: AssistantMessage   => "assistant"
-      case _: SystemMessage      => "system"
-      case _: ResultMessage      => "result"
-      case KeepAliveMessage      => "keep_alive"
-      case _: StreamEventMessage => "stream_event"
+      case _: UserMessage          => "user"
+      case _: AssistantMessage     => "assistant"
+      case _: SystemMessage        => "system"
+      case _: ResultMessage        => "result"
+      case KeepAliveMessage        => "keep_alive"
+      case _: StreamEventMessage   => "stream_event"
+      case unknown: UnknownMessage => s"unknown(${unknown.messageType})"

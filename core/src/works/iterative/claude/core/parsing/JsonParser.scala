@@ -8,27 +8,25 @@ import works.iterative.claude.core.model.*
 
 object JsonParser:
   // Pure JSON line parsing - simple parsing without effects
+  // None only for blank or non-JSON lines; every parsed JSON becomes a Message
   def parseJsonLine(line: String): Option[Message] =
     if line.trim.isEmpty then None
-    else
-      parser.parse(line) match
-        case Right(json) => parseMessage(json)
-        case Left(_)     => None
+    else parser.parse(line).toOption.map(parseMessage)
 
-  // Core message parsing - dispatches to specific message type parsers
-  def parseMessage(json: Json): Option[Message] =
+  // Core message parsing - total: dispatches to specific message type parsers,
+  // and anything they cannot handle survives verbatim as UnknownMessage
+  def parseMessage(json: Json): Message =
     val cursor = json.hcursor
-    cursor
-      .get[String]("type")
-      .toOption
-      .flatMap:
-        case "user"         => parseUserMessage(cursor)
-        case "assistant"    => parseAssistantMessage(cursor)
-        case "system"       => parseSystemMessage(json, cursor)
-        case "result"       => parseResultMessage(cursor)
-        case "keep_alive"   => Some(KeepAliveMessage)
-        case "stream_event" => parseStreamEventMessage(json)
-        case _              => None
+    val messageType = cursor.get[String]("type").getOrElse("")
+    val parsed: Option[Message] = messageType match
+      case "user"         => parseUserMessage(cursor)
+      case "assistant"    => parseAssistantMessage(cursor)
+      case "system"       => parseSystemMessage(json, cursor)
+      case "result"       => parseResultMessage(cursor)
+      case "keep_alive"   => Some(KeepAliveMessage)
+      case "stream_event" => parseStreamEventMessage(json)
+      case _              => None
+    parsed.getOrElse(UnknownMessage(messageType, json))
 
   // Message type parsers - handle specific message formats
   private def parseUserMessage(cursor: io.circe.HCursor): Option[UserMessage] =

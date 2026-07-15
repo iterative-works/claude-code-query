@@ -27,7 +27,7 @@ class JsonParserTest extends FunSuite:
     val result = JsonParser.parseMessage(json)
 
     result match
-      case Some(SystemMessage(subtype, data)) =>
+      case SystemMessage(subtype, data) =>
         assertEquals(subtype, "init")
         assertEquals(data("apiKeySource"), "environment")
         assertEquals(data("cwd"), "/test")
@@ -36,9 +36,8 @@ class JsonParserTest extends FunSuite:
         assertEquals(data("permissionMode"), "default")
         assert(data.contains("tools"))
         assert(data.contains("mcp_servers"))
-      case Some(other) =>
+      case other =>
         fail(s"Expected SystemMessage, got: ${other.getClass.getSimpleName}")
-      case None => fail("Expected SystemMessage, got None")
 
   test("parseMessage should handle existing assistant message"):
     val assistantJsonStr = """{
@@ -55,14 +54,13 @@ class JsonParserTest extends FunSuite:
     val result = JsonParser.parseMessage(json)
 
     result match
-      case Some(AssistantMessage(content)) =>
-        assertEquals(content.length, 1)
-        content.head match
+      case assistant: AssistantMessage =>
+        assertEquals(assistant.content.length, 1)
+        assistant.content.head match
           case TextBlock(text) => assertEquals(text, "Hello")
           case _               => fail("Expected TextBlock")
-      case Some(other) =>
+      case other =>
         fail(s"Expected AssistantMessage, got: ${other.getClass.getSimpleName}")
-      case None => fail("Expected AssistantMessage, got None")
 
   test("parseMessage should handle existing result message"):
     val resultJsonStr = """{
@@ -83,31 +81,18 @@ class JsonParserTest extends FunSuite:
     val result = JsonParser.parseMessage(json)
 
     result match
-      case Some(
-            ResultMessage(
-              subtype,
-              durationMs,
-              durationApiMs,
-              isError,
-              numTurns,
-              sessionId,
-              totalCostUsd,
-              usage,
-              resultText
-            )
-          ) =>
-        assertEquals(subtype, "query")
-        assertEquals(durationMs, 1500)
-        assertEquals(durationApiMs, 800)
-        assertEquals(isError, false)
-        assertEquals(numTurns, 1)
-        assertEquals(sessionId, "test-session-123")
-        assertEquals(totalCostUsd, Some(0.001))
-        assertEquals(resultText, Some("4"))
-        assert(usage.isDefined)
-      case Some(other) =>
+      case rm: ResultMessage =>
+        assertEquals(rm.subtype, "query")
+        assertEquals(rm.durationMs, 1500)
+        assertEquals(rm.durationApiMs, 800)
+        assertEquals(rm.isError, false)
+        assertEquals(rm.numTurns, 1)
+        assertEquals(rm.sessionId, "test-session-123")
+        assertEquals(rm.totalCostUsd, Some(0.001))
+        assertEquals(rm.result, Some("4"))
+        assert(rm.usage.isDefined)
+      case other =>
         fail(s"Expected ResultMessage, got: ${other.getClass.getSimpleName}")
-      case None => fail("Expected ResultMessage, got None")
 
   test("parseMessage should parse user message"):
     val userJsonStr = """{
@@ -120,11 +105,10 @@ class JsonParserTest extends FunSuite:
     val result = JsonParser.parseMessage(json)
 
     result match
-      case Some(UserMessage(content)) =>
+      case UserMessage(content) =>
         assertEquals(content, "What is 2+2?")
-      case Some(other) =>
+      case other =>
         fail(s"Expected UserMessage, got: ${other.getClass.getSimpleName}")
-      case None => fail("Expected UserMessage, got None")
 
   test("parseJsonLine should handle invalid JSON gracefully"):
     val invalidJson = """{"type": "invalid", "malformed": }"""
@@ -148,10 +132,9 @@ class JsonParserTest extends FunSuite:
     val result = JsonParser.parseMessage(json)
 
     result match
-      case Some(KeepAliveMessage) => () // success
-      case Some(other)            =>
+      case KeepAliveMessage => () // success
+      case other            =>
         fail(s"Expected KeepAliveMessage, got: ${other.getClass.getSimpleName}")
-      case None => fail("Expected KeepAliveMessage, got None")
 
   test("parseMessage parses stream_event into StreamEventMessage"):
     val streamEventStr = """{
@@ -165,18 +148,17 @@ class JsonParserTest extends FunSuite:
     val result = JsonParser.parseMessage(json)
 
     result match
-      case Some(StreamEventMessage(data)) =>
+      case StreamEventMessage(data) =>
         assert(data.contains("event"))
         assertEquals(data("event"), "content_block_delta")
         assert(data.contains("data"))
         val nestedData = data("data").asInstanceOf[Map[String, Any]]
         assertEquals(nestedData("type"), "text_delta")
         assertEquals(nestedData("text"), "Hello")
-      case Some(other) =>
+      case other =>
         fail(
           s"Expected StreamEventMessage, got: ${other.getClass.getSimpleName}"
         )
-      case None => fail("Expected StreamEventMessage, got None")
 
   test("ResultMessage parses realistic stream-json end-of-turn"):
     val resultJsonStr = """{
@@ -197,7 +179,7 @@ class JsonParserTest extends FunSuite:
     val result = JsonParser.parseMessage(json)
 
     result match
-      case Some(rm: ResultMessage) =>
+      case rm: ResultMessage =>
         assertEquals(rm.subtype, "success")
         assertEquals(rm.durationMs, 3200)
         assertEquals(rm.durationApiMs, 2800)
@@ -210,6 +192,5 @@ class JsonParserTest extends FunSuite:
           rm.result,
           Some("Here is the final answer to your question.")
         )
-      case Some(other) =>
+      case other =>
         fail(s"Expected ResultMessage, got: ${other.getClass.getSimpleName}")
-      case None => fail("Expected ResultMessage, got None")

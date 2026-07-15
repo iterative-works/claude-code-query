@@ -25,7 +25,7 @@ object JsonParser:
           ZIO.logDebug(
             s"Successfully parsed JSON message at line $lineNumber"
           ) *>
-            ZIO.succeed(CoreJsonParser.parseMessage(json))
+            ZIO.succeed(Some(CoreJsonParser.parseMessage(json)))
         case Left(error) =>
           ZIO.logError(
             s"JSON parsing error at line $lineNumber: ${error.getMessage}"
