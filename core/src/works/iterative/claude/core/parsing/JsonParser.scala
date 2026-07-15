@@ -156,20 +156,7 @@ object JsonParser:
   private def parseTokenUsage(
       cursor: io.circe.HCursor
   ): Option[TokenUsage] =
-    for
-      usageJson <- cursor.get[Json]("usage").toOption
-      usageCursor = usageJson.hcursor
-      inputTokens <- usageCursor.get[Int]("input_tokens").toOption
-      outputTokens <- usageCursor.get[Int]("output_tokens").toOption
-    yield TokenUsage(
-      inputTokens = inputTokens,
-      outputTokens = outputTokens,
-      cacheCreationInputTokens =
-        usageCursor.get[Int]("cache_creation_input_tokens").toOption,
-      cacheReadInputTokens =
-        usageCursor.get[Int]("cache_read_input_tokens").toOption,
-      serviceTier = usageCursor.get[String]("service_tier").toOption
-    )
+    cursor.get[Json]("usage").toOption.flatMap(TokenUsage.fromJson)
 
   private def extractJsonValue(json: Json): Any =
     json.fold(
