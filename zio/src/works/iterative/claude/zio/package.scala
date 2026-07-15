@@ -44,7 +44,7 @@ package object zio:
   type InterruptOutcome = works.iterative.claude.core.model.InterruptOutcome
   val InterruptOutcome = works.iterative.claude.core.model.InterruptOutcome
 
-  // Structured user input (Wave 3)
+  // Structured user input
   type UserInput = works.iterative.claude.core.model.UserInput
   val UserInput = works.iterative.claude.core.model.UserInput
   type ContextItem = works.iterative.claude.core.model.ContextItem
@@ -52,7 +52,7 @@ package object zio:
   type Channel = works.iterative.claude.core.model.Channel
   val Channel = works.iterative.claude.core.model.Channel
 
-  // Archive custody configuration (Wave 4 wiring)
+  // Archive custody configuration
   type ArchiveConfig = works.iterative.claude.core.log.ArchiveConfig
   val ArchiveConfig = works.iterative.claude.core.log.ArchiveConfig
   type PermissionDenial = works.iterative.claude.core.model.PermissionDenial

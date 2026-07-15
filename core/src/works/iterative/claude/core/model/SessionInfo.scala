@@ -1,4 +1,4 @@
-// PURPOSE: Identifying information about a live session, replacing the "pending" session-id sentinel
+// PURPOSE: Identifying information about a live session (the vendor-assigned session id)
 // PURPOSE: Carries the session id the vendor assigned, known once the CLI names the session
 
 package works.iterative.claude.core.model
