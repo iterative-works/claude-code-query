@@ -62,6 +62,23 @@ object ZioPackageReexportTest extends ClaudeZioSpec:
       )
       val usage = TokenUsage(100, 50, None, None, None)
       assertTrue(entries.size == 8, usage.inputTokens == 100),
+    test("re-exports the wire message model additions"):
+      val id = MessageId("uuid-1")
+      val unknown = UnknownMessage("rate_limit_event", io.circe.Json.Null)
+      val control = ControlResponse("req-1", "success", io.circe.Json.Null)
+      val origin: ResultOrigin = ResultOrigin.TaskNotification
+      val denial = PermissionDenial(io.circe.Json.Null)
+      val timings = ResultTimings(Some(1), None, None)
+      val request = ControlRequest("req-1", ControlRequestBody.Interrupt)
+      assertTrue(
+        id.value == "uuid-1",
+        unknown.messageType == "rate_limit_event",
+        control.requestId == "req-1",
+        origin == ResultOrigin.TaskNotification,
+        denial.json == io.circe.Json.Null,
+        timings.ttftMs == Some(1),
+        request.requestId == "req-1"
+      ),
     test("re-exports the log service traits"):
       val _ : Class[ConversationLogIndex[?]]  = classOf[ConversationLogIndex[?]]
       val _ : Class[ConversationLogReader[?]] = classOf[ConversationLogReader[?]]

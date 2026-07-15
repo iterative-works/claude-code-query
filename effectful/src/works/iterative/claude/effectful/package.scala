@@ -20,6 +20,23 @@ package object effectful:
   val SystemMessage = works.iterative.claude.core.model.SystemMessage
   type ResultMessage = works.iterative.claude.core.model.ResultMessage
   val ResultMessage = works.iterative.claude.core.model.ResultMessage
+  type UnknownMessage = works.iterative.claude.core.model.UnknownMessage
+  val UnknownMessage = works.iterative.claude.core.model.UnknownMessage
+  type ControlResponse = works.iterative.claude.core.model.ControlResponse
+  val ControlResponse = works.iterative.claude.core.model.ControlResponse
+  type ControlRequest = works.iterative.claude.core.model.ControlRequest
+  val ControlRequest = works.iterative.claude.core.model.ControlRequest
+  type ControlRequestBody =
+    works.iterative.claude.core.model.ControlRequestBody
+  val ControlRequestBody = works.iterative.claude.core.model.ControlRequestBody
+  type MessageId = works.iterative.claude.core.model.MessageId
+  val MessageId = works.iterative.claude.core.model.MessageId
+  type ResultOrigin = works.iterative.claude.core.model.ResultOrigin
+  val ResultOrigin = works.iterative.claude.core.model.ResultOrigin
+  type PermissionDenial = works.iterative.claude.core.model.PermissionDenial
+  val PermissionDenial = works.iterative.claude.core.model.PermissionDenial
+  type ResultTimings = works.iterative.claude.core.model.ResultTimings
+  val ResultTimings = works.iterative.claude.core.model.ResultTimings
   type ContentBlock = works.iterative.claude.core.model.ContentBlock
   type TextBlock = works.iterative.claude.core.model.TextBlock
   val TextBlock = works.iterative.claude.core.model.TextBlock
