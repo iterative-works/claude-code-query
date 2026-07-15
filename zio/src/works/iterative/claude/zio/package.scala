@@ -89,8 +89,8 @@ package object zio:
     works.iterative.claude.core.log.model.LastPromptLogEntry
   type RawLogEntry = works.iterative.claude.core.log.model.RawLogEntry
   val RawLogEntry = works.iterative.claude.core.log.model.RawLogEntry
-  type TokenUsage = works.iterative.claude.core.log.model.TokenUsage
-  val TokenUsage = works.iterative.claude.core.log.model.TokenUsage
+  type TokenUsage = works.iterative.claude.core.model.TokenUsage
+  val TokenUsage = works.iterative.claude.core.model.TokenUsage
   type LogFileMetadata = works.iterative.claude.core.log.model.LogFileMetadata
   val LogFileMetadata = works.iterative.claude.core.log.model.LogFileMetadata
   type SubAgentMetadata = works.iterative.claude.core.log.model.SubAgentMetadata

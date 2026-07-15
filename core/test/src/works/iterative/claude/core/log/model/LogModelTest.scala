@@ -5,7 +5,7 @@ package works.iterative.claude.core.log.model
 
 import munit.FunSuite
 import java.time.Instant
-import works.iterative.claude.core.model.{ContentBlock, TextBlock}
+import works.iterative.claude.core.model.{ContentBlock, TextBlock, TokenUsage}
 import io.circe.Json
 
 class LogModelTest extends FunSuite:
