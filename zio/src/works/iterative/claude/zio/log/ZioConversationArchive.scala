@@ -13,6 +13,7 @@ import works.iterative.claude.core.log.ArchiveError.SessionNotFound
 import works.iterative.claude.core.log.ArchiveError.SubAgentNotFound
 import works.iterative.claude.core.log.ArchivePaths
 import works.iterative.claude.core.log.BackwardLineReader
+import works.iterative.claude.core.log.ByteRangeReader
 import works.iterative.claude.core.log.ConversationArchive
 import works.iterative.claude.core.log.MirrorAction
 import works.iterative.claude.core.log.MirrorPlanner
@@ -128,7 +129,12 @@ class ZioConversationArchive private (config: ArchiveConfig)
           regionEnd,
           limit,
           tailBlockSize,
-          (offset, length) => os.read.bytes(path, offset, length)
+          (offset, length) =>
+            ByteRangeReader.readFully(
+              offset,
+              length,
+              (at, count) => os.read.bytes(path, at, count)
+            )
         )
         val entries = tail.lines.flatMap(ConversationLogParser.parseLogLine)
         val older = tail.older.map(offset => PageToken(sessionId, path, offset))
