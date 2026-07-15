@@ -49,10 +49,11 @@ class ZioConversationArchive private (config: ArchiveConfig)
     locate(sessionId)
 
   def entries(sessionId: SessionId): EntryStream =
-    ZStream.unwrap:
-      forSession(sessionId).map:
-        case Some(record) => transcriptStream(record.mainTranscript)
-        case None         => ZStream.fail(SessionNotFound(sessionId.value))
+    VanishedFileRetry.stream(
+      transcriptStream,
+      resolveMainTranscript(sessionId),
+      SessionNotFound(sessionId.value)
+    )
 
   def lastEntries(
       sessionId: SessionId,
@@ -61,7 +62,11 @@ class ZioConversationArchive private (config: ArchiveConfig)
     ZIO.fromEither(PageSize.validate(limit)) *>
       locate(sessionId).flatMap:
         case Some(record) =>
-          readPage(sessionId, record.mainTranscript, None, limit)
+          VanishedFileRetry.read(
+            record.mainTranscript,
+            p => readPage(sessionId, p, None, limit),
+            requireResolved(sessionId)
+          )
         case None => ZIO.fail(SessionNotFound(sessionId.value))
 
   def entriesBefore(
@@ -73,7 +78,11 @@ class ZioConversationArchive private (config: ArchiveConfig)
       current <- resolveMainTranscript(token.sessionId)
       page <- current match
         case Some(path) if path == token.source =>
-          readPage(token.sessionId, token.source, Some(token.offset), limit)
+          VanishedFileRetry.read(
+            token.source,
+            p => readPage(token.sessionId, p, Some(token.offset), limit),
+            repinSource(token)
+          )
         case Some(_) => ZIO.fail(PageSourceMoved(token.sessionId.value))
         case None    => ZIO.fail(SessionNotFound(token.sessionId.value))
     yield page
@@ -82,11 +91,11 @@ class ZioConversationArchive private (config: ArchiveConfig)
       sessionId: SessionId,
       parentToolUseId: String
   ): EntryStream =
-    ZStream.unwrap:
-      locateSubAgentTranscript(sessionId, parentToolUseId).map:
-        case Some(transcript) => transcriptStream(transcript)
-        case None             =>
-          ZStream.fail(SubAgentNotFound(sessionId.value, parentToolUseId))
+    VanishedFileRetry.stream(
+      transcriptStream,
+      locateSubAgentTranscript(sessionId, parentToolUseId),
+      SubAgentNotFound(sessionId.value, parentToolUseId)
+    )
 
   def mirror(sessionId: SessionId): IO[ArchiveError, MirrorReport] =
     locate(sessionId).flatMap:
@@ -115,6 +124,26 @@ class ZioConversationArchive private (config: ArchiveConfig)
       sessionId: SessionId
   ): IO[ArchiveError, Option[os.Path]] =
     locate(sessionId).map(_.map(_.mainTranscript))
+
+  /** Re-resolves a session to a readable main transcript for a retry, failing
+    * with `SessionNotFound` when it no longer resolves under either root.
+    */
+  private def requireResolved(
+      sessionId: SessionId
+  ): IO[ArchiveError, os.Path] =
+    resolveMainTranscript(sessionId).flatMap:
+      case Some(path) => ZIO.succeed(path)
+      case None       => ZIO.fail(SessionNotFound(sessionId.value))
+
+  /** Re-resolves a paged token's source for a retry, preserving the pin: a
+    * resolution that moved off `token.source` (e.g. the vendor tree was pruned)
+    * fails with `PageSourceMoved` rather than reading the wrong file.
+    */
+  private def repinSource(token: PageToken): IO[ArchiveError, os.Path] =
+    resolveMainTranscript(token.sessionId).flatMap:
+      case Some(path) if path == token.source => ZIO.succeed(path)
+      case Some(_) => ZIO.fail(PageSourceMoved(token.sessionId.value))
+      case None    => ZIO.fail(SessionNotFound(token.sessionId.value))
 
   private def isTranscript(path: os.Path): Boolean =
     os.exists(path) && os.isFile(path)
