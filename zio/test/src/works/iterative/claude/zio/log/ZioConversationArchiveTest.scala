@@ -124,6 +124,24 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
       yield assertTrue(
         result == Left(SubAgentNotFound(sessionId, "toolu_UNKNOWN"))
       ),
+    test("subagentEntries fails with SubAgentNotFound when a meta.json has no transcript"):
+      for
+        fx <- fixture
+        archive = fx.archive
+        config  = fx.config
+        orphanTool = "toolu_ORPHAN"
+        _ <- ZIO.attempt:
+               val subagents =
+                 config.vendorProjectsDir / "-home-tester-proj" / sessionId / "subagents"
+               os.write(
+                 subagents / "agent-orphan.meta.json",
+                 s"""{"agentType":"general-purpose","description":"gone","toolUseId":"$orphanTool"}"""
+               )
+        result <- archive
+                    .subagentEntries(sessionId, orphanTool)
+                    .runCollect
+                    .either
+      yield assertTrue(result == Left(SubAgentNotFound(sessionId, orphanTool))),
     test("mirror fails with SessionNotFound for an absent session"):
       for
         fx <- fixture
@@ -155,6 +173,53 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
         second.extended.isEmpty,
         second.refreshed.isEmpty
       ) && assertMirrorMatchesSource(config),
+    test("mirror skips an equal-size content change, leaving the archive stale"):
+      // Size is the only signal, so a same-length edit is invisible to the
+      // mirror: it is skipped and the archived copy stays byte-divergent.
+      for
+        fx <- fixture
+        archive = fx.archive
+        config  = fx.config
+        _                 <- archive.mirror(sessionId)
+        projectDir = config.vendorProjectsDir / "-home-tester-proj"
+        mainPath   = projectDir / s"$sessionId.jsonl"
+        _ <- ZIO.attempt:
+               val edited = os.read(mainPath).replace("first", "FIRST")
+               os.write.over(mainPath, edited)
+        report <- archive.mirror(sessionId)
+      yield
+        val archivedMain = config.archiveDir / s"$sessionId.jsonl"
+        assertTrue(
+          report.skipped.contains(os.sub / s"$sessionId.jsonl"),
+          !java.util.Arrays.equals(
+            os.read.bytes(mainPath),
+            os.read.bytes(archivedMain)
+          )
+        ),
+    test("mirror keeps a vendor-pruned sub-agent file in the archive"):
+      for
+        fx <- fixture
+        archive = fx.archive
+        config  = fx.config
+        _                 <- archive.mirror(sessionId)
+        subagents = config.vendorProjectsDir / "-home-tester-proj" /
+          sessionId / "subagents"
+        archivedAgent = config.archiveDir / sessionId / "subagents" /
+          "agent-abc.jsonl"
+        archivedMeta = config.archiveDir / sessionId / "subagents" /
+          "agent-abc.meta.json"
+        agentSnapshot <- ZIO.attempt(os.read.bytes(archivedAgent))
+        metaSnapshot  <- ZIO.attempt(os.read.bytes(archivedMeta))
+        _ <- ZIO.attempt:
+               os.remove.all(subagents / "agent-abc.jsonl")
+               os.remove.all(subagents / "agent-abc.meta.json")
+        _ <- archive.mirror(sessionId)
+      yield assertTrue(
+        os.exists(archivedAgent),
+        java.util.Arrays.equals(os.read.bytes(archivedAgent), agentSnapshot),
+        os.exists(archivedMeta),
+        java.util.Arrays.equals(os.read.bytes(archivedMeta), metaSnapshot)
+      ),
     test("mirror appends when the source strictly extends the mirrored prefix"):
       for
         fx <- fixture
@@ -188,6 +253,32 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
         report.refreshed == Seq(os.sub / s"$sessionId.jsonl"),
         report.extended.isEmpty
       ) && assertMirrorMatchesSource(config),
+    test("mirror records a per-file copy failure instead of aborting the run"):
+      // A blocker file where the sub-agents directory must go makes the
+      // sub-agent copies fail while the main transcript still mirrors. The run
+      // reports the failures rather than throwing away all progress.
+      for
+        fx <- fixture
+        archive = fx.archive
+        config  = fx.config
+        _ <- ZIO.attempt(
+               os.write(
+                 config.archiveDir / sessionId / "subagents",
+                 "blocker",
+                 createFolders = true
+               )
+             )
+        result <- archive.mirror(sessionId).either
+      yield assertTrue(result.isRight) && (result match
+        case Right(report) =>
+          assertTrue(
+            report.copied.contains(os.sub / s"$sessionId.jsonl"),
+            report.failed
+              .map(_._1)
+              .contains(os.sub / sessionId / "subagents" / "agent-abc.jsonl")
+          )
+        case Left(_) => assertTrue(false)
+      ),
     test("mirror recopies when a grown source diverges from the mirrored prefix"):
       for
         fx <- fixture

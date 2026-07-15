@@ -36,7 +36,29 @@ class SubAgentMetadataParserTest extends FunSuite:
         assertEquals(meta.agentId, "agent-abc123")
         assertEquals(meta.agentType, None)
         assertEquals(meta.description, None)
+        assertEquals(meta.toolUseId, None)
         assertEquals(meta.transcriptPath, transcriptPath)
+      case None => fail("Expected Some(SubAgentMetadata)")
+
+  test("JSON with toolUseId returns Some with the parsed tool_use id"):
+    val json = parser
+      .parse("""{"toolUseId": "toolu_01RKfPARENT"}""")
+      .getOrElse(fail("parse failed"))
+    val result = SubAgentMetadataParser.parse(json, transcriptPath)
+    result match
+      case Some(meta) => assertEquals(meta.toolUseId, Some("toolu_01RKfPARENT"))
+      case None       => fail("Expected Some(SubAgentMetadata)")
+
+  test("toolUseId is extracted from real-world .meta.json alongside other fields"):
+    val json = parser
+      .parse("""{"agentType":"general-purpose","description":"probe","toolUseId":"toolu_01RKfPARENT"}""")
+      .getOrElse(fail("parse failed"))
+    val result = SubAgentMetadataParser.parse(json, transcriptPath)
+    result match
+      case Some(meta) =>
+        assertEquals(meta.agentType, Some("general-purpose"))
+        assertEquals(meta.description, Some("probe"))
+        assertEquals(meta.toolUseId, Some("toolu_01RKfPARENT"))
       case None => fail("Expected Some(SubAgentMetadata)")
 
   test("JSON with only agentType and description returns Some"):

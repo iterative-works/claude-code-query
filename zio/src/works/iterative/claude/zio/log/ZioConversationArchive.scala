@@ -17,7 +17,6 @@ import works.iterative.claude.core.log.SubAgentNotFound
 import works.iterative.claude.core.log.model.ConversationLogEntry
 import works.iterative.claude.core.log.model.MirrorReport
 import works.iterative.claude.core.log.model.SessionRecord
-import works.iterative.claude.core.log.parsing.SubAgentMetadataParser
 
 class ZioConversationArchive private (config: ArchiveConfig)
     extends ConversationArchive[[A] =>> IO[ArchiveError, A]]:
@@ -25,6 +24,11 @@ class ZioConversationArchive private (config: ArchiveConfig)
   type EntryStream = ZStream[Any, ArchiveError, ConversationLogEntry]
 
   private val reader = ZioConversationLogReader()
+
+  // Sub-agent discovery reuses the index's tested join. Only `listSubAgents`
+  // is called, and it takes the project path explicitly, so the override and
+  // home passed here are irrelevant.
+  private val index = ZioConversationLogIndex.make(None, os.home)
 
   def forSession(sessionId: String): IO[ArchiveError, Option[SessionRecord]] =
     ZIO
@@ -69,49 +73,44 @@ class ZioConversationArchive private (config: ArchiveConfig)
       sessionId: String,
       parentToolUseId: String
   ): IO[ArchiveError, Option[os.Path]] =
-    ZIO
-      .attemptBlocking:
-        val subagentsDir = ArchivePaths.treeDir(config, sessionId) / "subagents"
-        if !(os.exists(subagentsDir) && os.isDir(subagentsDir)) then None
-        else
-          os.list(subagentsDir)
-            .filter: path =>
-              val name = path.last
-              os.isFile(path) && name.startsWith("agent-") && name.endsWith(
-                ".meta.json"
-              )
-            .flatMap: metaPath =>
-              val transcript =
-                metaPath / os.up / s"${metaPath.last.stripSuffix(".meta.json")}.jsonl"
-              io.circe.parser
-                .parse(os.read(metaPath))
-                .toOption
-                .flatMap(SubAgentMetadataParser.parse(_, transcript))
-            .find(_.toolUseId.contains(parentToolUseId))
-            .map(_.transcriptPath)
+    index
+      .listSubAgents(ArchivePaths.projectDir(config), sessionId)
       .mapError(toArchiveError)
+      .map(
+        _.find(_.toolUseId.contains(parentToolUseId)).map(_.transcriptPath)
+      )
 
   private def runMirror(record: SessionRecord): MirrorReport =
     val projectDir = ArchivePaths.projectDir(config)
     val source = listing(sourceFiles(record), projectDir)
     val mirror = listing(mirrorFiles(record), config.archiveDir)
     val plan = MirrorPlanner.plan(source, mirror)
-    plan.actions.foldLeft(MirrorReport(Nil, Nil, Nil, Nil)): (report, action) =>
+    plan.actions.foldLeft(MirrorReport.empty): (report, action) =>
+      def guarded(rel: os.SubPath)(onSuccess: => MirrorReport): MirrorReport =
+        scala.util.Try(onSuccess) match
+          case scala.util.Success(updated) => updated
+          case scala.util.Failure(cause)   =>
+            report.copy(failed =
+              report.failed :+ (rel -> failureMessage(cause))
+            )
       action match
         case MirrorAction.Skip(rel) =>
           report.copy(skipped = report.skipped :+ rel)
         case MirrorAction.Copy(rel) =>
-          copyWhole(projectDir / rel, config.archiveDir / rel)
-          report.copy(copied = report.copied :+ rel)
+          guarded(rel):
+            copyWhole(projectDir / rel, config.archiveDir / rel)
+            report.copy(copied = report.copied :+ rel)
         case MirrorAction.Recopy(rel) =>
-          copyWhole(projectDir / rel, config.archiveDir / rel)
-          report.copy(refreshed = report.refreshed :+ rel)
-        case MirrorAction.Extend(rel, _) =>
-          if extendInPlace(projectDir / rel, config.archiveDir / rel) then
-            report.copy(extended = report.extended :+ rel)
-          else
+          guarded(rel):
             copyWhole(projectDir / rel, config.archiveDir / rel)
             report.copy(refreshed = report.refreshed :+ rel)
+        case MirrorAction.Extend(rel, _) =>
+          guarded(rel):
+            if extendInPlace(projectDir / rel, config.archiveDir / rel) then
+              report.copy(extended = report.extended :+ rel)
+            else
+              copyWhole(projectDir / rel, config.archiveDir / rel)
+              report.copy(refreshed = report.refreshed :+ rel)
 
   private def sourceFiles(record: SessionRecord): Seq[os.Path] =
     val tree =
@@ -154,6 +153,9 @@ class ZioConversationArchive private (config: ArchiveConfig)
       os.write.append(dest, sourceBytes.drop(mirrorBytes.length))
       true
     else false
+
+  private def failureMessage(cause: Throwable): String =
+    Option(cause.getMessage).getOrElse(cause.toString)
 
   private def toArchiveError(t: Throwable): ArchiveError =
     t match

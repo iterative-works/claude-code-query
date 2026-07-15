@@ -1,5 +1,5 @@
 // PURPOSE: Outcome of a mirror run, listing which tree files were copied, extended, refreshed, skipped
-// PURPOSE: Reflects what actually happened, including extends that degraded to a full recopy
+// PURPOSE: Reflects what actually happened, including per-file failures that left the archive partial
 
 package works.iterative.claude.core.log.model
 
@@ -13,15 +13,28 @@ package works.iterative.claude.core.log.model
   *   files recopied whole because they shrank or their mirrored prefix diverged
   * @param skipped
   *   files left untouched because source and mirror sizes matched
+  * @param failed
+  *   files whose copy failed mid-run (e.g. the vendor deleted or truncated them
+  *   between listing and copy), paired with the failure message. Other files
+  *   are still mirrored; a later run retries these because the mirror is
+  *   idempotent.
   */
 case class MirrorReport(
     copied: Seq[os.SubPath],
     extended: Seq[os.SubPath],
     refreshed: Seq[os.SubPath],
-    skipped: Seq[os.SubPath]
+    skipped: Seq[os.SubPath],
+    failed: Seq[(os.SubPath, String)] = Nil
 ):
   def isEmpty: Boolean =
-    copied.isEmpty && extended.isEmpty && refreshed.isEmpty && skipped.isEmpty
+    copied.isEmpty && extended.isEmpty && refreshed.isEmpty &&
+      skipped.isEmpty && failed.isEmpty
 
   /** Total number of files the run considered. */
-  def total: Int = copied.size + extended.size + refreshed.size + skipped.size
+  def total: Int =
+    copied.size + extended.size + refreshed.size + skipped.size + failed.size
+
+object MirrorReport:
+
+  /** A report before any action has been applied. */
+  val empty: MirrorReport = MirrorReport(Nil, Nil, Nil, Nil, Nil)
