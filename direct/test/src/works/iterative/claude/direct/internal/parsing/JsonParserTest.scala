@@ -7,6 +7,7 @@ import works.iterative.claude.core.model.*
 import works.iterative.claude.direct.internal.parsing.JsonParser
 import works.iterative.claude.direct.Logger
 import works.iterative.claude.direct.internal.testing.TestConstants
+import io.circe.Json
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalacheck.Prop.forAll
 
@@ -261,6 +262,22 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
       serviceTier
     )
 
+    // Generator for PermissionDenial wire entries (raw denial JSON objects)
+    val permissionDenialGen: Gen[PermissionDenial] = for {
+      toolName <- Gen.alphaNumStr.suchThat(_.nonEmpty)
+      toolInput <- Gen.oneOf(
+        Json.fromString("deny"),
+        Json.fromInt(3),
+        Json.obj("command" -> Json.fromString("rm -rf /")),
+        Json.obj("nested" -> Json.obj("path" -> Json.fromString("/etc")))
+      )
+    } yield PermissionDenial(
+      Json.obj(
+        "tool_name" -> Json.fromString(toolName),
+        "tool_input" -> toolInput
+      )
+    )
+
     // Generator for ResultTimings
     val resultTimingsGen: Gen[ResultTimings] = for {
       ttftMs <- Gen.option(Gen.choose(0, 60000))
@@ -298,6 +315,9 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
       )
       stopReason <- Gen.option(Gen.alphaNumStr.suchThat(_.nonEmpty))
       terminalReason <- Gen.option(Gen.alphaNumStr.suchThat(_.nonEmpty))
+      permissionDenials <- Gen
+        .choose(0, 3)
+        .flatMap(Gen.listOfN(_, permissionDenialGen))
       apiErrorStatus <- Gen.option(Gen.alphaNumStr.suchThat(_.nonEmpty))
       timings <- resultTimingsGen
     } yield ResultMessage(
@@ -314,7 +334,7 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
       origin,
       stopReason,
       terminalReason,
-      Nil,
+      permissionDenials,
       apiErrorStatus,
       timings
     )
