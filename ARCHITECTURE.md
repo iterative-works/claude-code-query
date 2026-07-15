@@ -129,7 +129,7 @@ A ZIO-native API using `ZIO` and `ZStream`, for applications built on the ZIO ec
 - `query(options: QueryOptions): ZStream[Any, CLIError, Message]` - Streaming messages
 - `querySync(options: QueryOptions): IO[CLIError, List[Message]]` - Collects all messages
 - `queryResult(options: QueryOptions): IO[CLIError, String]` - Extracted text result
-- `session(options: SessionOptions): ZIO[Scope, CLIError, Session]` - Scoped multi-turn session
+- `session(options, archive?, eventsBufferSize?): ZIO[Scope, CLIError, Session]` - Scoped session
 
 **Architecture Features**:
 - **Typed Errors**: Failures are surfaced through a typed `CLIError` channel, not as exceptions
@@ -137,6 +137,46 @@ A ZIO-native API using `ZIO` and `ZStream`, for applications built on the ZIO ec
 - **Resource Safety**: Sessions are `Scope`-acquired; finalizers shut down the process deterministically
 - **Subprocess Management**: Uses `zio-process` for spawning the CLI and streaming stdout/stderr
 - **Built-in Logging**: Uses ZIO's runtime logging (`ZIO.log*`); no logger is threaded through the API
+
+#### Session: a stream, not turns
+
+Per [ADR 0001](docs/adr/0001-session-is-a-stream-not-turns.md), a `Session` is a
+stream of messages plus a way to inject input. The CLI owns turn boundaries
+(it emits results with no send in flight, and merges a mid-turn send into the
+running turn), so turns are not modelled — there is no `Turn`, `TurnId`, or
+per-send promise. `query`/`ask`/`queryResult` keep their one-process/one-result
+framing, where it is honest.
+
+**Session surface** (`works.iterative.claude.zio.Session`):
+- `info: IO[CLIError, SessionInfo]` — the vendor session id, blocking until the
+  CLI names the session (no `"pending"` sentinel); death-guarded and
+  interruptible so it cannot wedge.
+- `send(input: UserInput): IO[CLIError, Unit]` — fire-and-forget; encodes the
+  input as a content-block array (injection-safe) and returns when written.
+- `interrupt: IO[CLIError, InterruptOutcome]` — a **real** stop via the vendor
+  control protocol (`control_request`/`control_response` correlated by
+  `request_id`); the session survives.
+- `events: ZStream[Any, Nothing, Message]` — the live view, fanned out from a
+  Hub. **Lossy by contract** (bounded sliding, `eventsBufferSize`); for
+  rendering only.
+- `state` / `stateChanges` / `terminated` — completion is READABLE STATE, not a
+  delivered event. `SessionState.resultsSeen` is a monotone counter of real
+  (origin-absent) results; origin-present results bump `notificationsSeen`
+  instead, so a background task finishing cannot wake a completion waiter.
+- `awaitResultAfter(seen)` / `sendAndAwait(input)` — wait on the monotone
+  predicate `resultsSeen > seen`. Because the counter never decreases and is
+  read (not delivered), a result that lands before the wait still returns
+  immediately: the completion race is closed, not narrowed. Death is raced in,
+  so a waiter fails rather than hangs.
+
+**Internals** (`internal/cli/SessionProcess`): ONE reader fiber owns stdout —
+it parses each line, captures the session id, routes control responses to their
+waiting `request_id`, folds results into the readable `SessionState` (pure
+`SessionState.fold`), and fans every message out over the Hub. This resolves the
+old undocumented exactly-one-consumer constraint of `ZStream.fromQueue` by
+construction. An optional `SessionArchiveHook` mirrors the vendor transcript
+tree after each result and on close — best-effort, so a mirror failure is logged
+and never breaks the session.
 
 ### Shared Architecture Pattern
 

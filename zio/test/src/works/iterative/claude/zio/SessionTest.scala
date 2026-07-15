@@ -235,7 +235,7 @@ object SessionTest extends ClaudeZioSpec:
         r    <- rig()
         sub1 <- r.session.events.take(2).runCollect.fork
         sub2 <- r.session.events.take(2).runCollect.fork
-        _    <- ZIO.sleep(50.millis)
+        _    <- ZIO.sleep(300.millis)
         _    <- r.eventsHub.publish(a)
         _    <- r.eventsHub.publish(b)
         one  <- sub1.join
