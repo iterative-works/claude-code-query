@@ -92,7 +92,7 @@ class ZioConversationArchive private (config: ArchiveConfig)
     val source = listing(sourceFiles(record), projectDir)
     val mirror = listing(mirrorFiles(record), config.archiveDir)
     val plan = MirrorPlanner.plan(source, mirror)
-    plan.actions.foldLeft(MirrorReport.empty): (report, action) =>
+    val report = plan.actions.foldLeft(MirrorReport.empty): (report, action) =>
       def guarded(rel: os.SubPath)(onSuccess: => MirrorReport): MirrorReport =
         scala.util.Try(onSuccess) match
           case scala.util.Success(updated) => updated
@@ -118,11 +118,32 @@ class ZioConversationArchive private (config: ArchiveConfig)
             else
               copyWhole(projectDir / rel, config.archiveDir / rel)
               report.copy(refreshed = report.refreshed :+ rel)
+    restrictArchiveDirs()
+    report
+
+  private val isPosix: Boolean =
+    java.nio.file.FileSystems.getDefault.supportedFileAttributeViews
+      .contains("posix")
+
+  // Vendor transcripts are copied 0600, but os.copy.over creates any missing
+  // parent directories with umask perms, leaking the archive's structure to
+  // other local users. Restrict the archive directory tree to the owner.
+  private def restrictArchiveDirs(): Unit =
+    if isPosix && os.exists(config.archiveDir) then
+      val ownerOnly = os.PermSet.fromString("rwx------")
+      val dirs = config.archiveDir +:
+        os.walk(config.archiveDir).filter(os.isDir(_, followLinks = false))
+      dirs.foreach(dir => os.perms.set(dir, ownerOnly))
+
+  // Symlinks are excluded from both listings: the archive is a faithful copy of
+  // the session's own regular files only, never the content a link points at.
+  private def regularFile(path: os.Path): Boolean =
+    !os.isLink(path) && os.isFile(path)
 
   private def sourceFiles(record: SessionRecord): Seq[os.Path] =
     val tree =
       if os.exists(record.treeDir) then
-        os.walk(record.treeDir).filter(os.isFile)
+        os.walk(record.treeDir).filter(regularFile)
       else Seq.empty
     record.mainTranscript +: tree
 
@@ -131,7 +152,7 @@ class ZioConversationArchive private (config: ArchiveConfig)
     val tree = config.archiveDir / record.sessionId.value
     val mainFiles = if os.exists(main) then Seq(main) else Seq.empty
     val treeFiles =
-      if os.exists(tree) then os.walk(tree).filter(os.isFile) else Seq.empty
+      if os.exists(tree) then os.walk(tree).filter(regularFile) else Seq.empty
     mainFiles ++ treeFiles
 
   private def listing(

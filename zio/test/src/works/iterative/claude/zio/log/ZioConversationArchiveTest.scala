@@ -55,6 +55,10 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
       os.write(subagents / "agent-abc.meta.json", subAgentMeta)
       Fixture(ZioConversationArchive(config), config)
 
+  private val isPosixFs: Boolean =
+    java.nio.file.FileSystems.getDefault.supportedFileAttributeViews
+      .contains("posix")
+
   private def relFilesUnder(root: os.Path): Set[os.SubPath] =
     if !os.exists(root) then Set.empty
     else os.walk(root).filter(os.isFile).map(_.subRelativeTo(root)).toSet
@@ -324,5 +328,39 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
       yield assertTrue(
         report.refreshed == Seq(os.sub / s"$sessionId.jsonl"),
         report.extended.isEmpty
-      ) && assertMirrorMatchesSource(config)
+      ) && assertMirrorMatchesSource(config),
+    test("mirror does not follow a symlink in the vendor tree"):
+      for
+        fx <- fixture
+        archive = fx.archive
+        config  = fx.config
+        _ <- ZIO.attempt:
+               val outside = os.temp.dir() / "outside.jsonl"
+               os.write(outside, "SECRET OUTSIDE THE TREE\n")
+               val subagents =
+                 config.vendorProjectsDir / "-home-tester-proj" / sessionId /
+                   "subagents"
+               os.symlink(subagents / "leak.jsonl", outside)
+        report <- archive.mirror(SessionId(sessionId))
+      yield assertTrue(
+        // The symlink is neither planned nor copied into the archive.
+        report.total > 0,
+        !report.copied.exists(_.last == "leak.jsonl"),
+        !os.exists(
+          config.archiveDir / sessionId / "subagents" / "leak.jsonl",
+          followLinks = false
+        )
+      ),
+    test("mirror restricts the archive directory tree to owner-only on POSIX"):
+      for
+        fx <- fixture
+        archive = fx.archive
+        config  = fx.config
+        _ <- archive.mirror(SessionId(sessionId))
+      yield
+        if !isPosixFs then assertTrue(true)
+        else
+          val dirs = config.archiveDir +:
+            os.walk(config.archiveDir).filter(os.isDir(_, followLinks = false))
+          assertTrue(dirs.forall(d => os.perms(d).toString == "rwx------"))
   )
