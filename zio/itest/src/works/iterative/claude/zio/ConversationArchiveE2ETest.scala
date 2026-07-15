@@ -12,7 +12,7 @@ import works.iterative.claude.zio.log.ZioConversationArchive
 
 object ConversationArchiveE2ETest extends ClaudeZioSpec:
 
-  private def sessionIdOf(messages: Seq[Message]): Option[String] =
+  private def sessionIdOf(messages: Seq[Message]): Option[SessionId] =
     messages.collectFirst { case r: ResultMessage => r.sessionId }
 
   def spec = suite("ConversationArchive (e2e, real CLI)")(
@@ -34,7 +34,7 @@ object ConversationArchiveE2ETest extends ClaudeZioSpec:
                          new RuntimeException("no session id in CLI result")
                        )
         config  = ArchiveConfig(configDir / "projects", archiveDir, workDir)
-        archive = ZioConversationArchive.make(config)
+        archive = ZioConversationArchive(config)
         located <- archive.forSession(sessionId)
         entries <- archive.entries(sessionId).runCollect
         report  <- archive.mirror(sessionId)

@@ -19,7 +19,7 @@ object ZioPackageReexportTest extends ClaudeZioSpec:
         UserMessage("h"),
         AssistantMessage(Nil),
         SystemMessage("init", Map.empty),
-        ResultMessage("s", 1, 1, false, 1, "id")
+        ResultMessage("s", 1, 1, false, 1, SessionId("id"))
       )
       assertTrue(messages.size == 4),
     test("re-exports the ContentBlock types"):
@@ -65,19 +65,19 @@ object ZioPackageReexportTest extends ClaudeZioSpec:
     test("re-exports the wire message model additions"):
       val id = MessageId("uuid-1")
       val unknown = UnknownMessage("rate_limit_event", io.circe.Json.Null)
-      val control = ControlResponse("req-1", "success", io.circe.Json.Null)
+      val control = ControlResponse(RequestId("req-1"), "success", io.circe.Json.Null)
       val origin: ResultOrigin = ResultOrigin.TaskNotification
       val denial = PermissionDenial(io.circe.Json.Null)
       val timings = ResultTimings(Some(1), None, None)
-      val request = ControlRequest("req-1", ControlRequestBody.Interrupt)
+      val request = ControlRequest(RequestId("req-1"), ControlRequestBody.Interrupt)
       assertTrue(
         id.value == "uuid-1",
         unknown.messageType == "rate_limit_event",
-        control.requestId == "req-1",
+        control.requestId.value == "req-1",
         origin == ResultOrigin.TaskNotification,
         denial.json == io.circe.Json.Null,
         timings.ttftMs == Some(1),
-        request.requestId == "req-1"
+        request.requestId.value == "req-1"
       ),
     test("re-exports the log service traits"):
       val _ : Class[ConversationLogIndex[?]]  = classOf[ConversationLogIndex[?]]

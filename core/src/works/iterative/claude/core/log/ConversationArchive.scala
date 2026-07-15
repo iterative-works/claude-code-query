@@ -5,6 +5,7 @@ package works.iterative.claude.core.log
 
 import works.iterative.claude.core.log.model.MirrorReport
 import works.iterative.claude.core.log.model.SessionRecord
+import works.iterative.claude.core.model.SessionId
 
 /** Custody of a session's vendor record: locate it, read its conversation
   * entries (main thread and sub-agent sidechains), and mirror the whole tree
@@ -27,17 +28,20 @@ trait ConversationArchive[F[_]]:
   /** Locates a session by encoding the configured cwd; `None` when no main
     * transcript exists for the id.
     */
-  def forSession(sessionId: String): F[Option[SessionRecord]]
+  def forSession(sessionId: SessionId): F[Option[SessionRecord]]
 
   /** Streams the main-thread entries of a session. */
-  def entries(sessionId: String): EntryStream
+  def entries(sessionId: SessionId): EntryStream
 
   /** Streams a sub-agent's own sidechain entries, joined to its parent by the
     * `tool_use` id recorded in the sub-agent's `.meta.json`.
     */
-  def subagentEntries(sessionId: String, parentToolUseId: String): EntryStream
+  def subagentEntries(
+      sessionId: SessionId,
+      parentToolUseId: String
+  ): EntryStream
 
   /** Idempotently mirrors the whole session tree into the archive directory,
     * reporting what was copied, extended, refreshed, and skipped.
     */
-  def mirror(sessionId: String): F[MirrorReport]
+  def mirror(sessionId: SessionId): F[MirrorReport]

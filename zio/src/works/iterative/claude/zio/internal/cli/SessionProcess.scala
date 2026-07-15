@@ -51,11 +51,11 @@ object SessionProcess:
       eventsHub <- Hub.sliding[Message](eventsBufferSize)
       stateChangesHub <- Hub.sliding[SessionState](eventsBufferSize)
       stateRef <- Ref.make(SessionState.initial)
-      sessionIdRef <- Ref.make(Option.empty[String])
+      sessionIdRef <- Ref.make(Option.empty[SessionId])
       idKnown <- Promise.make[Nothing, Unit]
       terminated <- Promise.make[Nothing, SessionEnd]
       pendingRequests <-
-        Ref.make(Map.empty[String, Promise[CLIError, ControlResponse]])
+        Ref.make(Map.empty[RequestId, Promise[CLIError, ControlResponse]])
       requestCounter <- Ref.make(0L)
       aliveRef <- Ref.make(true)
       process <- buildCommand(executablePath, args, options, stdinQueue).run
@@ -98,10 +98,10 @@ object SessionProcess:
       eventsHub: Hub[Message],
       stateChangesHub: Hub[SessionState],
       stateRef: Ref[SessionState],
-      sessionIdRef: Ref[Option[String]],
+      sessionIdRef: Ref[Option[SessionId]],
       idKnown: Promise[Nothing, Unit],
       terminated: Promise[Nothing, SessionEnd],
-      pendingRequests: Ref[Map[String, Promise[CLIError, ControlResponse]]],
+      pendingRequests: Ref[Map[RequestId, Promise[CLIError, ControlResponse]]],
       requestCounter: Ref[Long],
       aliveRef: Ref[Boolean]
   ): Session =
@@ -143,10 +143,10 @@ object SessionProcess:
       eventsHub: Hub[Message],
       stateChangesHub: Hub[SessionState],
       stateRef: Ref[SessionState],
-      sessionIdRef: Ref[Option[String]],
+      sessionIdRef: Ref[Option[SessionId]],
       idKnown: Promise[Nothing, Unit],
       terminated: Promise[Nothing, SessionEnd],
-      pendingRequests: Ref[Map[String, Promise[CLIError, ControlResponse]]],
+      pendingRequests: Ref[Map[RequestId, Promise[CLIError, ControlResponse]]],
       aliveRef: Ref[Boolean],
       archiveHook: SessionArchiveHook
   ): UIO[Unit] =
@@ -194,9 +194,9 @@ object SessionProcess:
       eventsHub: Hub[Message],
       stateChangesHub: Hub[SessionState],
       stateRef: Ref[SessionState],
-      sessionIdRef: Ref[Option[String]],
+      sessionIdRef: Ref[Option[SessionId]],
       idKnown: Promise[Nothing, Unit],
-      pendingRequests: Ref[Map[String, Promise[CLIError, ControlResponse]]],
+      pendingRequests: Ref[Map[RequestId, Promise[CLIError, ControlResponse]]],
       archiveHook: SessionArchiveHook
   ): UIO[Unit] =
     for
@@ -218,7 +218,7 @@ object SessionProcess:
     */
   private def captureSessionId(
       message: Message,
-      sessionIdRef: Ref[Option[String]],
+      sessionIdRef: Ref[Option[SessionId]],
       idKnown: Promise[Nothing, Unit]
   ): UIO[Unit] =
     message match
@@ -228,15 +228,15 @@ object SessionProcess:
         // id is known without waiting for a turn (the CLI emits `init` only
         // after the first user message).
         data.get("session_id").map(_.toString) match
-          case Some(id) => setSessionId(id, sessionIdRef, idKnown)
+          case Some(id) => setSessionId(SessionId(id), sessionIdRef, idKnown)
           case None     => ZIO.unit
       case result: ResultMessage =>
         setSessionId(result.sessionId, sessionIdRef, idKnown)
       case _ => ZIO.unit
 
   private def setSessionId(
-      id: String,
-      sessionIdRef: Ref[Option[String]],
+      id: SessionId,
+      sessionIdRef: Ref[Option[SessionId]],
       idKnown: Promise[Nothing, Unit]
   ): UIO[Unit] =
     sessionIdRef.get.flatMap:
@@ -248,7 +248,7 @@ object SessionProcess:
 
   private def routeControlResponse(
       message: Message,
-      pendingRequests: Ref[Map[String, Promise[CLIError, ControlResponse]]]
+      pendingRequests: Ref[Map[RequestId, Promise[CLIError, ControlResponse]]]
   ): UIO[Unit] =
     message match
       case response: ControlResponse =>
@@ -266,7 +266,7 @@ object SessionProcess:
       message: Message,
       stateChangesHub: Hub[SessionState],
       stateRef: Ref[SessionState],
-      sessionIdRef: Ref[Option[String]],
+      sessionIdRef: Ref[Option[SessionId]],
       archiveHook: SessionArchiveHook
   ): UIO[Unit] =
     for
@@ -292,9 +292,9 @@ object SessionProcess:
       process: Process,
       stateChangesHub: Hub[SessionState],
       stateRef: Ref[SessionState],
-      sessionIdRef: Ref[Option[String]],
+      sessionIdRef: Ref[Option[SessionId]],
       terminated: Promise[Nothing, SessionEnd],
-      pendingRequests: Ref[Map[String, Promise[CLIError, ControlResponse]]],
+      pendingRequests: Ref[Map[RequestId, Promise[CLIError, ControlResponse]]],
       aliveRef: Ref[Boolean],
       eventsHub: Hub[Message],
       archiveHook: SessionArchiveHook
@@ -318,7 +318,7 @@ object SessionProcess:
     yield ()
 
   private def failPendingRequests(
-      pendingRequests: Ref[Map[String, Promise[CLIError, ControlResponse]]],
+      pendingRequests: Ref[Map[RequestId, Promise[CLIError, ControlResponse]]],
       error: Option[CLIError],
       exitCode: Option[Int]
   ): UIO[Unit] =
@@ -357,10 +357,10 @@ private final class SessionImpl(
     eventsHub: Hub[Message],
     stateChangesHub: Hub[SessionState],
     stateRef: Ref[SessionState],
-    sessionIdRef: Ref[Option[String]],
+    sessionIdRef: Ref[Option[SessionId]],
     idKnown: Promise[Nothing, Unit],
     terminatedPromise: Promise[Nothing, SessionEnd],
-    pendingRequests: Ref[Map[String, Promise[CLIError, ControlResponse]]],
+    pendingRequests: Ref[Map[RequestId, Promise[CLIError, ControlResponse]]],
     requestCounter: Ref[Long],
     aliveRef: Ref[Boolean]
 ) extends Session:
@@ -385,7 +385,8 @@ private final class SessionImpl(
             // the process IS the session — so an empty value is accepted until
             // the id is known.
             sessionIdRef.get.flatMap: idOpt =>
-              val line = SessionStdin.userInputLine(input, idOpt.getOrElse(""))
+              val line =
+                SessionStdin.userInputLine(input, idOpt.map(_.value).getOrElse(""))
               ZIO.logDebug(s"Writing user input to stdin: ${line.trim}")
                 *> offer(line)
 
@@ -395,7 +396,7 @@ private final class SessionImpl(
       case true  =>
         for
           n <- requestCounter.updateAndGet(_ + 1)
-          requestId = s"req-$n"
+          requestId = RequestId(s"req-$n")
           promise <- Promise.make[CLIError, ControlResponse]
           _ <- pendingRequests.update(_ + (requestId -> promise))
           // recordEnd flips `aliveRef` to false strictly before it drains the
@@ -475,7 +476,7 @@ private final class SessionImpl(
     * interrupt the losing branch — an uninterruptible losing `await` would wedge
     * it forever. This is the same hazard commit 21594a3 fixed for the init read.
     */
-  private def requireSessionId: IO[CLIError, String] =
+  private def requireSessionId: IO[CLIError, SessionId] =
     sessionIdRef.get.flatMap:
       case Some(id) => ZIO.succeed(id)
       case None     =>

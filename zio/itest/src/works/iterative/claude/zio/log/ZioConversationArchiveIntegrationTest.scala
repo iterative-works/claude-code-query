@@ -6,6 +6,7 @@ package works.iterative.claude.zio.log
 import zio.*
 import zio.test.*
 import works.iterative.claude.core.log.ArchiveConfig
+import works.iterative.claude.core.model.SessionId
 import works.iterative.claude.zio.internal.testing.ClaudeZioSpec
 
 object ZioConversationArchiveIntegrationTest extends ClaudeZioSpec:
@@ -60,20 +61,20 @@ object ZioConversationArchiveIntegrationTest extends ClaudeZioSpec:
     test("locate, read, join, and mirror a whole session tree, then keep it current"):
       for
         config  <- buildVendorTree
-        archive  = ZioConversationArchive.make(config)
+        archive  = ZioConversationArchive(config)
 
         // locate
-        located <- archive.forSession(sessionId)
+        located <- archive.forSession(SessionId(sessionId))
 
         // read main + sub-agent sidechain
-        main    <- archive.entries(sessionId).runCollect
-        sub     <- archive.subagentEntries(sessionId, toolUseId).runCollect
+        main    <- archive.entries(SessionId(sessionId)).runCollect
+        sub     <- archive.subagentEntries(SessionId(sessionId), toolUseId).runCollect
 
         // mirror the whole tree
-        first   <- archive.mirror(sessionId)
+        first   <- archive.mirror(SessionId(sessionId))
 
         // idempotent second run
-        second  <- archive.mirror(sessionId)
+        second  <- archive.mirror(SessionId(sessionId))
 
         // source strictly extended -> mirror catches up by appending
         projectDir = config.vendorProjectsDir / encoded
@@ -83,8 +84,8 @@ object ZioConversationArchiveIntegrationTest extends ClaudeZioSpec:
                        line("m3", false) + "\n"
                      )
                    )
-        extend  <- archive.mirror(sessionId)
-        afterExtend <- archive.entries(sessionId).runCollect
+        extend  <- archive.mirror(SessionId(sessionId))
+        afterExtend <- archive.entries(SessionId(sessionId)).runCollect
 
         // source shrinks -> full recopy fallback
         _       <- ZIO.attempt(
@@ -93,9 +94,9 @@ object ZioConversationArchiveIntegrationTest extends ClaudeZioSpec:
                        line("m1", false) + "\n"
                      )
                    )
-        shrink  <- archive.mirror(sessionId)
+        shrink  <- archive.mirror(SessionId(sessionId))
       yield assertTrue(
-        located.exists(_.sessionId == sessionId),
+        located.exists(_.sessionId.value == sessionId),
         main.map(_.uuid.getOrElse("")).toList == List("m1", "m2"),
         sub.map(_.uuid.getOrElse("")).toList == List("s1"),
         first.copied.size == 3,

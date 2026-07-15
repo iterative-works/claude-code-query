@@ -4,6 +4,7 @@
 package works.iterative.claude.core.log
 
 import munit.FunSuite
+import works.iterative.claude.core.model.SessionId
 
 class ArchivePathsTest extends FunSuite:
   private def config(cwd: os.Path): ArchiveConfig =
@@ -32,13 +33,25 @@ class ArchivePathsTest extends FunSuite:
   test("mainTranscript and treeDir hang off the encoded project directory"):
     val c = config(os.Path("/home/mph/proj"))
     assertEquals(
-      ArchivePaths.mainTranscript(c, "sess-1"),
-      os.Path("/vendor/projects/-home-mph-proj/sess-1.jsonl")
+      ArchivePaths.mainTranscript(c, SessionId("sess-1")),
+      Right(os.Path("/vendor/projects/-home-mph-proj/sess-1.jsonl"))
     )
     assertEquals(
-      ArchivePaths.treeDir(c, "sess-1"),
-      os.Path("/vendor/projects/-home-mph-proj/sess-1")
+      ArchivePaths.treeDir(c, SessionId("sess-1")),
+      Right(os.Path("/vendor/projects/-home-mph-proj/sess-1"))
     )
+
+  test("mainTranscript and treeDir reject a traversing id rather than deriving a path"):
+    val c = config(os.Path("/home/mph/proj"))
+    for id <- List("../x", "a/b", "..", "", "a\\b", "/etc/passwd") do
+      assertEquals(
+        ArchivePaths.mainTranscript(c, SessionId(id)),
+        Left(ArchiveError.InvalidSessionId(id))
+      )
+      assertEquals(
+        ArchivePaths.treeDir(c, SessionId(id)),
+        Left(ArchiveError.InvalidSessionId(id))
+      )
 
   test("locating derives vendorProjectsDir from CLAUDE_CONFIG_DIR override"):
     val c = ArchiveConfig.locating(

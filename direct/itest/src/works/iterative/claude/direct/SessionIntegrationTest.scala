@@ -67,7 +67,7 @@ class SessionIntegrationTest extends munit.FunSuite:
           case rm: ResultMessage =>
             assertEquals(rm.subtype, "conversation_result")
             assertEquals(rm.isError, false)
-            assertEquals(rm.sessionId, sessionId)
+            assertEquals(rm.sessionId.value, sessionId)
           case other => fail(s"Expected ResultMessage, got: $other")
       finally session.close()
     }
@@ -318,7 +318,7 @@ class SessionIntegrationTest extends munit.FunSuite:
             assert(texts.exists(_.contains("First turn answer")))
           case other => fail(s"Expected AssistantMessage, got: $other")
         turn1Messages.last match
-          case r: ResultMessage => assertEquals(r.sessionId, turn1SessionId)
+          case r: ResultMessage => assertEquals(r.sessionId.value, turn1SessionId)
           case other            => fail(s"Expected ResultMessage, got: $other")
 
         assertEquals(session.sessionId, turn1SessionId)
@@ -332,7 +332,7 @@ class SessionIntegrationTest extends munit.FunSuite:
             assert(texts.exists(_.contains("Second turn answer")))
           case other => fail(s"Expected AssistantMessage, got: $other")
         turn2Messages.last match
-          case r: ResultMessage => assertEquals(r.sessionId, turn2SessionId)
+          case r: ResultMessage => assertEquals(r.sessionId.value, turn2SessionId)
           case other            => fail(s"Expected ResultMessage, got: $other")
 
         assertEquals(session.sessionId, turn2SessionId)

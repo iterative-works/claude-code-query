@@ -23,17 +23,17 @@ object SessionTest extends ClaudeZioSpec:
       eventsHub: Hub[Message],
       stateChangesHub: Hub[SessionState],
       stateRef: Ref[SessionState],
-      sessionIdRef: Ref[Option[String]],
+      sessionIdRef: Ref[Option[SessionId]],
       idKnown: Promise[Nothing, Unit],
       terminated: Promise[Nothing, SessionEnd],
-      pendingRequests: Ref[Map[String, Promise[CLIError, ControlResponse]]],
+      pendingRequests: Ref[Map[RequestId, Promise[CLIError, ControlResponse]]],
       aliveRef: Ref[Boolean]
   )
 
   private def rig(
       alive: Boolean = true,
       state: SessionState = SessionState.initial,
-      sessionId: Option[String] = Some("sess-1"),
+      sessionId: Option[SessionId] = Some(SessionId("sess-1")),
       idAlreadyKnown: Boolean = true
   ): UIO[Rig] =
     for
@@ -46,7 +46,7 @@ object SessionTest extends ClaudeZioSpec:
       _               <- idKnown.succeed(()).when(idAlreadyKnown)
       terminated      <- Promise.make[Nothing, SessionEnd]
       pendingRequests <-
-        Ref.make(Map.empty[String, Promise[CLIError, ControlResponse]])
+        Ref.make(Map.empty[RequestId, Promise[CLIError, ControlResponse]])
       requestCounter  <- Ref.make(0L)
       aliveRef        <- Ref.make(alive)
     yield Rig(
@@ -79,7 +79,15 @@ object SessionTest extends ClaudeZioSpec:
       isError: Boolean = false,
       sessionId: String = "sess-1"
   ): ResultMessage =
-    ResultMessage("success", 1, 1, isError, 1, sessionId, origin = origin)
+    ResultMessage(
+      "success",
+      1,
+      1,
+      isError,
+      1,
+      SessionId(sessionId),
+      origin = origin
+    )
 
   private def takeLine(queue: Queue[Chunk[Byte]]): UIO[String] =
     queue.take.map(chunk => new String(chunk.toArray, StandardCharsets.UTF_8))
@@ -113,7 +121,7 @@ object SessionTest extends ClaudeZioSpec:
         context = List(ContextItem.Viewing("https://example.test"))
       )
       for
-        r    <- rig(sessionId = Some("sess-1"))
+        r    <- rig(sessionId = Some(SessionId("sess-1")))
         _    <- r.session.send(structured)
         line <- takeLine(r.stdinQueue)
         json  = parser.parse(line).toOption.get
@@ -201,16 +209,16 @@ object SessionTest extends ClaudeZioSpec:
       yield assertTrue(state == s),
     test("info returns the session id once known"):
       for
-        r    <- rig(sessionId = Some("abc"))
+        r    <- rig(sessionId = Some(SessionId("abc")))
         info <- r.session.info
-      yield assertTrue(info == SessionInfo("abc")),
+      yield assertTrue(info == SessionInfo(SessionId("abc"))),
     test("interrupt writes a control_request and returns the routed outcome"):
       for
         r     <- rig()
         fiber <- r.session.interrupt.fork
         line  <- takeLine(r.stdinQueue)
         cursor = parser.parse(line).toOption.get.hcursor
-        requestId = cursor.get[String]("request_id").toOption.get
+        requestId = RequestId(cursor.get[String]("request_id").toOption.get)
         // Simulate the reader routing the vendor's control_response.
         promise <- r.pendingRequests.get.map(_(requestId))
         _       <- promise.succeed(

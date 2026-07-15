@@ -3,6 +3,8 @@
 
 package works.iterative.claude.core.log.model
 
+import works.iterative.claude.core.model.SessionId
+
 /** A located session record.
   *
   * @param sessionId
@@ -14,7 +16,7 @@ package works.iterative.claude.core.log.model
   *   `workflows/`; may not exist when a session spawned no sub-agents
   */
 case class SessionRecord(
-    sessionId: String,
+    sessionId: SessionId,
     mainTranscript: os.Path,
     treeDir: os.Path
 )

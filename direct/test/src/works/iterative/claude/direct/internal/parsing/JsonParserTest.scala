@@ -93,7 +93,7 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
           s""""duration_api_ms":${rm.durationApiMs}""",
           s""""is_error":${rm.isError}""",
           s""""num_turns":${rm.numTurns}""",
-          s""""session_id":${escapeJsonString(rm.sessionId)}"""
+          s""""session_id":${escapeJsonString(rm.sessionId.value)}"""
         ) ++ optionalFields
         s"""{${allFields.mkString(",")}}"""
 
@@ -119,7 +119,7 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
           else s""","response":${payload.noSpaces}"""
         s"""{"type":"control_response","response":{"subtype":${escapeJsonString(
             subtype
-          )},"request_id":${escapeJsonString(requestId)}$payloadField}}"""
+          )},"request_id":${escapeJsonString(requestId.value)}$payloadField}}"""
 
     private def serializeOrigin(origin: ResultOrigin): String = origin match
       case ResultOrigin.TaskNotification => """{"kind":"task-notification"}"""
@@ -326,7 +326,7 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
       durationApiMs,
       isError,
       numTurns,
-      sessionId,
+      SessionId(sessionId),
       totalCostUsd,
       usage,
       result,
@@ -379,7 +379,7 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
         Json.obj("still_queued" -> Json.arr()),
         Json.obj("message" -> Json.fromString("ok"))
       )
-    } yield ControlResponse(requestId, subtype, payload)
+    } yield ControlResponse(RequestId(requestId), subtype, payload)
 
     // Generator for any Message type
     val messageGen: Gen[Message] = Gen.oneOf(
@@ -454,7 +454,7 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
         assertEquals(rm.durationApiMs, 567)
         assertEquals(rm.isError, false)
         assertEquals(rm.numTurns, 1)
-        assertEquals(rm.sessionId, "session_123")
+        assertEquals(rm.sessionId.value, "session_123")
       case other =>
         fail(s"Expected Right(Some(ResultMessage(...))) but got: $other")
   }
@@ -786,7 +786,7 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
         0,
         false,
         0,
-        "",
+        SessionId(""),
         None,
         None,
         Some("")

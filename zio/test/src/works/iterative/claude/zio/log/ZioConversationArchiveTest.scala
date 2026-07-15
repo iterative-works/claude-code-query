@@ -10,6 +10,7 @@ import works.iterative.claude.core.log.ArchiveError
 import works.iterative.claude.core.log.ArchiveError.SessionNotFound
 import works.iterative.claude.core.log.ArchiveError.SubAgentNotFound
 import works.iterative.claude.core.log.model.RawLogEntry
+import works.iterative.claude.core.model.SessionId
 import works.iterative.claude.zio.internal.testing.ClaudeZioSpec
 
 object ZioConversationArchiveTest extends ClaudeZioSpec:
@@ -82,8 +83,8 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
       for
         fx <- fixture
         archive = fx.archive
-        located <- ZIO.foreach(traversals)(id => archive.forSession(id).either)
-        mirrored <- ZIO.foreach(traversals)(id => archive.mirror(id).either)
+        located <- ZIO.foreach(traversals)(id => archive.forSession(SessionId(id)).either)
+        mirrored <- ZIO.foreach(traversals)(id => archive.mirror(SessionId(id)).either)
       yield
         def allRejected(results: List[Either[ArchiveError, ?]]): Boolean =
           results.forall:
@@ -94,8 +95,8 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
       for
         fx <- fixture
         archive = fx.archive
-        bySession <- archive.subagentEntries("../x", parentToolUse).runCollect.either
-        byTool    <- archive.subagentEntries(sessionId, "../x").runCollect.either
+        bySession <- archive.subagentEntries(SessionId("../x"), parentToolUse).runCollect.either
+        byTool    <- archive.subagentEntries(SessionId(sessionId), "../x").runCollect.either
       yield assertTrue(
         bySession == Left(ArchiveError.InvalidSessionId("../x")),
         byTool == Left(ArchiveError.InvalidSessionId("../x"))
@@ -104,10 +105,10 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
       for
         fx <- fixture
         archive = fx.archive
-        found        <- archive.forSession(sessionId)
-        missing      <- archive.forSession("no-such-session")
+        found        <- archive.forSession(SessionId(sessionId))
+        missing      <- archive.forSession(SessionId("no-such-session"))
       yield assertTrue(
-        found.exists(_.sessionId == sessionId),
+        found.exists(_.sessionId.value == sessionId),
         found.exists(_.mainTranscript.last == s"$sessionId.jsonl"),
         missing.isEmpty
       ),
@@ -115,7 +116,7 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
       for
         fx <- fixture
         archive = fx.archive
-        entries      <- archive.entries(sessionId).runCollect
+        entries      <- archive.entries(SessionId(sessionId)).runCollect
       yield assertTrue(
         entries.map(_.uuid.getOrElse("")).toList == List("u1", "u2", "u3"),
         entries.last.payload match
@@ -126,13 +127,13 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
       for
         fx <- fixture
         archive = fx.archive
-        result       <- archive.entries("no-such-session").runCollect.either
+        result       <- archive.entries(SessionId("no-such-session")).runCollect.either
       yield assertTrue(result == Left(SessionNotFound("no-such-session"))),
     test("subagentEntries joins a sub-agent by its meta.json toolUseId"):
       for
         fx <- fixture
         archive = fx.archive
-        entries      <- archive.subagentEntries(sessionId, parentToolUse).runCollect
+        entries      <- archive.subagentEntries(SessionId(sessionId), parentToolUse).runCollect
       yield assertTrue(
         entries.map(_.uuid.getOrElse("")).toList == List("a1"),
         entries.forall(_.isSidechain)
@@ -142,7 +143,7 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
         fx <- fixture
         archive = fx.archive
         result       <- archive
-                          .subagentEntries(sessionId, "toolu_UNKNOWN")
+                          .subagentEntries(SessionId(sessionId), "toolu_UNKNOWN")
                           .runCollect
                           .either
       yield assertTrue(
@@ -162,7 +163,7 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
                  s"""{"agentType":"general-purpose","description":"gone","toolUseId":"$orphanTool"}"""
                )
         result <- archive
-                    .subagentEntries(sessionId, orphanTool)
+                    .subagentEntries(SessionId(sessionId), orphanTool)
                     .runCollect
                     .either
       yield assertTrue(result == Left(SubAgentNotFound(sessionId, orphanTool))),
@@ -170,14 +171,14 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
       for
         fx <- fixture
         archive = fx.archive
-        result       <- archive.mirror("no-such-session").either
+        result       <- archive.mirror(SessionId("no-such-session")).either
       yield assertTrue(result == Left(SessionNotFound("no-such-session"))),
     test("mirror copies the whole tree byte-identically and reports it"):
       for
         fx <- fixture
         archive = fx.archive
         config  = fx.config
-        report            <- archive.mirror(sessionId)
+        report            <- archive.mirror(SessionId(sessionId))
       yield assertTrue(
         report.copied.size == 3,
         report.extended.isEmpty,
@@ -189,8 +190,8 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
         fx <- fixture
         archive = fx.archive
         config  = fx.config
-        _                 <- archive.mirror(sessionId)
-        second            <- archive.mirror(sessionId)
+        _                 <- archive.mirror(SessionId(sessionId))
+        second            <- archive.mirror(SessionId(sessionId))
       yield assertTrue(
         second.skipped.size == 3,
         second.copied.isEmpty,
@@ -204,13 +205,13 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
         fx <- fixture
         archive = fx.archive
         config  = fx.config
-        _                 <- archive.mirror(sessionId)
+        _                 <- archive.mirror(SessionId(sessionId))
         projectDir = config.vendorProjectsDir / "-home-tester-proj"
         mainPath   = projectDir / s"$sessionId.jsonl"
         _ <- ZIO.attempt:
                val edited = os.read(mainPath).replace("first", "FIRST")
                os.write.over(mainPath, edited)
-        report <- archive.mirror(sessionId)
+        report <- archive.mirror(SessionId(sessionId))
       yield
         val archivedMain = config.archiveDir / s"$sessionId.jsonl"
         assertTrue(
@@ -225,7 +226,7 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
         fx <- fixture
         archive = fx.archive
         config  = fx.config
-        _                 <- archive.mirror(sessionId)
+        _                 <- archive.mirror(SessionId(sessionId))
         subagents = config.vendorProjectsDir / "-home-tester-proj" /
           sessionId / "subagents"
         archivedAgent = config.archiveDir / sessionId / "subagents" /
@@ -237,7 +238,7 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
         _ <- ZIO.attempt:
                os.remove.all(subagents / "agent-abc.jsonl")
                os.remove.all(subagents / "agent-abc.meta.json")
-        _ <- archive.mirror(sessionId)
+        _ <- archive.mirror(SessionId(sessionId))
       yield assertTrue(
         os.exists(archivedAgent),
         java.util.Arrays.equals(os.read.bytes(archivedAgent), agentSnapshot),
@@ -249,7 +250,7 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
         fx <- fixture
         archive = fx.archive
         config  = fx.config
-        _                 <- archive.mirror(sessionId)
+        _                 <- archive.mirror(SessionId(sessionId))
         projectDir = config.vendorProjectsDir / "-home-tester-proj"
         _ <- ZIO.attempt(
                os.write.append(
@@ -257,7 +258,7 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
                  mainLine2 + "\n"
                )
              )
-        report <- archive.mirror(sessionId)
+        report <- archive.mirror(SessionId(sessionId))
       yield assertTrue(
         report.extended == Seq(os.sub / s"$sessionId.jsonl"),
         report.refreshed.isEmpty
@@ -267,12 +268,12 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
         fx <- fixture
         archive = fx.archive
         config  = fx.config
-        _                 <- archive.mirror(sessionId)
+        _                 <- archive.mirror(SessionId(sessionId))
         projectDir = config.vendorProjectsDir / "-home-tester-proj"
         _ <- ZIO.attempt(
                os.write.over(projectDir / s"$sessionId.jsonl", mainLine1 + "\n")
              )
-        report <- archive.mirror(sessionId)
+        report <- archive.mirror(SessionId(sessionId))
       yield assertTrue(
         report.refreshed == Seq(os.sub / s"$sessionId.jsonl"),
         report.extended.isEmpty
@@ -292,7 +293,7 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
                  createFolders = true
                )
              )
-        result <- archive.mirror(sessionId).either
+        result <- archive.mirror(SessionId(sessionId)).either
       yield assertTrue(result.isRight) && (result match
         case Right(report) =>
           assertTrue(
@@ -308,7 +309,7 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
         fx <- fixture
         archive = fx.archive
         config  = fx.config
-        _                 <- archive.mirror(sessionId)
+        _                 <- archive.mirror(SessionId(sessionId))
         projectDir = config.vendorProjectsDir / "-home-tester-proj"
         // Longer than the mirror, but the first bytes differ: not a true
         // extension, so the append fast path must fall back to a full recopy.
@@ -319,7 +320,7 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
                    mainUnknown + "\n"
                )
              )
-        report <- archive.mirror(sessionId)
+        report <- archive.mirror(SessionId(sessionId))
       yield assertTrue(
         report.refreshed == Seq(os.sub / s"$sessionId.jsonl"),
         report.extended.isEmpty

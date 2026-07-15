@@ -91,7 +91,7 @@ private[direct] class SessionProcess(
                 emit(message)
                 message match
                   case result: ResultMessage =>
-                    currentSessionId.set(result.sessionId)
+                    currentSessionId.set(result.sessionId.value)
                     true
                   case _ =>
                     loop(nextLineNumber)

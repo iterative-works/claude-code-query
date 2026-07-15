@@ -63,7 +63,7 @@ class ClaudeCodeIntegrationTest extends CatsEffectSuite:
             assertEquals(result.subtype, "query")
             assertEquals(result.isError, false)
             assertEquals(result.numTurns, 1)
-            assertEquals(result.sessionId, "test-session-123")
+            assertEquals(result.sessionId.value, "test-session-123")
             assertEquals(result.totalCostUsd, Some(0.001))
             assert(result.usage.isDefined)
 
@@ -118,7 +118,7 @@ class ClaudeCodeIntegrationTest extends CatsEffectSuite:
             assertEquals(result.subtype, "query")
             assertEquals(result.isError, false)
             assertEquals(result.numTurns, 1)
-            assertEquals(result.sessionId, "test-session-123")
+            assertEquals(result.sessionId.value, "test-session-123")
             assertEquals(result.totalCostUsd, Some(0.001))
             assert(result.usage.isDefined)
 

@@ -32,7 +32,7 @@ object SessionIntegrationTest extends ClaudeZioSpec:
           session <- ClaudeCode.session(options(script))
           result  <- session.sendAndAwait(input)
         yield assertTrue(
-          result.sessionId == "sess-itest",
+          result.sessionId.value == "sess-itest",
           result.origin.isEmpty,
           !result.isError
         ),
@@ -180,8 +180,8 @@ object SessionIntegrationTest extends ClaudeZioSpec:
           _       <- session.sendAndAwait(input)
           after   <- session.info
         yield assertTrue(
-          before == SessionInfo("sess-itest"),
-          after == SessionInfo("sess-after-turn")
+          before == SessionInfo(SessionId("sess-itest")),
+          after == SessionInfo(SessionId("sess-after-turn"))
         ),
     test("a configured archive with no vendor tree does not fail the session"):
       val script  = MockCliScript.sessionScript(initLine, List(resultLine))

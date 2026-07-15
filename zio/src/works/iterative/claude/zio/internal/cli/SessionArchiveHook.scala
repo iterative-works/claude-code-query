@@ -5,6 +5,7 @@ package works.iterative.claude.zio.internal.cli
 
 import zio.*
 import works.iterative.claude.core.log.ArchiveConfig
+import works.iterative.claude.core.model.SessionId
 import works.iterative.claude.zio.log.ZioConversationArchive
 
 /** Hooks the session reader invokes to mirror the vendor transcript tree.
@@ -23,8 +24,8 @@ import works.iterative.claude.zio.log.ZioConversationArchive
   *   fired with the session id when the session ends
   */
 final case class SessionArchiveHook(
-    afterResult: String => UIO[Unit],
-    onClose: String => UIO[Unit]
+    afterResult: SessionId => UIO[Unit],
+    onClose: SessionId => UIO[Unit]
 )
 
 object SessionArchiveHook:
@@ -47,16 +48,16 @@ object SessionArchiveHook:
       .make(1)
       .map: permit =>
         val archive = ZioConversationArchive(config)
-        def mirror(sessionId: String): UIO[Unit] =
+        def mirror(sessionId: SessionId): UIO[Unit] =
           archive
             .mirror(sessionId)
             .unit
             .catchAll: error =>
               ZIO.logWarning(
-                s"Session archive mirror failed for '$sessionId': ${error.message}"
+                s"Session archive mirror failed for '${sessionId.value}': ${error.message}"
               )
-        def afterResult(sessionId: String): UIO[Unit] =
+        def afterResult(sessionId: SessionId): UIO[Unit] =
           permit.tryWithPermit(mirror(sessionId)).forkDaemon.unit
-        def onClose(sessionId: String): UIO[Unit] =
+        def onClose(sessionId: SessionId): UIO[Unit] =
           permit.withPermit(mirror(sessionId))
         SessionArchiveHook(afterResult, onClose)

@@ -17,6 +17,7 @@ import works.iterative.claude.core.log.MirrorPlanner
 import works.iterative.claude.core.log.model.ConversationLogEntry
 import works.iterative.claude.core.log.model.MirrorReport
 import works.iterative.claude.core.log.model.SessionRecord
+import works.iterative.claude.core.model.SessionId
 
 class ZioConversationArchive private (config: ArchiveConfig)
     extends ConversationArchive[[A] =>> IO[ArchiveError, A]]:
@@ -30,7 +31,9 @@ class ZioConversationArchive private (config: ArchiveConfig)
   // home passed here are irrelevant.
   private val index = ZioConversationLogIndex.make(None, os.home)
 
-  def forSession(sessionId: String): IO[ArchiveError, Option[SessionRecord]] =
+  def forSession(
+      sessionId: SessionId
+  ): IO[ArchiveError, Option[SessionRecord]] =
     for
       main <- ZIO.fromEither(ArchivePaths.mainTranscript(config, sessionId))
       tree <- ZIO.fromEither(ArchivePaths.treeDir(config, sessionId))
@@ -41,27 +44,28 @@ class ZioConversationArchive private (config: ArchiveConfig)
         .mapError(toArchiveError)
     yield record
 
-  def entries(sessionId: String): EntryStream =
+  def entries(sessionId: SessionId): EntryStream =
     ZStream.unwrap:
       forSession(sessionId).map:
         case Some(record) => transcriptStream(record.mainTranscript)
-        case None         => ZStream.fail(SessionNotFound(sessionId))
+        case None         => ZStream.fail(SessionNotFound(sessionId.value))
 
   def subagentEntries(
-      sessionId: String,
+      sessionId: SessionId,
       parentToolUseId: String
   ): EntryStream =
     ZStream.unwrap:
       locateSubAgentTranscript(sessionId, parentToolUseId).map:
         case Some(transcript) => transcriptStream(transcript)
-        case None => ZStream.fail(SubAgentNotFound(sessionId, parentToolUseId))
+        case None             =>
+          ZStream.fail(SubAgentNotFound(sessionId.value, parentToolUseId))
 
-  def mirror(sessionId: String): IO[ArchiveError, MirrorReport] =
+  def mirror(sessionId: SessionId): IO[ArchiveError, MirrorReport] =
     for
       located <- forSession(sessionId)
       record <- ZIO
         .fromOption(located)
-        .orElseFail(SessionNotFound(sessionId))
+        .orElseFail(SessionNotFound(sessionId.value))
       report <- ZIO.attemptBlocking(runMirror(record)).mapError(toArchiveError)
     yield report
 
@@ -69,14 +73,14 @@ class ZioConversationArchive private (config: ArchiveConfig)
     reader.stream(path).mapError(toArchiveError)
 
   private def locateSubAgentTranscript(
-      sessionId: String,
+      sessionId: SessionId,
       parentToolUseId: String
   ): IO[ArchiveError, Option[os.Path]] =
     for
-      _ <- ZIO.fromEither(ArchivePaths.validateId(sessionId))
+      _ <- ZIO.fromEither(ArchivePaths.validateId(sessionId.value))
       _ <- ZIO.fromEither(ArchivePaths.validateId(parentToolUseId))
       located <- index
-        .listSubAgents(ArchivePaths.projectDir(config), sessionId)
+        .listSubAgents(ArchivePaths.projectDir(config), sessionId.value)
         .mapError(toArchiveError)
         .map(
           _.find(_.toolUseId.contains(parentToolUseId)).map(_.transcriptPath)
@@ -123,8 +127,8 @@ class ZioConversationArchive private (config: ArchiveConfig)
     record.mainTranscript +: tree
 
   private def mirrorFiles(record: SessionRecord): Seq[os.Path] =
-    val main = config.archiveDir / s"${record.sessionId}.jsonl"
-    val tree = config.archiveDir / record.sessionId
+    val main = config.archiveDir / s"${record.sessionId.value}.jsonl"
+    val tree = config.archiveDir / record.sessionId.value
     val mainFiles = if os.exists(main) then Seq(main) else Seq.empty
     val treeFiles =
       if os.exists(tree) then os.walk(tree).filter(os.isFile) else Seq.empty

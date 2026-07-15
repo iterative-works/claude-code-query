@@ -19,7 +19,7 @@ class SessionStateFoldTest extends FunSuite:
       durationApiMs = 1,
       isError = isError,
       numTurns = 1,
-      sessionId = sessionId,
+      sessionId = SessionId(sessionId),
       origin = origin
     )
 
@@ -59,7 +59,7 @@ class SessionStateFoldTest extends FunSuite:
     assertEquals(state.notificationsSeen, 2L)
 
   test("a control response leaves the state unchanged"):
-    val message = ControlResponse("req-1", "success", Json.obj())
+    val message = ControlResponse(RequestId("req-1"), "success", Json.obj())
     val state   = SessionState.fold(SessionState.initial, message)
     assertEquals(state, SessionState.initial)
 

@@ -55,7 +55,7 @@ object SessionE2ETest extends ClaudeZioSpec:
           session <- ClaudeCode.session(SessionOptions.defaults)
           _       <- session.sendAndAwait(userInput("Reply with 'OK'."))
           info    <- session.info
-        yield assertTrue(info.sessionId != "pending", info.sessionId.nonEmpty),
+        yield assertTrue(info.sessionId.value != "pending", info.sessionId.value.nonEmpty),
     test("E2E: two sequential turns preserve context"):
       ZIO.scoped:
         for

@@ -133,7 +133,9 @@ object SessionProcess:
         case Right(Some(msg)) =>
           msg match
             case result: ResultMessage =>
-              sessionIdRef.set(result.sessionId).as(Some(msg): Option[Message])
+              sessionIdRef
+                .set(result.sessionId.value)
+                .as(Some(msg): Option[Message])
             case _ => IO.pure(Some(msg): Option[Message])
       }
       .unNone

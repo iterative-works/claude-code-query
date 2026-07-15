@@ -31,6 +31,10 @@ package object effectful:
   val ControlRequestBody = works.iterative.claude.core.model.ControlRequestBody
   type MessageId = works.iterative.claude.core.model.MessageId
   val MessageId = works.iterative.claude.core.model.MessageId
+  type SessionId = works.iterative.claude.core.model.SessionId
+  val SessionId = works.iterative.claude.core.model.SessionId
+  type RequestId = works.iterative.claude.core.model.RequestId
+  val RequestId = works.iterative.claude.core.model.RequestId
   type ResultOrigin = works.iterative.claude.core.model.ResultOrigin
   val ResultOrigin = works.iterative.claude.core.model.ResultOrigin
   type PermissionDenial = works.iterative.claude.core.model.PermissionDenial

@@ -70,7 +70,7 @@ object JsonParser:
       requestId <- response.get[String]("request_id").toOption
       subtype <- response.get[String]("subtype").toOption
     yield ControlResponse(
-      requestId = requestId,
+      requestId = RequestId(requestId),
       subtype = subtype,
       payload = response.downField("response").focus.getOrElse(Json.Null)
     )
@@ -114,7 +114,7 @@ object JsonParser:
       durationApiMs = durationApiMs,
       isError = isError,
       numTurns = numTurns,
-      sessionId = sessionId,
+      sessionId = SessionId(sessionId),
       totalCostUsd = totalCostUsd,
       usage = usage,
       result = result,

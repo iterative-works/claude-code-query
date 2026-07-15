@@ -206,7 +206,7 @@ class ProcessManagerTest extends munit.FunSuite:
             rm.numTurns,
             TestConstants.MockJsonValues.MOCK_NUM_TURNS_SINGLE
           )
-          assertEquals(rm.sessionId, TestConstants.MockJsonValues.MOCK_SESSION_ID)
+          assertEquals(rm.sessionId.value, TestConstants.MockJsonValues.MOCK_SESSION_ID)
         case other => fail(s"Expected ResultMessage but got: $other")
 
       // Verify: Should log process start and completion

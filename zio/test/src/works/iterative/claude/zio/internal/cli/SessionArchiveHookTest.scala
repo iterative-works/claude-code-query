@@ -6,11 +6,12 @@ package works.iterative.claude.zio.internal.cli
 import zio.*
 import zio.test.*
 import works.iterative.claude.core.log.ArchiveConfig
+import works.iterative.claude.core.model.SessionId
 import works.iterative.claude.zio.internal.testing.ClaudeZioSpec
 
 object SessionArchiveHookTest extends ClaudeZioSpec:
 
-  private val sessionId = "0d43043b-aaaa-bbbb-cccc-dddddddddddd"
+  private val sessionId = SessionId("0d43043b-aaaa-bbbb-cccc-dddddddddddd")
   private val cwd       = os.Path("/home/tester/proj")
   private val mainLine  =
     s"""{"type":"user","sessionId":"$sessionId","uuid":"u1","message":{"content":"hi"}}"""

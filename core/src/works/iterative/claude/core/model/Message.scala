@@ -38,7 +38,7 @@ case class ResultMessage(
     durationApiMs: Int,
     isError: Boolean,
     numTurns: Int,
-    sessionId: String,
+    sessionId: SessionId,
     totalCostUsd: Option[Double] = None,
     usage: Option[TokenUsage] = None,
     result: Option[String] = None,
@@ -67,7 +67,7 @@ case class UnknownMessage(messageType: String, json: Json) extends Message
   * response object, e.g. `{"still_queued": []}` for an interrupt.
   */
 case class ControlResponse(
-    requestId: String,
+    requestId: RequestId,
     subtype: String,
     payload: Json
 ) extends Message

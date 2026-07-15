@@ -72,7 +72,7 @@ class SDKUserMessageRoundTripTest extends FunSuite:
       parsed(1) match
         case rm: ResultMessage =>
           assertEquals(rm.subtype, "success")
-          assertEquals(rm.sessionId, "session-abc")
+          assertEquals(rm.sessionId.value, "session-abc")
           assertEquals(rm.result, Some("The answer is 4."))
         case other => fail(s"Expected ResultMessage, got $other")
     finally java.nio.file.Files.deleteIfExists(scriptFile): Unit
@@ -145,6 +145,6 @@ class SDKUserMessageRoundTripTest extends FunSuite:
       val resultMsg = JsonParser.parseJsonLine(resultLine)
       resultMsg match
         case Some(rm: ResultMessage) =>
-          assertEquals(rm.sessionId, "real-session-42")
+          assertEquals(rm.sessionId.value, "real-session-42")
         case other => fail(s"Expected ResultMessage, got $other")
     finally java.nio.file.Files.deleteIfExists(scriptFile): Unit

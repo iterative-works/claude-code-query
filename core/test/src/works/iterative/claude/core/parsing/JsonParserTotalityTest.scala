@@ -339,7 +339,7 @@ class JsonParserTotalityTest extends FunSuite:
     }"""
     JsonParser.parseMessage(parseJson(controlResponseStr)) match
       case ControlResponse(requestId, subtype, payload) =>
-        assertEquals(requestId, "req_probe_1")
+        assertEquals(requestId.value, "req_probe_1")
         assertEquals(subtype, "success")
         assertEquals(payload, parseJson("""{"still_queued": []}"""))
       case other => fail(s"Expected ControlResponse, got: $other")
@@ -354,7 +354,7 @@ class JsonParserTotalityTest extends FunSuite:
     }"""
     JsonParser.parseMessage(parseJson(controlResponseStr)) match
       case ControlResponse(requestId, subtype, payload) =>
-        assertEquals(requestId, "req_2")
+        assertEquals(requestId.value, "req_2")
         assertEquals(subtype, "success")
         assertEquals(payload, io.circe.Json.Null)
       case other => fail(s"Expected ControlResponse, got: $other")

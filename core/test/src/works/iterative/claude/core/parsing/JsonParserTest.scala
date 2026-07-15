@@ -87,7 +87,7 @@ class JsonParserTest extends FunSuite:
         assertEquals(rm.durationApiMs, 800)
         assertEquals(rm.isError, false)
         assertEquals(rm.numTurns, 1)
-        assertEquals(rm.sessionId, "test-session-123")
+        assertEquals(rm.sessionId.value, "test-session-123")
         assertEquals(rm.totalCostUsd, Some(0.001))
         assertEquals(rm.result, Some("4"))
         assert(rm.usage.isDefined)
@@ -185,7 +185,7 @@ class JsonParserTest extends FunSuite:
         assertEquals(rm.durationApiMs, 2800)
         assertEquals(rm.isError, false)
         assertEquals(rm.numTurns, 3)
-        assertEquals(rm.sessionId, "abc-def-123-456")
+        assertEquals(rm.sessionId.value, "abc-def-123-456")
         assertEquals(rm.totalCostUsd, Some(0.0042))
         assert(rm.usage.isDefined)
         assertEquals(

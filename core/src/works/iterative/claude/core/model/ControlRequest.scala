@@ -5,7 +5,7 @@ package works.iterative.claude.core.model
 
 import io.circe.{Encoder, Json}
 
-case class ControlRequest(requestId: String, request: ControlRequestBody)
+case class ControlRequest(requestId: RequestId, request: ControlRequestBody)
 
 object ControlRequest:
   /** Serializes a control request to the exact wire shape the CLI reads on
@@ -17,7 +17,7 @@ object ControlRequest:
   given Encoder[ControlRequest] = Encoder.instance: req =>
     Json.obj(
       "type" -> Json.fromString("control_request"),
-      "request_id" -> Json.fromString(req.requestId),
+      "request_id" -> Json.fromString(req.requestId.value),
       "request" -> requestBodyJson(req.request)
     )
 

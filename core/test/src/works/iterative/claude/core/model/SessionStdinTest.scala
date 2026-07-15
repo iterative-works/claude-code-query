@@ -59,7 +59,7 @@ class SessionStdinTest extends FunSuite:
 
   test("controlRequestLine writes the interrupt control_request shape"):
     val line = SessionStdin.controlRequestLine(
-      ControlRequest("req-1", ControlRequestBody.Interrupt)
+      ControlRequest(RequestId("req-1"), ControlRequestBody.Interrupt)
     )
     assert(line.endsWith("\n"))
     val cursor = parser.parse(line).toOption.get.hcursor
@@ -73,7 +73,7 @@ class SessionStdinTest extends FunSuite:
   test("controlRequestLine merges an Other request's payload alongside subtype"):
     val line = SessionStdin.controlRequestLine(
       ControlRequest(
-        "req-2",
+        RequestId("req-2"),
         ControlRequestBody.Other(
           "set_permission",
           io.circe.Json.obj("mode" -> io.circe.Json.fromString("acceptEdits"))

@@ -3,6 +3,8 @@
 
 package works.iterative.claude.core.log
 
+import works.iterative.claude.core.model.SessionId
+
 object ArchivePaths:
 
   /** Accepted shape for vendor session and sub-agent ids — UUID- or
@@ -35,15 +37,15 @@ object ArchivePaths:
     */
   def mainTranscript(
       config: ArchiveConfig,
-      sessionId: String
+      sessionId: SessionId
   ): Either[ArchiveError, os.Path] =
-    validateId(sessionId).map(id => projectDir(config) / s"$id.jsonl")
+    validateId(sessionId.value).map(id => projectDir(config) / s"$id.jsonl")
 
   /** The `<sessionId>/` directory holding sub-agent and workflow sidechains, or
     * a rejection when the id is not an accepted shape.
     */
   def treeDir(
       config: ArchiveConfig,
-      sessionId: String
+      sessionId: SessionId
   ): Either[ArchiveError, os.Path] =
-    validateId(sessionId).map(id => projectDir(config) / id)
+    validateId(sessionId.value).map(id => projectDir(config) / id)

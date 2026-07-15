@@ -54,7 +54,7 @@ class SessionIntegrationTest extends CatsEffectSuite:
             case r: ResultMessage =>
               assertEquals(r.subtype, "conversation_result")
               assertEquals(r.isError, false)
-              assertEquals(r.sessionId, sessionId)
+              assertEquals(r.sessionId.value, sessionId)
             case other => fail(s"Expected ResultMessage, got: $other")
       }
       .guarantee(IO { SessionMockCliScript.cleanup(script): Unit })
@@ -241,7 +241,7 @@ class SessionIntegrationTest extends CatsEffectSuite:
               assert(texts.exists(_.contains("First turn answer")))
             case other => fail(s"Expected AssistantMessage, got: $other")
           _ = turn1.last match
-            case r: ResultMessage => assertEquals(r.sessionId, turn1SessionId)
+            case r: ResultMessage => assertEquals(r.sessionId.value, turn1SessionId)
             case other => fail(s"Expected ResultMessage, got: $other")
           id1 <- session.sessionId
           _ = assertEquals(id1, turn1SessionId)
@@ -254,7 +254,7 @@ class SessionIntegrationTest extends CatsEffectSuite:
               assert(texts.exists(_.contains("Second turn answer")))
             case other => fail(s"Expected AssistantMessage, got: $other")
           _ = turn2.last match
-            case r: ResultMessage => assertEquals(r.sessionId, turn2SessionId)
+            case r: ResultMessage => assertEquals(r.sessionId.value, turn2SessionId)
             case other => fail(s"Expected ResultMessage, got: $other")
           id2 <- session.sessionId
           _ = assertEquals(id2, turn2SessionId)
