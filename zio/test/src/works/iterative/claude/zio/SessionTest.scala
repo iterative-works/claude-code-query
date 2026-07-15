@@ -49,9 +49,7 @@ object SessionTest extends ClaudeZioSpec:
         Ref.make(Map.empty[RequestId, Promise[CLIError, ControlResponse]])
       requestCounter  <- Ref.make(0L)
       aliveRef        <- Ref.make(alive)
-    yield Rig(
-      SessionProcess.make(
-        stdinQueue,
+      context = SessionProcess.ReaderContext(
         eventsHub,
         stateChangesHub,
         stateRef,
@@ -59,9 +57,10 @@ object SessionTest extends ClaudeZioSpec:
         idKnown,
         terminated,
         pendingRequests,
-        requestCounter,
         aliveRef
-      ),
+      )
+    yield Rig(
+      SessionProcess.make(stdinQueue, context, requestCounter),
       stdinQueue,
       eventsHub,
       stateChangesHub,

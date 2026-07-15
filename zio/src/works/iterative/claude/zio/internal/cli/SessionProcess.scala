@@ -38,6 +38,23 @@ object SessionProcess:
 
   private[cli] val InterruptTimeout = 30.seconds
 
+  /** The correlated effect handles the single reader fiber owns and the session
+    * also reads: the message and state Hubs, the readable state, the captured
+    * session id, the id-known and termination signals, the pending control-request
+    * registry, and the alive flag. Bundled so a new piece of reader state is one
+    * field, not another parameter on every private function.
+    */
+  private[claude] final case class ReaderContext(
+      eventsHub: Hub[Message],
+      stateChangesHub: Hub[SessionState],
+      stateRef: Ref[SessionState],
+      sessionIdRef: Ref[Option[SessionId]],
+      idKnown: Promise[Nothing, Unit],
+      terminated: Promise[Nothing, SessionEnd],
+      pendingRequests: Ref[Map[RequestId, Promise[CLIError, ControlResponse]]],
+      aliveRef: Ref[Boolean]
+  )
+
   def start(
       executablePath: String,
       options: SessionOptions,
@@ -58,10 +75,7 @@ object SessionProcess:
         Ref.make(Map.empty[RequestId, Promise[CLIError, ControlResponse]])
       requestCounter <- Ref.make(0L)
       aliveRef <- Ref.make(true)
-      process <- buildCommand(executablePath, args, options, stdinQueue).run
-        .mapError(toSessionError(_, command))
-      _ <- startReader(
-        process,
+      context = ReaderContext(
         eventsHub,
         stateChangesHub,
         stateRef,
@@ -69,9 +83,11 @@ object SessionProcess:
         idKnown,
         terminated,
         pendingRequests,
-        aliveRef,
-        archiveHook
-      ).forkScoped
+        aliveRef
+      )
+      process <- buildCommand(executablePath, args, options, stdinQueue).run
+        .mapError(toSessionError(_, command))
+      _ <- startReader(process, context, archiveHook).forkScoped
       _ <- captureStderr(process).forkScoped
       // Finalizers run in reverse registration order, so registering the kill
       // last makes it run first on teardown: killing the process makes the
@@ -79,44 +95,15 @@ object SessionProcess:
       // stop promptly. stdinQueue.shutdown then releases the input stream.
       _ <- ZIO.addFinalizer(stdinQueue.shutdown)
       _ <- ZIO.addFinalizer(process.killForcibly.ignore)
-    yield make(
-      stdinQueue,
-      eventsHub,
-      stateChangesHub,
-      stateRef,
-      sessionIdRef,
-      idKnown,
-      terminated,
-      pendingRequests,
-      requestCounter,
-      aliveRef
-    )
+    yield make(stdinQueue, context, requestCounter)
 
   /** Test seam: builds a Session from its backing primitives. */
   private[claude] def make(
       stdinQueue: Queue[Chunk[Byte]],
-      eventsHub: Hub[Message],
-      stateChangesHub: Hub[SessionState],
-      stateRef: Ref[SessionState],
-      sessionIdRef: Ref[Option[SessionId]],
-      idKnown: Promise[Nothing, Unit],
-      terminated: Promise[Nothing, SessionEnd],
-      pendingRequests: Ref[Map[RequestId, Promise[CLIError, ControlResponse]]],
-      requestCounter: Ref[Long],
-      aliveRef: Ref[Boolean]
+      context: ReaderContext,
+      requestCounter: Ref[Long]
   ): Session =
-    new SessionImpl(
-      stdinQueue,
-      eventsHub,
-      stateChangesHub,
-      stateRef,
-      sessionIdRef,
-      idKnown,
-      terminated,
-      pendingRequests,
-      requestCounter,
-      aliveRef
-    )
+    new SessionImpl(stdinQueue, context, requestCounter)
 
   private def buildCommand(
       executablePath: String,
@@ -140,14 +127,7 @@ object SessionProcess:
     */
   private def startReader(
       process: Process,
-      eventsHub: Hub[Message],
-      stateChangesHub: Hub[SessionState],
-      stateRef: Ref[SessionState],
-      sessionIdRef: Ref[Option[SessionId]],
-      idKnown: Promise[Nothing, Unit],
-      terminated: Promise[Nothing, SessionEnd],
-      pendingRequests: Ref[Map[RequestId, Promise[CLIError, ControlResponse]]],
-      aliveRef: Ref[Boolean],
+      context: ReaderContext,
       archiveHook: SessionArchiveHook
   ): UIO[Unit] =
     process.stdout.linesStream.zipWithIndex
@@ -162,54 +142,21 @@ object SessionProcess:
                 .as(Option.empty[Message])
             case Right(message) => ZIO.succeed(message)
       .collect { case Some(message) => message }
-      .mapZIO: message =>
-        handleMessage(
-          message,
-          eventsHub,
-          stateChangesHub,
-          stateRef,
-          sessionIdRef,
-          idKnown,
-          pendingRequests,
-          archiveHook
-        )
+      .mapZIO(message => handleMessage(message, context, archiveHook))
       .runDrain
       .catchAll(_ => ZIO.unit)
-      .zipRight(
-        recordEnd(
-          process,
-          stateChangesHub,
-          stateRef,
-          sessionIdRef,
-          terminated,
-          pendingRequests,
-          aliveRef,
-          eventsHub,
-          archiveHook
-        )
-      )
+      .zipRight(recordEnd(process, context, archiveHook))
 
   private def handleMessage(
       message: Message,
-      eventsHub: Hub[Message],
-      stateChangesHub: Hub[SessionState],
-      stateRef: Ref[SessionState],
-      sessionIdRef: Ref[Option[SessionId]],
-      idKnown: Promise[Nothing, Unit],
-      pendingRequests: Ref[Map[RequestId, Promise[CLIError, ControlResponse]]],
+      context: ReaderContext,
       archiveHook: SessionArchiveHook
   ): UIO[Unit] =
     for
-      _ <- captureSessionId(message, sessionIdRef, idKnown)
-      _ <- routeControlResponse(message, pendingRequests)
-      _ <- foldState(
-        message,
-        stateChangesHub,
-        stateRef,
-        sessionIdRef,
-        archiveHook
-      )
-      _ <- eventsHub.publish(message)
+      _ <- captureSessionId(message, context.sessionIdRef, context.idKnown)
+      _ <- routeControlResponse(message, context.pendingRequests)
+      _ <- foldState(message, context, archiveHook)
+      _ <- context.eventsHub.publish(message)
     yield ()
 
   /** Captures the session id from the init message and from every result, so a
@@ -264,20 +211,18 @@ object SessionProcess:
     */
   private def foldState(
       message: Message,
-      stateChangesHub: Hub[SessionState],
-      stateRef: Ref[SessionState],
-      sessionIdRef: Ref[Option[SessionId]],
+      context: ReaderContext,
       archiveHook: SessionArchiveHook
   ): UIO[Unit] =
     for
-      transition <- stateRef.modify: old =>
+      transition <- context.stateRef.modify: old =>
         val next = SessionState.fold(old, message)
         ((old, next), next)
       (old, next) = transition
-      _ <- ZIO.when(old != next)(stateChangesHub.publish(next).unit)
+      _ <- ZIO.when(old != next)(context.stateChangesHub.publish(next).unit)
       _ <- message match
         case result: ResultMessage if result.origin.isEmpty =>
-          sessionIdRef.get.flatMap:
+          context.sessionIdRef.get.flatMap:
             case Some(id) => archiveHook.afterResult(id)
             case None     => ZIO.unit
         case _ => ZIO.unit
@@ -290,31 +235,25 @@ object SessionProcess:
     */
   private def recordEnd(
       process: Process,
-      stateChangesHub: Hub[SessionState],
-      stateRef: Ref[SessionState],
-      sessionIdRef: Ref[Option[SessionId]],
-      terminated: Promise[Nothing, SessionEnd],
-      pendingRequests: Ref[Map[RequestId, Promise[CLIError, ControlResponse]]],
-      aliveRef: Ref[Boolean],
-      eventsHub: Hub[Message],
+      context: ReaderContext,
       archiveHook: SessionArchiveHook
   ): UIO[Unit] =
     for
-      _ <- aliveRef.set(false)
+      _ <- context.aliveRef.set(false)
       exit <- process.exitCode.either
       exitCode = exit.toOption.map(_.code)
       error = exitCode.collect:
         case code if code != 0 => SessionProcessDied(Some(code), "")
       end = SessionEnd(exitCode, error)
-      endState <- stateRef.updateAndGet(SessionState.ended(_, end))
-      _ <- stateChangesHub.publish(endState)
-      _ <- terminated.succeed(end)
-      _ <- failPendingRequests(pendingRequests, error, exitCode)
-      _ <- sessionIdRef.get.flatMap:
+      endState <- context.stateRef.updateAndGet(SessionState.ended(_, end))
+      _ <- context.stateChangesHub.publish(endState)
+      _ <- context.terminated.succeed(end)
+      _ <- failPendingRequests(context.pendingRequests, error, exitCode)
+      _ <- context.sessionIdRef.get.flatMap:
         case Some(id) => archiveHook.onClose(id)
         case None     => ZIO.unit
-      _ <- eventsHub.shutdown
-      _ <- stateChangesHub.shutdown
+      _ <- context.eventsHub.shutdown
+      _ <- context.stateChangesHub.shutdown
     yield ()
 
   private def failPendingRequests(
@@ -351,19 +290,26 @@ object SessionProcess:
       List("control_request", "interrupt")
     )
 
-/** Session backed by a stdin queue, a message Hub, and readable state. */
+/** Session backed by a stdin queue, the reader's shared channels, and a
+  * request counter.
+  */
 private final class SessionImpl(
     stdinQueue: Queue[Chunk[Byte]],
-    eventsHub: Hub[Message],
-    stateChangesHub: Hub[SessionState],
-    stateRef: Ref[SessionState],
-    sessionIdRef: Ref[Option[SessionId]],
-    idKnown: Promise[Nothing, Unit],
-    terminatedPromise: Promise[Nothing, SessionEnd],
-    pendingRequests: Ref[Map[RequestId, Promise[CLIError, ControlResponse]]],
-    requestCounter: Ref[Long],
-    aliveRef: Ref[Boolean]
+    context: SessionProcess.ReaderContext,
+    requestCounter: Ref[Long]
 ) extends Session:
+
+  // The reader's `terminated` promise is reached as `context.terminated` to
+  // avoid clashing with this session's own `terminated` method.
+  import context.{
+    eventsHub,
+    stateChangesHub,
+    stateRef,
+    sessionIdRef,
+    idKnown,
+    pendingRequests,
+    aliveRef
+  }
 
   def info: IO[CLIError, SessionInfo] =
     requireSessionId.map(SessionInfo(_))
@@ -428,7 +374,7 @@ private final class SessionImpl(
   def stateChanges: ZStream[Any, Nothing, SessionState] =
     ZStream.fromHub(stateChangesHub)
 
-  def terminated: IO[Nothing, SessionEnd] = terminatedPromise.await
+  def terminated: IO[Nothing, SessionEnd] = context.terminated.await
 
   def awaitResultAfter(seen: Long): IO[CLIError, ResultMessage] =
     ZIO.scoped:
@@ -481,7 +427,7 @@ private final class SessionImpl(
       case Some(id) => ZIO.succeed(id)
       case None     =>
         idKnown.await
-          .raceFirst(terminatedPromise.await.flatMap(failEnd))
+          .raceFirst(context.terminated.await.flatMap(failEnd))
           .interruptible
         *> sessionIdRef.get.flatMap:
           case Some(id) => ZIO.succeed(id)
