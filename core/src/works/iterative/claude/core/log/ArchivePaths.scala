@@ -3,6 +3,8 @@
 
 package works.iterative.claude.core.log
 
+import works.iterative.claude.core.log.model.RecordRoot
+import works.iterative.claude.core.log.model.SessionRecord
 import works.iterative.claude.core.model.SessionId
 
 object ArchivePaths:
@@ -31,6 +33,30 @@ object ArchivePaths:
     */
   def projectDir(config: ArchiveConfig): os.Path =
     config.vendorProjectsDir / ProjectPathEncoder.encode(config.cwd)
+
+  /** The archive's project directory: the same encoded-cwd segment
+    * [[projectDir]] uses, hung off `config.archiveDir`. The archive is thus
+    * projects-dir-shaped, so a session reads back through the identical
+    * relative layout whether it is served from the vendor tree or the mirror.
+    */
+  def archiveProjectDir(config: ArchiveConfig): os.Path =
+    config.archiveDir / ProjectPathEncoder.encode(config.cwd)
+
+  /** The record candidates for a session, in resolution order: the live vendor
+    * tree first, then the archive mirror. Each candidate names the paths a
+    * record would have under its root; the caller keeps the first whose main
+    * transcript exists. Rejects a non-accepted id before deriving any path.
+    */
+  def candidates(
+      config: ArchiveConfig,
+      sessionId: SessionId
+  ): Either[ArchiveError, Seq[SessionRecord]] =
+    validateId(sessionId.value).map: id =>
+      Seq(
+        RecordRoot.Vendor -> projectDir(config),
+        RecordRoot.Archive -> archiveProjectDir(config)
+      ).map: (root, dir) =>
+        SessionRecord(sessionId, dir / s"$id.jsonl", dir / id, root)
 
   /** The `<sessionId>.jsonl` main-thread transcript for a session, or a
     * rejection when the id is not an accepted shape.

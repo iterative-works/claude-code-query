@@ -4,6 +4,8 @@
 package works.iterative.claude.core.log
 
 import munit.FunSuite
+import works.iterative.claude.core.log.model.RecordRoot
+import works.iterative.claude.core.log.model.SessionRecord
 import works.iterative.claude.core.model.SessionId
 
 class ArchivePathsTest extends FunSuite:
@@ -50,6 +52,45 @@ class ArchivePathsTest extends FunSuite:
       )
       assertEquals(
         ArchivePaths.treeDir(c, SessionId(id)),
+        Left(ArchiveError.InvalidSessionId(id))
+      )
+
+  test("archiveProjectDir mirrors the vendor layout under the archive root"):
+    // The archive is projects-dir-shaped: the same encoded-cwd segment the
+    // vendor tree uses hangs off archiveDir, so read fallback shares the layout.
+    val c = config(os.Path("/home/mph/proj"))
+    assertEquals(
+      ArchivePaths.archiveProjectDir(c),
+      os.Path("/archive/-home-mph-proj")
+    )
+
+  test("candidates resolve vendor first, then the archive, in that order"):
+    val c = config(os.Path("/home/mph/proj"))
+    assertEquals(
+      ArchivePaths.candidates(c, SessionId("sess-1")),
+      Right(
+        Seq(
+          SessionRecord(
+            SessionId("sess-1"),
+            os.Path("/vendor/projects/-home-mph-proj/sess-1.jsonl"),
+            os.Path("/vendor/projects/-home-mph-proj/sess-1"),
+            RecordRoot.Vendor
+          ),
+          SessionRecord(
+            SessionId("sess-1"),
+            os.Path("/archive/-home-mph-proj/sess-1.jsonl"),
+            os.Path("/archive/-home-mph-proj/sess-1"),
+            RecordRoot.Archive
+          )
+        )
+      )
+    )
+
+  test("candidates reject a traversing id rather than deriving any path"):
+    val c = config(os.Path("/home/mph/proj"))
+    for id <- List("../x", "a/b", "..", "", "a\\b", "/etc/passwd") do
+      assertEquals(
+        ArchivePaths.candidates(c, SessionId(id)),
         Left(ArchiveError.InvalidSessionId(id))
       )
 

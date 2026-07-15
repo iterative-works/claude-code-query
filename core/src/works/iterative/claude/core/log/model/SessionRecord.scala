@@ -14,9 +14,13 @@ import works.iterative.claude.core.model.SessionId
   * @param treeDir
   *   the `<sessionId>/` directory holding `subagents/`, `tool-results/`, and
   *   `workflows/`; may not exist when a session spawned no sub-agents
+  * @param root
+  *   which root the record was resolved under — the live vendor tree or the
+  *   archive mirror it falls back to
   */
 case class SessionRecord(
     sessionId: SessionId,
     mainTranscript: os.Path,
-    treeDir: os.Path
+    treeDir: os.Path,
+    root: RecordRoot
 )

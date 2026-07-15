@@ -27,13 +27,22 @@ enum ArchiveError extends Throwable:
     */
   case InvalidSessionId(value: String)
 
+  /** A page cursor was minted against a transcript that no longer is the
+    * session's resolved source (e.g. the vendor tree was pruned between pages,
+    * so the mirror now wins). The offset would index a different file, so
+    * paging stops rather than reading it; restart from the latest page.
+    */
+  case PageSourceMoved(sessionId: String)
+
   def message: String = this match
     case SessionNotFound(sessionId) =>
       s"No archived session found for id '$sessionId'"
     case SubAgentNotFound(sessionId, parentToolUseId) =>
       s"No sub-agent joined by tool_use id '$parentToolUseId' in session '$sessionId'"
-    case ArchiveIOError(detail, _) => detail
-    case InvalidSessionId(value)   =>
+    case ArchiveIOError(detail, _)  => detail
+    case PageSourceMoved(sessionId) =>
+      s"Transcript source for session '$sessionId' changed between pages; restart from the latest page"
+    case InvalidSessionId(value) =>
       // The rejected value is attacker-shaped by definition: strip control
       // characters and bound the length before it reaches any log line.
       val printable = value.filter(c => c >= ' ' && c != '\u007f').take(40)
