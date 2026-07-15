@@ -1,4 +1,4 @@
-// PURPOSE: Located handle to a session's vendor record tree on disk
+// PURPOSE: Located handle to a session's record tree on disk, under the vendor tree or the archive mirror
 // PURPOSE: Names the main transcript file and the directory holding sub-agent sidechains
 
 package works.iterative.claude.core.log.model

@@ -1,5 +1,5 @@
-// PURPOSE: Pure resolution of a session's vendor record paths by encoding a known cwd
-// PURPOSE: Locates only in the encode direction; never decodes a directory name back to a cwd
+// PURPOSE: Pure resolution of a session's record paths across the vendor tree and its archive mirror
+// PURPOSE: Encodes a known cwd to derive vendor and archive candidates; never decodes a directory name back to a cwd
 
 package works.iterative.claude.core.log
 
