@@ -62,9 +62,9 @@ class SDKUserMessageRoundTripTest extends FunSuite:
       assertEquals(parsed.length, 2)
 
       parsed(0) match
-        case AssistantMessage(content) =>
-          assertEquals(content.length, 1)
-          content.head match
+        case assistant: AssistantMessage =>
+          assertEquals(assistant.content.length, 1)
+          assistant.content.head match
             case TextBlock(text) => assertEquals(text, "The answer is 4.")
             case other           => fail(s"Expected TextBlock, got $other")
         case other => fail(s"Expected AssistantMessage, got $other")
@@ -136,8 +136,8 @@ class SDKUserMessageRoundTripTest extends FunSuite:
 
       val assistantMsg = JsonParser.parseJsonLine(assistantLine)
       assistantMsg match
-        case Some(AssistantMessage(content)) =>
-          content.head match
+        case Some(assistant: AssistantMessage) =>
+          assistant.content.head match
             case TextBlock(text) => assertEquals(text, "Hi there!")
             case other           => fail(s"Expected TextBlock, got $other")
         case other => fail(s"Expected AssistantMessage, got $other")

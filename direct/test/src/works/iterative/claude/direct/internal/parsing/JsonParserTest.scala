@@ -33,10 +33,24 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
       case UserMessage(content) =>
         s"""{"type":"user","content":${escapeJsonString(content)}}"""
 
-      case AssistantMessage(content) =>
+      case assistant: AssistantMessage =>
         val contentJson =
-          content.map(serializeContentBlock).mkString("[", ",", "]")
-        s"""{"type":"assistant","message":{"content":$contentJson}}"""
+          assistant.content.map(serializeContentBlock).mkString("[", ",", "]")
+        val messageFields = List(
+          Some(s""""content":$contentJson"""),
+          assistant.model.map(m => s""""model":${escapeJsonString(m)}""")
+        ).flatten
+        val topLevelFields = List(
+          Some(s""""type":"assistant""""),
+          Some(s""""message":{${messageFields.mkString(",")}}"""),
+          assistant.id.map(id =>
+            s""""uuid":${escapeJsonString(id.value)}"""
+          ),
+          assistant.parentToolUseId.map(p =>
+            s""""parent_tool_use_id":${escapeJsonString(p)}"""
+          )
+        ).flatten
+        s"""{${topLevelFields.mkString(",")}}"""
 
       case SystemMessage(subtype, data) =>
         val dataJson = data
@@ -48,30 +62,37 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
             if dataJson.nonEmpty then "," + dataJson else ""
           }}"""
 
-      case ResultMessage(
-            subtype,
-            durationMs,
-            durationApiMs,
-            isError,
-            numTurns,
-            sessionId,
-            totalCostUsd,
-            usage,
-            result
-          ) =>
+      case rm: ResultMessage =>
         val optionalFields = List(
-          totalCostUsd.map(cost => s""""total_cost_usd":$cost"""),
-          usage.map(_ => s""""usage":{}"""), // Simplified usage serialization
-          result.map(r => s""""result":${escapeJsonString(r)}""")
+          rm.totalCostUsd.map(cost => s""""total_cost_usd":$cost"""),
+          rm.usage.map(u => s""""usage":${serializeTokenUsage(u)}"""),
+          rm.result.map(r => s""""result":${escapeJsonString(r)}"""),
+          rm.id.map(id => s""""uuid":${escapeJsonString(id.value)}"""),
+          rm.stopReason.map(s => s""""stop_reason":${escapeJsonString(s)}"""),
+          rm.terminalReason.map(t =>
+            s""""terminal_reason":${escapeJsonString(t)}"""
+          ),
+          rm.apiErrorStatus.map(a =>
+            s""""api_error_status":${escapeJsonString(a)}"""
+          ),
+          rm.timings.ttftMs.map(t => s""""ttft_ms":$t"""),
+          rm.timings.ttftStreamMs.map(t => s""""ttft_stream_ms":$t"""),
+          rm.timings.timeToRequestMs.map(t => s""""time_to_request_ms":$t"""),
+          rm.origin.map(o => s""""origin":${serializeOrigin(o)}"""),
+          Option.when(rm.permissionDenials.nonEmpty)(
+            s""""permission_denials":${rm.permissionDenials
+                .map(_.json.noSpaces)
+                .mkString("[", ",", "]")}"""
+          )
         ).flatten
         val allFields = List(
           s""""type":"result"""",
-          s""""subtype":${escapeJsonString(subtype)}""",
-          s""""duration_ms":$durationMs""",
-          s""""duration_api_ms":$durationApiMs""",
-          s""""is_error":$isError""",
-          s""""num_turns":$numTurns""",
-          s""""session_id":${escapeJsonString(sessionId)}"""
+          s""""subtype":${escapeJsonString(rm.subtype)}""",
+          s""""duration_ms":${rm.durationMs}""",
+          s""""duration_api_ms":${rm.durationApiMs}""",
+          s""""is_error":${rm.isError}""",
+          s""""num_turns":${rm.numTurns}""",
+          s""""session_id":${escapeJsonString(rm.sessionId)}"""
         ) ++ optionalFields
         s"""{${allFields.mkString(",")}}"""
 
@@ -87,6 +108,35 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
         s"""{"type":"stream_event"${
             if dataJson.nonEmpty then "," + dataJson else ""
           }}"""
+
+      case UnknownMessage(_, json) =>
+        json.noSpaces
+
+      case ControlResponse(requestId, subtype, payload) =>
+        val payloadField =
+          if payload.isNull then ""
+          else s""","response":${payload.noSpaces}"""
+        s"""{"type":"control_response","response":{"subtype":${escapeJsonString(
+            subtype
+          )},"request_id":${escapeJsonString(requestId)}$payloadField}}"""
+
+    private def serializeOrigin(origin: ResultOrigin): String = origin match
+      case ResultOrigin.TaskNotification => """{"kind":"task-notification"}"""
+      case ResultOrigin.Other(kind) => s"""{"kind":${escapeJsonString(kind)}}"""
+
+    private def serializeTokenUsage(usage: TokenUsage): String =
+      val fields = List(
+        Some(s""""input_tokens":${usage.inputTokens}"""),
+        Some(s""""output_tokens":${usage.outputTokens}"""),
+        usage.cacheCreationInputTokens.map(c =>
+          s""""cache_creation_input_tokens":$c"""
+        ),
+        usage.cacheReadInputTokens.map(c =>
+          s""""cache_read_input_tokens":$c"""
+        ),
+        usage.serviceTier.map(t => s""""service_tier":${escapeJsonString(t)}""")
+      ).flatten
+      s"""{${fields.mkString(",")}}"""
 
     private def serializeContentBlock(block: ContentBlock): String = block match
       case TextBlock(text) =>
@@ -180,16 +230,43 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
     val userMessageGen: Gen[UserMessage] = safeTextGen.map(UserMessage.apply)
 
     // Generator for AssistantMessage
-    val assistantMessageGen: Gen[AssistantMessage] =
-      Gen
-        .listOfN(Gen.choose(1, 3).sample.getOrElse(1), contentBlockGen)
-        .map(AssistantMessage.apply)
+    val assistantMessageGen: Gen[AssistantMessage] = for {
+      content <- Gen.listOfN(
+        Gen.choose(1, 3).sample.getOrElse(1),
+        contentBlockGen
+      )
+      id <- Gen.option(Gen.uuid.map(u => MessageId(u.toString)))
+      parentToolUseId <- Gen.option(Gen.alphaNumStr.suchThat(_.nonEmpty))
+      model <- Gen.option(Gen.const("claude-sonnet-4-5-20250929"))
+    } yield AssistantMessage(content, id, parentToolUseId, model)
 
     // Generator for SystemMessage
     val systemMessageGen: Gen[SystemMessage] = for {
       subtype <- Gen.oneOf("user_context", "session_start", "config_update")
       data <- systemDataGen
     } yield SystemMessage(subtype, data)
+
+    // Generator for TokenUsage
+    val tokenUsageGen: Gen[TokenUsage] = for {
+      inputTokens <- Gen.choose(0, 100000)
+      outputTokens <- Gen.choose(0, 100000)
+      cacheCreation <- Gen.option(Gen.choose(0, 100000))
+      cacheRead <- Gen.option(Gen.choose(0, 100000))
+      serviceTier <- Gen.option(Gen.oneOf("standard", "priority"))
+    } yield TokenUsage(
+      inputTokens,
+      outputTokens,
+      cacheCreation,
+      cacheRead,
+      serviceTier
+    )
+
+    // Generator for ResultTimings
+    val resultTimingsGen: Gen[ResultTimings] = for {
+      ttftMs <- Gen.option(Gen.choose(0, 60000))
+      ttftStreamMs <- Gen.option(Gen.choose(0, 60000))
+      timeToRequestMs <- Gen.option(Gen.choose(0, 60000))
+    } yield ResultTimings(ttftMs, ttftStreamMs, timeToRequestMs)
 
     // Generator for ResultMessage
     val resultMessageGen: Gen[ResultMessage] = for {
@@ -210,8 +287,19 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
       numTurns <- Gen.choose(1, 10)
       sessionId <- Gen.alphaNumStr.suchThat(_.nonEmpty)
       totalCostUsd <- Gen.option(Gen.choose(0.001, 1.0))
-      usage <- Gen.option(Gen.const(Map.empty[String, Any]))
+      usage <- Gen.option(tokenUsageGen)
       result <- Gen.option(safeTextGen)
+      id <- Gen.option(Gen.uuid.map(u => MessageId(u.toString)))
+      origin <- Gen.option(
+        Gen.oneOf(
+          Gen.const(ResultOrigin.TaskNotification),
+          Gen.alphaNumStr.suchThat(_.nonEmpty).map(ResultOrigin.Other.apply)
+        )
+      )
+      stopReason <- Gen.option(Gen.alphaNumStr.suchThat(_.nonEmpty))
+      terminalReason <- Gen.option(Gen.alphaNumStr.suchThat(_.nonEmpty))
+      apiErrorStatus <- Gen.option(Gen.alphaNumStr.suchThat(_.nonEmpty))
+      timings <- resultTimingsGen
     } yield ResultMessage(
       subtype,
       durationMs,
@@ -221,7 +309,14 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
       sessionId,
       totalCostUsd,
       usage,
-      result
+      result,
+      id,
+      origin,
+      stopReason,
+      terminalReason,
+      Nil,
+      apiErrorStatus,
+      timings
     )
 
     // Generator for KeepAliveMessage
@@ -286,9 +381,9 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
         fail(s"Expected Right(Some(UserMessage(...))) but got: $other")
 
     assistantResult match
-      case Right(Some(AssistantMessage(content))) =>
-        assertEquals(content.length, 1)
-        content.head match
+      case Right(Some(assistant: AssistantMessage)) =>
+        assertEquals(assistant.content.length, 1)
+        assistant.content.head match
           case TextBlock(text) =>
             assertEquals(text, "Hello! How can I help you today?")
           case other => fail(s"Expected TextBlock but got: $other")
@@ -296,27 +391,13 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
         fail(s"Expected Right(Some(AssistantMessage(...))) but got: $other")
 
     resultResult match
-      case Right(
-            Some(
-              ResultMessage(
-                subtype,
-                durationMs,
-                durationApiMs,
-                isError,
-                numTurns,
-                sessionId,
-                _,
-                _,
-                _
-              )
-            )
-          ) =>
-        assertEquals(subtype, "conversation_result")
-        assertEquals(durationMs, 1234)
-        assertEquals(durationApiMs, 567)
-        assertEquals(isError, false)
-        assertEquals(numTurns, 1)
-        assertEquals(sessionId, "session_123")
+      case Right(Some(rm: ResultMessage)) =>
+        assertEquals(rm.subtype, "conversation_result")
+        assertEquals(rm.durationMs, 1234)
+        assertEquals(rm.durationApiMs, 567)
+        assertEquals(rm.isError, false)
+        assertEquals(rm.numTurns, 1)
+        assertEquals(rm.sessionId, "session_123")
       case other =>
         fail(s"Expected Right(Some(ResultMessage(...))) but got: $other")
   }
@@ -498,8 +579,8 @@ class JsonParserTest extends munit.FunSuite with munit.ScalaCheckSuite:
       val parseResult = JsonParser.parseJsonLineWithContext(jsonString, 1)
 
       parseResult match
-        case Right(Some(AssistantMessage(content))) =>
-          assertEquals(AssistantMessage(content), originalMessage)
+        case Right(Some(assistant: AssistantMessage)) =>
+          assertEquals(assistant, originalMessage)
         case other =>
           fail(
             s"Expected Right(Some(AssistantMessage(...))) but got: $other for JSON: $jsonString"

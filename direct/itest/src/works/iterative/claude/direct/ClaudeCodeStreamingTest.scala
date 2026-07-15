@@ -116,9 +116,9 @@ class ClaudeCodeStreamingTest extends munit.FunSuite:
         case other => fail(s"Expected SystemMessage but got: $other")
 
       messages(1) match
-        case AssistantMessage(content) =>
-          assertEquals(content.length, 1)
-          content.head match
+        case assistant: AssistantMessage =>
+          assertEquals(assistant.content.length, 1)
+          assistant.content.head match
             case TextBlock(text) => assertEquals(text, "First response")
             case other           => fail(s"Expected TextBlock but got: $other")
         case other => fail(s"Expected AssistantMessage but got: $other")

@@ -94,8 +94,8 @@ class ClaudeCodeIntegrationTest extends munit.FunSuite:
 
       // Verify assistant response content
       assistantMessage match {
-        case Some(AssistantMessage(content)) =>
-          val textBlocks = content.collect { case TextBlock(text) =>
+        case Some(assistant: AssistantMessage) =>
+          val textBlocks = assistant.content.collect { case TextBlock(text) =>
             text
           }
           assert(
@@ -154,7 +154,7 @@ class ClaudeCodeIntegrationTest extends munit.FunSuite:
 
       // Verify: Environment variable was passed through the entire stack
       val assistantMessages = messages.collect {
-        case AssistantMessage(content) => content
+        case assistant: AssistantMessage => assistant.content
       }
       assert(
         assistantMessages.nonEmpty,
@@ -212,7 +212,7 @@ class ClaudeCodeIntegrationTest extends munit.FunSuite:
 
       // Verify: Working directory was set correctly through the entire stack
       val assistantMessages = messages.collect {
-        case AssistantMessage(content) => content
+        case assistant: AssistantMessage => assistant.content
       }
       assert(
         assistantMessages.nonEmpty,

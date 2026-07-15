@@ -58,8 +58,8 @@ object ClaudeCode:
 
   private[claude] def extractTextFromMessages(messages: List[Message]): String =
     messages
-      .collectFirst { case AssistantMessage(content) =>
-        content
+      .collectFirst { case assistant: AssistantMessage =>
+        assistant.content
           .collectFirst { case TextBlock(text) => text }
           .getOrElse("")
       }

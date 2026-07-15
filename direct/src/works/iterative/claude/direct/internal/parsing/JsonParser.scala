@@ -11,7 +11,8 @@ import works.iterative.claude.core.model.{
   ResultMessage,
   KeepAliveMessage,
   StreamEventMessage,
-  UnknownMessage
+  UnknownMessage,
+  ControlResponse
 }
 import works.iterative.claude.core.parsing.{JsonParser as CoreJsonParser}
 import works.iterative.claude.direct.Logger
@@ -114,4 +115,5 @@ object JsonParser:
       case _: ResultMessage        => "result"
       case KeepAliveMessage        => "keep_alive"
       case _: StreamEventMessage   => "stream_event"
+      case _: ControlResponse      => "control_response"
       case unknown: UnknownMessage => s"unknown(${unknown.messageType})"

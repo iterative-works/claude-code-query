@@ -46,8 +46,8 @@ class SessionIntegrationTest extends CatsEffectSuite:
         yield
           assertEquals(messages.length, 2)
           messages.head match
-            case AssistantMessage(content) =>
-              val texts = content.collect { case TextBlock(t) => t }
+            case assistant: AssistantMessage =>
+              val texts = assistant.content.collect { case TextBlock(t) => t }
               assert(texts.exists(_.contains("The answer is 42")))
             case other => fail(s"Expected AssistantMessage, got: $other")
           messages.last match
@@ -236,8 +236,8 @@ class SessionIntegrationTest extends CatsEffectSuite:
           turn1 <- session.stream.compile.toList
           _ = assertEquals(turn1.length, 2)
           _ = turn1.head match
-            case AssistantMessage(content) =>
-              val texts = content.collect { case TextBlock(t) => t }
+            case assistant: AssistantMessage =>
+              val texts = assistant.content.collect { case TextBlock(t) => t }
               assert(texts.exists(_.contains("First turn answer")))
             case other => fail(s"Expected AssistantMessage, got: $other")
           _ = turn1.last match
@@ -249,8 +249,8 @@ class SessionIntegrationTest extends CatsEffectSuite:
           turn2 <- session.stream.compile.toList
           _ = assertEquals(turn2.length, 2)
           _ = turn2.head match
-            case AssistantMessage(content) =>
-              val texts = content.collect { case TextBlock(t) => t }
+            case assistant: AssistantMessage =>
+              val texts = assistant.content.collect { case TextBlock(t) => t }
               assert(texts.exists(_.contains("Second turn answer")))
             case other => fail(s"Expected AssistantMessage, got: $other")
           _ = turn2.last match
