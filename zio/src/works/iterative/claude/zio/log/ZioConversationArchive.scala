@@ -184,6 +184,7 @@ class ZioConversationArchive private (config: ArchiveConfig)
   private def transcriptPresence(path: os.Path): TranscriptPresence =
     val nio = path.toNIO
     ZioConversationArchive.classifyPresence(
+      java.nio.file.Files.isSymbolicLink(nio),
       java.nio.file.Files.isRegularFile(nio),
       java.nio.file.Files.notExists(nio),
       java.nio.file.Files.exists(nio)
@@ -375,18 +376,22 @@ object ZioConversationArchive:
   private[log] enum TranscriptPresence:
     case Present, Absent, Indeterminate
 
-  /** The tri-state presence decision from the three `java.nio.file.Files`
-    * predicates for one path. Because each predicate reports `false` when it
-    * cannot access the path, only their combination separates a confirmed
-    * absence (`notExists` or a non-file that `exists`) from the indeterminate
-    * case where none is confirmed — the signature of an unreadable parent.
+  /** The tri-state presence decision for one path. A symlink is refused up
+    * front (treated as absent), so the read path never follows a link out of
+    * the archive, matching the mirror-write guard. Otherwise, because each
+    * `java.nio.file.Files` predicate reports `false` when it cannot access the
+    * path, only their combination separates a confirmed absence (`notExists` or
+    * a non-file that `exists`) from the indeterminate case where none is
+    * confirmed — the signature of an unreadable parent.
     */
   private[log] def classifyPresence(
+      isSymbolicLink: Boolean,
       isRegularFile: Boolean,
       notExists: Boolean,
       exists: Boolean
   ): TranscriptPresence =
-    if isRegularFile then TranscriptPresence.Present
+    if isSymbolicLink then TranscriptPresence.Absent
+    else if isRegularFile then TranscriptPresence.Present
     else if notExists then TranscriptPresence.Absent
     else if exists then TranscriptPresence.Absent
     else TranscriptPresence.Indeterminate

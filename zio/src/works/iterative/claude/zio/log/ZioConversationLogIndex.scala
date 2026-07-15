@@ -46,13 +46,14 @@ class ZioConversationLogIndex private (
         os.list(subagentsDir)
           .filter: path =>
             val name = path.last
-            os.isFile(path) && name.startsWith("agent-") && name.endsWith(
-              ".jsonl"
-            )
+            // Symlinks are refused: a sidechain must be a real file under the
+            // tree, never a link that could point outside it.
+            !os.isLink(path) && os.isFile(path) &&
+            name.startsWith("agent-") && name.endsWith(".jsonl")
           .flatMap: jsonlPath =>
             val metaPath =
               jsonlPath / os.up / s"${jsonlPath.last.stripSuffix(".jsonl")}.meta.json"
-            if !os.exists(metaPath) then None
+            if !os.exists(metaPath) || os.isLink(metaPath) then None
             else
               io.circe.parser
                 .parse(os.read(metaPath))

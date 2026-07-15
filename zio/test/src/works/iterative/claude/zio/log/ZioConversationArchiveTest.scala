@@ -123,16 +123,20 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
       import ZioConversationArchive.TranscriptPresence.*
       assertTrue(
         ZioConversationArchive.classifyPresence(
+          isSymbolicLink = false,
           isRegularFile = true,
           notExists = false,
           exists = true
         ) == Present,
+        // A symlink is refused up front, even to a real regular file.
+        ZioConversationArchive.classifyPresence(true, true, false, true) == Absent,
         // Confirmed absent: notExists is decisive.
-        ZioConversationArchive.classifyPresence(false, true, false) == Absent,
+        ZioConversationArchive.classifyPresence(false, false, true, false) == Absent,
         // Exists but is not a regular file (e.g. a directory): not a transcript.
-        ZioConversationArchive.classifyPresence(false, false, true) == Absent,
+        ZioConversationArchive.classifyPresence(false, false, false, true) == Absent,
         // Nothing confirmed either way: an unreadable parent, not an absence.
         ZioConversationArchive.classifyPresence(
+          false,
           false,
           false,
           false
@@ -418,7 +422,7 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
           followLinks = false
         )
       ),
-    test("mirror does not dereference a symlinked main transcript"):
+    test("mirror refuses a symlinked main transcript instead of dereferencing it"):
       for
         fx <- fixture
         archive = fx.archive
@@ -429,10 +433,11 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
                os.write(secret, "TOP SECRET MAIN\n")
                val projectDir = config.vendorProjectsDir / "-home-tester-proj"
                os.symlink(projectDir / s"$linkedId.jsonl", secret)
-        report <- archive.mirror(SessionId(linkedId))
+        // A symlinked main transcript is not a resolvable session record, so the
+        // session is refused rather than the link being followed and copied.
+        result <- archive.mirror(SessionId(linkedId)).either
       yield assertTrue(
-        // The symlinked main transcript is neither planned nor copied.
-        report.copied.isEmpty,
+        result == Left(SessionNotFound(linkedId)),
         !os.exists(
           config.archiveDir / encoded / s"$linkedId.jsonl",
           followLinks = false
@@ -487,6 +492,46 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
         // The old flat layout is gone: nothing hangs directly off archiveDir.
         !os.exists(config.archiveDir / s"$sessionId.jsonl")
       ),
+    test("a symlinked main transcript under the archive root is refused, not followed"):
+      for
+        fx <- fixture
+        archive = fx.archive
+        config  = fx.config
+        linkedId = "sess-archlink"
+        _ <- ZIO.attempt:
+          val secret = os.temp.dir() / "secret.jsonl"
+          os.write(secret, "TOP SECRET ARCHIVE MAIN\n")
+          val archiveProj = config.archiveDir / encoded
+          os.makeDir.all(archiveProj)
+          os.symlink(archiveProj / s"$linkedId.jsonl", secret)
+        located <- archive.forSession(SessionId(linkedId))
+        entries <- archive.entries(SessionId(linkedId)).runCollect.either
+      yield assertTrue(
+        located.isEmpty,
+        entries == Left(SessionNotFound(linkedId))
+      ),
+    test("a symlinked sidechain under the archive root is ignored by the sub-agent join"):
+      for
+        fx <- fixture
+        archive = fx.archive
+        config  = fx.config
+        _ <- archive.mirror(SessionId(sessionId))
+        _ <- ZIO.attempt(os.remove.all(config.vendorProjectsDir / encoded))
+        evilTool = "toolu_EVIL"
+        _ <- ZIO.attempt:
+          val secret = os.temp.dir() / "evil.jsonl"
+          os.write(secret, subAgentLine + "\n")
+          val subagents = config.archiveDir / encoded / sessionId / "subagents"
+          os.symlink(subagents / "agent-evil.jsonl", secret)
+          os.write(
+            subagents / "agent-evil.meta.json",
+            s"""{"agentType":"general-purpose","description":"evil","toolUseId":"$evilTool"}"""
+          )
+        result <- archive
+          .subagentEntries(SessionId(sessionId), evilTool)
+          .runCollect
+          .either
+      yield assertTrue(result == Left(SubAgentNotFound(sessionId, evilTool))),
     test("forSession and entries fall back to the archive when the vendor tree is pruned"):
       for
         fx <- fixture
