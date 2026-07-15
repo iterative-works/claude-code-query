@@ -180,6 +180,19 @@ object SessionTest extends ClaudeZioSpec:
           )
         error <- r.session.awaitResultAfter(0).flip
       yield assertTrue(error == SessionProcessDied(Some(2), "died")),
+    test("awaitResultAfter fails with the end error when the state hub is shut down mid-wait"):
+      // Session end records the ended state and then shuts the stateChanges Hub
+      // to complete its stream. A blocked awaitResultAfter must observe the
+      // recorded end and fail with its error, not surface the hub's interruption.
+      val end = SessionEnd(Some(3), Some(SessionProcessDied(Some(3), "died")))
+      for
+        r     <- rig()
+        fiber <- r.session.awaitResultAfter(0).fork
+        _     <- fiber.status.repeatUntil(_.isSuspended)
+        _     <- r.stateRef.update(SessionState.ended(_, end))
+        _     <- r.stateChangesHub.shutdown
+        error <- fiber.join.flip
+      yield assertTrue(error == SessionProcessDied(Some(3), "died")),
     test("state reads the current SessionState"):
       val s = SessionState.initial.copy(resultsSeen = 3, notificationsSeen = 1)
       for
@@ -228,21 +241,29 @@ object SessionTest extends ClaudeZioSpec:
         _   <- r.terminated.succeed(end)
         got <- r.session.terminated
       yield assertTrue(got == end),
-    test("two events subscribers both see the same messages"):
+    test("the events Hub fans every message out to all subscribers"):
+      // `session.events` is `ZStream.fromHub(eventsHub)`, so this pins the
+      // fan-out it relies on: two subscribers registered before publishing each
+      // see the full stream. Subscribing inside a scope registers both
+      // synchronously, so there is no wall-clock race before publishing (the
+      // public `session.events` path is covered end-to-end by the integration
+      // suite's equivalent test).
       val a = AssistantMessage(List(TextBlock("one")))
       val b = AssistantMessage(List(TextBlock("two")))
       for
-        r    <- rig()
-        sub1 <- r.session.events.take(2).runCollect.fork
-        sub2 <- r.session.events.take(2).runCollect.fork
-        _    <- ZIO.sleep(300.millis)
-        _    <- r.eventsHub.publish(a)
-        _    <- r.eventsHub.publish(b)
-        one  <- sub1.join
-        two  <- sub2.join
+        r <- rig()
+        result <- ZIO.scoped:
+                    for
+                      sub1 <- r.eventsHub.subscribe
+                      sub2 <- r.eventsHub.subscribe
+                      _    <- r.eventsHub.publish(a)
+                      _    <- r.eventsHub.publish(b)
+                      one  <- sub1.take.zipWith(sub1.take)(List(_, _))
+                      two  <- sub2.take.zipWith(sub2.take)(List(_, _))
+                    yield (one, two)
       yield assertTrue(
-        one.toList == List(a, b),
-        two.toList == List(a, b)
+        result._1 == List(a, b),
+        result._2 == List(a, b)
       ),
     // Regression (PROC-589 lineage): the wait for the session id must not hang
     // when the process ends before the CLI names the session, even inside an

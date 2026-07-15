@@ -25,9 +25,8 @@ import works.iterative.claude.zio.internal.parsing.JsonParser
   * fiber owns the stdout stream: it parses each line, captures the session id,
   * routes control responses to their waiting request, folds results into the
   * readable [[SessionState]], and fans every message out over a Hub — so any
-  * number of `events`/`stateChanges` consumers see the full stream, resolving
-  * the old exactly-one-consumer constraint by construction. Scope finalizers
-  * close stdin and kill the process on exit.
+  * number of `events`/`stateChanges` consumers each see the full stream. Scope
+  * finalizers close stdin and kill the process on exit.
   */
 object SessionProcess:
 
@@ -286,8 +285,8 @@ object SessionProcess:
 
   /** Records the session's end once the reader's stream completes: flips the
     * alive flag, folds the end into the state, resolves `terminated`, fails any
-    * pending control requests, mirrors on close, and shuts the events Hub so
-    * `events` streams complete.
+    * pending control requests, mirrors on close, and shuts both the events and
+    * stateChanges Hubs so their streams complete.
     */
   private def recordEnd(
       process: Process,
@@ -315,6 +314,7 @@ object SessionProcess:
         case Some(id) => archiveHook.onClose(id)
         case None     => ZIO.unit
       _ <- eventsHub.shutdown
+      _ <- stateChangesHub.shutdown
     yield ()
 
   private def failPendingRequests(
@@ -398,14 +398,26 @@ private final class SessionImpl(
           requestId = s"req-$n"
           promise <- Promise.make[CLIError, ControlResponse]
           _ <- pendingRequests.update(_ + (requestId -> promise))
+          // recordEnd flips `aliveRef` to false strictly before it drains the
+          // pending registry. If the process died in the window between the
+          // liveness gate above and this registration, that drain may already
+          // have run and would never fail this promise — leaving `await` to
+          // block until the interrupt timeout. Re-checking liveness after
+          // registration closes the window: a dead session fails fast here, and
+          // a still-live one is guaranteed to be drained (and thus failed) on
+          // end because our promise is now in the registry.
+          alive <- aliveRef.get
           request = ControlRequest(requestId, ControlRequestBody.Interrupt)
-          response <-
-            (offer(SessionStdin.controlRequestLine(request))
-              *> promise.await.timeoutFail(
-                SessionProcess.interruptTimedOut
-              )(SessionProcess.InterruptTimeout))
-              .ensuring(pendingRequests.update(_ - requestId))
-        yield InterruptOutcome(stillQueued(response))
+          outcome <-
+            if !alive then pendingRequests.update(_ - requestId) *> failProcessGone
+            else
+              (offer(SessionStdin.controlRequestLine(request))
+                *> promise.await.timeoutFail(
+                  SessionProcess.interruptTimedOut
+                )(SessionProcess.InterruptTimeout))
+                .ensuring(pendingRequests.update(_ - requestId))
+                .map(response => InterruptOutcome(stillQueued(response)))
+        yield outcome
 
   def events: ZStream[Any, Nothing, Message] =
     ZStream.fromHub(eventsHub)
@@ -428,8 +440,25 @@ private final class SessionImpl(
               case _ =>
                 current.ended match
                   case Some(end) => failEnd(end)
-                  case None      => subscription.take *> loop
+                  case None      => awaitChange(subscription) *> loop
         loop
+
+  /** Blocks until the state hub delivers a change. Session end shuts the hub
+    * down, which interrupts a blocked take; that shutdown is itself the change
+    * to observe, so it returns normally and lets the loop read the ended state.
+    * A genuine caller interruption (the hub still live) is propagated.
+    */
+  private def awaitChange(
+      subscription: Dequeue[SessionState]
+  ): UIO[Unit] =
+    subscription.take.unit.foldCauseZIO(
+      cause =>
+        subscription.isShutdown.flatMap:
+          case true  => ZIO.unit
+          case false => ZIO.refailCause(cause)
+      ,
+      _ => ZIO.unit
+    )
 
   private def offer(line: String): UIO[Unit] =
     stdinQueue

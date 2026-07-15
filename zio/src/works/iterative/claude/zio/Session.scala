@@ -77,7 +77,8 @@ trait Session:
   def state: UIO[SessionState]
 
   /** State transitions as they happen. May skip intermediate states under load;
-    * [[state]] is the ground truth to read.
+    * [[state]] is the ground truth to read. The stream completes when the
+    * session's process ends.
     */
   def stateChanges: ZStream[Any, Nothing, SessionState]
 

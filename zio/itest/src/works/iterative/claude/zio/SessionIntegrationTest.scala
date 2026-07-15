@@ -138,6 +138,18 @@ object SessionIntegrationTest extends ClaudeZioSpec:
           one.exists(_.isInstanceOf[AssistantMessage]),
           one.lastOption.exists(_.isInstanceOf[ResultMessage])
         ),
+    test("stateChanges completes when the session process ends"):
+      val script = MockCliScript.crashMidTurnScript(initLine, assistantLine)
+      ZIO.scoped:
+        for
+          session <- ClaudeCode.session(options(script))
+          drained <- session.stateChanges.runDrain.fork
+          _       <- session.send(input)
+          _       <- session.terminated
+          // The stateChanges stream must complete once the process ends; a hang
+          // here would leave `done` empty.
+          done    <- drained.join.timeout(5.seconds)
+        yield assertTrue(done.isDefined),
     test("skips a malformed JSON line mid-turn and still completes the turn"):
       val script = MockCliScript.sessionScript(
         initLine,
