@@ -7,9 +7,11 @@ import works.iterative.claude.core.model.SessionId
 
 /** A continuation cursor for reading older entries of a session's transcript.
   *
-  * Treat it as opaque: obtain one from a page and hand it back to fetch the
-  * previous page. Its fields pin the cursor to a single resolved file so it can
-  * never be applied to a different one:
+  * It is opaque by construction: only the archive read path (within the `log`
+  * package) mints one. A consumer obtains one from a page and hands it back to
+  * fetch the previous page, but cannot forge one against an arbitrary file. Its
+  * fields pin the cursor to a single resolved file so it can never be applied
+  * to a different one:
   *
   *   - `offset` is a byte position into an append-only file, so it stays valid
   *     as the file grows.
@@ -26,8 +28,21 @@ import works.iterative.claude.core.model.SessionId
   * @param offset
   *   the exclusive byte bound below which older entries are read
   */
-final case class PageToken(
+final case class PageToken private (
     sessionId: SessionId,
     source: os.Path,
     offset: Long
 )
+
+object PageToken:
+
+  /** Mints a cursor. Restricted to the `log` package so a token can only be
+    * produced by the read path that resolved `source`, never forged by a
+    * consumer.
+    */
+  private[log] def apply(
+      sessionId: SessionId,
+      source: os.Path,
+      offset: Long
+  ): PageToken =
+    new PageToken(sessionId, source, offset)

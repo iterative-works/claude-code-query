@@ -17,13 +17,13 @@ import works.iterative.claude.core.log.ByteRangeReader
 import works.iterative.claude.core.log.ConversationArchive
 import works.iterative.claude.core.log.MirrorAction
 import works.iterative.claude.core.log.MirrorPlanner
+import works.iterative.claude.core.log.TranscriptPage
 import works.iterative.claude.core.log.model.ConversationLogEntry
 import works.iterative.claude.core.log.model.EntryPage
 import works.iterative.claude.core.log.model.MirrorReport
 import works.iterative.claude.core.log.model.PageToken
 import works.iterative.claude.core.log.model.RecordRoot
 import works.iterative.claude.core.log.model.SessionRecord
-import works.iterative.claude.core.log.parsing.ConversationLogParser
 import works.iterative.claude.core.model.SessionId
 
 class ZioConversationArchive private (config: ArchiveConfig)
@@ -136,9 +136,7 @@ class ZioConversationArchive private (config: ArchiveConfig)
               (at, count) => os.read.bytes(path, at, count)
             )
         )
-        val entries = tail.lines.flatMap(ConversationLogParser.parseLogLine)
-        val older = tail.older.map(offset => PageToken(sessionId, path, offset))
-        EntryPage(entries, older)
+        TranscriptPage.fromTail(sessionId, path, tail)
       .mapError(toArchiveError)
 
   private def transcriptStream(path: os.Path): EntryStream =

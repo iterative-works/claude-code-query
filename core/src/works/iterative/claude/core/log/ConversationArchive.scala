@@ -43,10 +43,11 @@ trait ConversationArchive[F[_]]:
   def entries(sessionId: SessionId): EntryStream
 
   /** Reads the last `limit` main-thread entries of a session without parsing
-    * the transcript from the start, newest page first (entries within the page
-    * are oldest-first). The page's `older` cursor pages backward through the
-    * rest. Resolves vendor-then-mirror like [[forSession]], so a pruned session
-    * still tails from the mirror.
+    * the transcript from the start. Entries within the returned page are
+    * oldest-first; the page itself is the newest slice of the transcript. The
+    * page's `older` cursor pages backward through earlier, older pages.
+    * Resolves vendor-then-mirror like [[forSession]], so a pruned session still
+    * tails from the mirror.
     */
   def lastEntries(sessionId: SessionId, limit: Int): F[EntryPage]
 
@@ -55,7 +56,9 @@ trait ConversationArchive[F[_]]:
     * The token is pinned to the transcript it was minted against; if the
     * session now resolves to a different file (the vendor tree was pruned
     * between pages), this fails with [[ArchiveError.PageSourceMoved]] rather
-    * than reading a stale offset against the wrong file.
+    * than reading a stale offset against the wrong file. If the session no
+    * longer resolves under either root at all, this fails with
+    * [[ArchiveError.SessionNotFound]].
     */
   def entriesBefore(token: PageToken, limit: Int): F[EntryPage]
 
@@ -70,5 +73,13 @@ trait ConversationArchive[F[_]]:
 
   /** Idempotently mirrors the whole session tree into the archive directory,
     * reporting what was copied, extended, refreshed, and skipped.
+    *
+    * Custody is one-directional: when the session resolves under
+    * [[works.iterative.claude.core.log.model.RecordRoot.Archive]] (the vendor
+    * tree is already pruned), this is a no-op returning
+    * [[works.iterative.claude.core.log.model.MirrorReport.empty]] — the archive
+    * is never truncated or recopied from nothing. Only a `Vendor`-resolved
+    * record is ever a mirror source. `SessionNotFound` is raised only when
+    * neither root holds the session.
     */
   def mirror(sessionId: SessionId): F[MirrorReport]
