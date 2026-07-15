@@ -62,18 +62,10 @@ object BackwardLineReader:
     if limit <= 0 || regionEnd <= 0 then Tail(Vector.empty, None)
     else
       val newline = '\n'.toByte
-      // Read blocks backward, growing the buffer, until it holds one more
-      // newline than requested (so the oldest line's start is known) or the
-      // region start is reached.
-      var curStart = regionEnd
-      var buffer = Array.emptyByteArray
-      var newlines = 0
-      while curStart > 0 && newlines < limit + 1 do
-        val newStart = math.max(0L, curStart - blockSize)
-        val block = readBlock(newStart, (curStart - newStart).toInt)
-        buffer = block ++ buffer
-        curStart = newStart
-        newlines = countNewlines(buffer, newline)
+      // Grow the buffer backward until it holds one more newline than requested
+      // (so the oldest line's start is known) or the region start is reached.
+      val (curStart, buffer) =
+        readBackTo(regionEnd, Array.emptyByteArray, limit, blockSize, readBlock)
 
       // Absolute file offsets of every newline now in the buffer, ascending.
       val newlineOffsets =
@@ -87,23 +79,35 @@ object BackwardLineReader:
       val startOfOldest =
         if beforeOldest >= 0 then newlineOffsets(beforeOldest) + 1 else 0L
 
-      var lineStart = startOfOldest
-      val lines = chosen.map: end =>
-        val from = (lineStart - curStart).toInt
-        val until = (end - curStart).toInt
-        val decoded = decodeLine(buffer, from, until)
-        lineStart = end + 1
-        decoded
+      // Each chosen newline ends a line; that line starts just after the
+      // previous chosen newline, or at the oldest line's start for the first.
+      val starts = startOfOldest +: chosen.dropRight(1).map(_ + 1)
+      val lines = starts
+        .zip(chosen)
+        .map: (start, end) =>
+          decodeLine(buffer, (start - curStart).toInt, (end - curStart).toInt)
 
       Tail(lines, Option.when(startOfOldest > 0)(startOfOldest))
 
-  private def countNewlines(buffer: Array[Byte], newline: Byte): Int =
-    var count = 0
-    var i = 0
-    while i < buffer.length do
-      if buffer(i) == newline then count += 1
-      i += 1
-    count
+  /** Reads earlier blocks, prepending each, until the accumulated buffer holds
+    * more than `limit` newlines (enough to bound `limit` complete lines and
+    * know the oldest one's start) or the region start is reached. Returns the
+    * buffer and the file offset it now begins at.
+    */
+  @annotation.tailrec
+  private def readBackTo(
+      curStart: Long,
+      buffer: Array[Byte],
+      limit: Int,
+      blockSize: Int,
+      readBlock: (Long, Int) => Array[Byte]
+  ): (Long, Array[Byte]) =
+    if curStart <= 0 || buffer.count(_ == '\n'.toByte) > limit then
+      (curStart, buffer)
+    else
+      val newStart = math.max(0L, curStart - blockSize)
+      val block = readBlock(newStart, (curStart - newStart).toInt)
+      readBackTo(newStart, block ++ buffer, limit, blockSize, readBlock)
 
   /** Decodes `buffer[from, until)` as a UTF-8 line, dropping one trailing `\r`.
     */

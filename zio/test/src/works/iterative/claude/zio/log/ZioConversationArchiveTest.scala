@@ -10,6 +10,7 @@ import works.iterative.claude.core.log.ArchiveError
 import works.iterative.claude.core.log.ArchiveError.SessionNotFound
 import works.iterative.claude.core.log.ArchiveError.SubAgentNotFound
 import works.iterative.claude.core.log.model.RawLogEntry
+import works.iterative.claude.core.log.model.RecordRoot
 import works.iterative.claude.core.model.SessionId
 import works.iterative.claude.zio.internal.testing.ClaudeZioSpec
 
@@ -17,6 +18,7 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
 
   private val sessionId     = "0d43043b-1111-2222-3333-444455556666"
   private val cwd           = os.Path("/home/tester/proj")
+  private val encoded       = "-home-tester-proj"
   private val parentToolUse = "toolu_01RKfPARENT"
 
   private val mainLine1 =
@@ -63,21 +65,33 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
     if !os.exists(root) then Set.empty
     else os.walk(root).filter(os.isFile).map(_.subRelativeTo(root)).toSet
 
+  /** Byte-for-byte snapshot of every file under `root`, for asserting custody
+    * leaves the archive untouched.
+    */
+  private def snapshot(root: os.Path): Map[os.SubPath, List[Byte]] =
+    if !os.exists(root) then Map.empty
+    else
+      os.walk(root)
+        .filter(os.isFile)
+        .map(p => p.subRelativeTo(root) -> os.read.bytes(p).toList)
+        .toMap
+
   /** Asserts every source file under the session tree has a byte-identical
     * counterpart under the archive.
     */
   private def assertMirrorMatchesSource(config: ArchiveConfig): TestResult =
-    val projectDir = config.vendorProjectsDir / "-home-tester-proj"
+    val projectDir  = config.vendorProjectsDir / encoded
+    val mirrorDir   = config.archiveDir / encoded
     val sourceRel =
       relFilesUnder(projectDir).filter(rel =>
         rel == os.sub / s"$sessionId.jsonl" || rel.segments.headOption
           .contains(sessionId)
       )
     val identical = sourceRel.forall: rel =>
-      os.exists(config.archiveDir / rel) &&
+      os.exists(mirrorDir / rel) &&
         java.util.Arrays.equals(
           os.read.bytes(projectDir / rel),
-          os.read.bytes(config.archiveDir / rel)
+          os.read.bytes(mirrorDir / rel)
         )
     assertTrue(sourceRel.nonEmpty, identical)
 
@@ -217,7 +231,7 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
                os.write.over(mainPath, edited)
         report <- archive.mirror(SessionId(sessionId))
       yield
-        val archivedMain = config.archiveDir / s"$sessionId.jsonl"
+        val archivedMain = config.archiveDir / encoded / s"$sessionId.jsonl"
         assertTrue(
           report.skipped.contains(os.sub / s"$sessionId.jsonl"),
           !java.util.Arrays.equals(
@@ -233,9 +247,9 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
         _                 <- archive.mirror(SessionId(sessionId))
         subagents = config.vendorProjectsDir / "-home-tester-proj" /
           sessionId / "subagents"
-        archivedAgent = config.archiveDir / sessionId / "subagents" /
+        archivedAgent = config.archiveDir / encoded / sessionId / "subagents" /
           "agent-abc.jsonl"
-        archivedMeta = config.archiveDir / sessionId / "subagents" /
+        archivedMeta = config.archiveDir / encoded / sessionId / "subagents" /
           "agent-abc.meta.json"
         agentSnapshot <- ZIO.attempt(os.read.bytes(archivedAgent))
         metaSnapshot  <- ZIO.attempt(os.read.bytes(archivedMeta))
@@ -292,7 +306,7 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
         config  = fx.config
         _ <- ZIO.attempt(
                os.write(
-                 config.archiveDir / sessionId / "subagents",
+                 config.archiveDir / encoded / sessionId / "subagents",
                  "blocker",
                  createFolders = true
                )
@@ -347,7 +361,7 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
         report.total > 0,
         !report.copied.exists(_.last == "leak.jsonl"),
         !os.exists(
-          config.archiveDir / sessionId / "subagents" / "leak.jsonl",
+          config.archiveDir / encoded / sessionId / "subagents" / "leak.jsonl",
           followLinks = false
         )
       ),
@@ -366,7 +380,10 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
       yield assertTrue(
         // The symlinked main transcript is neither planned nor copied.
         report.copied.isEmpty,
-        !os.exists(config.archiveDir / s"$linkedId.jsonl", followLinks = false)
+        !os.exists(
+          config.archiveDir / encoded / s"$linkedId.jsonl",
+          followLinks = false
+        )
       ),
     test("mirror does not walk a symlinked session tree directory"):
       for
@@ -385,7 +402,10 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
         // Only the real main transcript is mirrored; the symlinked tree root
         // is not walked, so nothing behind it reaches the archive.
         report.copied == Seq(os.sub / s"$treeLinkedId.jsonl"),
-        !os.exists(config.archiveDir / treeLinkedId, followLinks = false)
+        !os.exists(
+          config.archiveDir / encoded / treeLinkedId,
+          followLinks = false
+        )
       ),
     test("mirror restricts the archive directory tree to owner-only on POSIX"):
       for
@@ -398,5 +418,130 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
         else
           val dirs = config.archiveDir +:
             os.walk(config.archiveDir).filter(os.isDir(_, followLinks = false))
-          assertTrue(dirs.forall(d => os.perms(d).toString == "rwx------"))
+          assertTrue(dirs.forall(d => os.perms(d).toString == "rwx------")),
+    test("mirror writes the archive under the encoded-cwd segment, not flat"):
+      for
+        fx <- fixture
+        archive = fx.archive
+        config  = fx.config
+        _ <- archive.mirror(SessionId(sessionId))
+      yield assertTrue(
+        os.exists(config.archiveDir / encoded / s"$sessionId.jsonl"),
+        os.exists(
+          config.archiveDir / encoded / sessionId / "subagents" /
+            "agent-abc.jsonl"
+        ),
+        // The old flat layout is gone: nothing hangs directly off archiveDir.
+        !os.exists(config.archiveDir / s"$sessionId.jsonl")
+      ),
+    test("forSession and entries fall back to the archive when the vendor tree is pruned"):
+      for
+        fx <- fixture
+        archive = fx.archive
+        config  = fx.config
+        _ <- archive.mirror(SessionId(sessionId))
+        _ <- ZIO.attempt(os.remove.all(config.vendorProjectsDir / encoded))
+        located     <- archive.forSession(SessionId(sessionId))
+        mainEntries <- archive.entries(SessionId(sessionId)).runCollect
+        subEntries  <- archive
+          .subagentEntries(SessionId(sessionId), parentToolUse)
+          .runCollect
+      yield assertTrue(
+        located.exists(_.root == RecordRoot.Archive),
+        located.exists(
+          _.mainTranscript == config.archiveDir / encoded / s"$sessionId.jsonl"
+        ),
+        mainEntries.map(_.uuid.getOrElse("")).toList == List("u1", "u2", "u3"),
+        subEntries.map(_.uuid.getOrElse("")).toList == List("a1")
+      ),
+    test("mirror is a no-op when the vendor tree is gone, leaving the archive intact"):
+      for
+        fx <- fixture
+        archive = fx.archive
+        config  = fx.config
+        _ <- archive.mirror(SessionId(sessionId))
+        mirrorDir = config.archiveDir / encoded
+        before <- ZIO.attempt(snapshot(mirrorDir))
+        _ <- ZIO.attempt(os.remove.all(config.vendorProjectsDir / encoded))
+        report      <- archive.mirror(SessionId(sessionId))
+        reportAgain <- archive.mirror(SessionId(sessionId))
+        after       <- ZIO.attempt(snapshot(mirrorDir))
+      yield assertTrue(
+        report.isEmpty,
+        reportAgain.isEmpty,
+        before.nonEmpty,
+        before == after
+      ),
+    test("lastEntries returns the final entries and pages backward to the start"):
+      for
+        fx <- fixture
+        archive = fx.archive
+        page1 <- archive.lastEntries(SessionId(sessionId), 2)
+        page2 <- ZIO.foreach(page1.older)(t => archive.entriesBefore(t, 2))
+      yield assertTrue(
+        page1.entries.map(_.uuid.getOrElse("")).toList == List("u2", "u3"),
+        page1.older.isDefined,
+        page2.exists(_.entries.map(_.uuid.getOrElse("")).toList == List("u1")),
+        page2.exists(_.older.isEmpty)
+      ),
+    test("lastEntries past the entry count returns all with no older page"):
+      for
+        fx <- fixture
+        archive = fx.archive
+        page <- archive.lastEntries(SessionId(sessionId), 10)
+      yield assertTrue(
+        page.entries.map(_.uuid.getOrElse("")).toList == List("u1", "u2", "u3"),
+        page.older.isEmpty
+      ),
+    test("lastEntries fails with SessionNotFound for an absent session"):
+      for
+        fx <- fixture
+        archive = fx.archive
+        result <- archive.lastEntries(SessionId("no-such-session"), 5).either
+      yield assertTrue(result == Left(SessionNotFound("no-such-session"))),
+    test("lastEntries tails the archive when the vendor tree is pruned"):
+      for
+        fx <- fixture
+        archive = fx.archive
+        config  = fx.config
+        _ <- archive.mirror(SessionId(sessionId))
+        _ <- ZIO.attempt(os.remove.all(config.vendorProjectsDir / encoded))
+        page <- archive.lastEntries(SessionId(sessionId), 3)
+      yield assertTrue(
+        page.entries.map(_.uuid.getOrElse("")).toList == List("u1", "u2", "u3")
+      ),
+    test("an older-page token stays valid after the transcript grows"):
+      for
+        fx <- fixture
+        archive = fx.archive
+        config  = fx.config
+        page1 <- archive.lastEntries(SessionId(sessionId), 1)
+        _ <- ZIO.attempt(
+               os.write.append(
+                 config.vendorProjectsDir / encoded / s"$sessionId.jsonl",
+                 mainLine2 + "\n"
+               )
+             )
+        older <- ZIO.foreach(page1.older)(t => archive.entriesBefore(t, 10))
+      yield assertTrue(
+        page1.entries.map(_.uuid.getOrElse("")).toList == List("u3"),
+        older.exists(
+          _.entries.map(_.uuid.getOrElse("")).toList == List("u1", "u2")
+        )
+      ),
+    test("a page token minted on the vendor tree fails once the source moves to the mirror"):
+      for
+        fx <- fixture
+        archive = fx.archive
+        config  = fx.config
+        _     <- archive.mirror(SessionId(sessionId))
+        page1 <- archive.lastEntries(SessionId(sessionId), 1)
+        _ <- ZIO.attempt(os.remove.all(config.vendorProjectsDir / encoded))
+        result <- ZIO.foreach(page1.older)(t =>
+          archive.entriesBefore(t, 1).either
+        )
+      yield assertTrue(
+        page1.older.isDefined,
+        result.contains(Left(ArchiveError.PageSourceMoved(sessionId)))
+      )
   )

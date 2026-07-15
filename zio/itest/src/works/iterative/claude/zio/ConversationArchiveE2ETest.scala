@@ -35,15 +35,17 @@ object ConversationArchiveE2ETest extends ClaudeZioSpec:
                        )
         config  = ArchiveConfig(configDir / "projects", archiveDir, workDir)
         archive = ZioConversationArchive(config)
-        located <- archive.forSession(sessionId)
-        entries <- archive.entries(sessionId).runCollect
-        report  <- archive.mirror(sessionId)
+        located  <- archive.forSession(sessionId)
+        entries  <- archive.entries(sessionId).runCollect
+        tailPage <- archive.lastEntries(sessionId, 5)
+        report   <- archive.mirror(sessionId)
         projectDir = ArchivePaths.projectDir(config)
+        mirrorDir  = ArchivePaths.archiveProjectDir(config)
         identical = os.walk(projectDir)
                       .filter(os.isFile)
                       .forall: source =>
                         val rel  = source.subRelativeTo(projectDir)
-                        val dest = archiveDir / rel
+                        val dest = mirrorDir / rel
                         os.exists(dest) && java.util.Arrays.equals(
                           os.read.bytes(source),
                           os.read.bytes(dest)
@@ -51,6 +53,10 @@ object ConversationArchiveE2ETest extends ClaudeZioSpec:
       yield assertTrue(
         located.exists(_.sessionId == sessionId),
         entries.nonEmpty,
+        // The tail is the last entries of what the full read returns.
+        tailPage.entries.nonEmpty,
+        tailPage.entries.map(_.uuid).toList ==
+          entries.takeRight(tailPage.entries.size).map(_.uuid).toList,
         report.copied.nonEmpty,
         identical
       )

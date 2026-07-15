@@ -18,6 +18,7 @@ object SessionArchiveHookTest extends ClaudeZioSpec:
 
   private val sessionId = SessionId("0d43043b-aaaa-bbbb-cccc-dddddddddddd")
   private val cwd       = os.Path("/home/tester/proj")
+  private val encoded   = "-home-tester-proj"
   private val mainLine  =
     s"""{"type":"user","sessionId":"$sessionId","uuid":"u1","message":{"content":"hi"}}"""
 
@@ -51,7 +52,9 @@ object SessionArchiveHookTest extends ClaudeZioSpec:
         _      <- hook.afterResult(sessionId)
         copied <- ZIO
                     .attemptBlocking(
-                      os.exists(config.archiveDir / s"$sessionId.jsonl")
+                      os.exists(
+                        config.archiveDir / encoded / s"$sessionId.jsonl"
+                      )
                     )
                     .orDie
       yield assertTrue(copied),
@@ -63,7 +66,7 @@ object SessionArchiveHookTest extends ClaudeZioSpec:
         _ <- ZIO
                .attemptBlocking(
                  os.write(
-                   config.archiveDir / sessionId.value / "subagents",
+                   config.archiveDir / encoded / sessionId.value / "subagents",
                    "blocker",
                    createFolders = true
                  )

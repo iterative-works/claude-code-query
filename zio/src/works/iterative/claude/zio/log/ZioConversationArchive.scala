@@ -1,5 +1,5 @@
-// PURPOSE: Task-based ConversationArchive that locates, reads, and mirrors a session's record tree
-// PURPOSE: Interprets the pure mirror plan with file IO, surfacing failures on a typed ArchiveError channel
+// PURPOSE: Task-based ConversationArchive that locates, reads, tails, and mirrors a session record tree
+// PURPOSE: Resolves vendor-then-mirror, keeps custody one-directional, and interprets the pure plan with IO
 
 package works.iterative.claude.zio.log
 
@@ -8,15 +8,21 @@ import zio.stream.*
 import works.iterative.claude.core.log.ArchiveConfig
 import works.iterative.claude.core.log.ArchiveError
 import works.iterative.claude.core.log.ArchiveError.ArchiveIOError
+import works.iterative.claude.core.log.ArchiveError.PageSourceMoved
 import works.iterative.claude.core.log.ArchiveError.SessionNotFound
 import works.iterative.claude.core.log.ArchiveError.SubAgentNotFound
 import works.iterative.claude.core.log.ArchivePaths
+import works.iterative.claude.core.log.BackwardLineReader
 import works.iterative.claude.core.log.ConversationArchive
 import works.iterative.claude.core.log.MirrorAction
 import works.iterative.claude.core.log.MirrorPlanner
 import works.iterative.claude.core.log.model.ConversationLogEntry
+import works.iterative.claude.core.log.model.EntryPage
 import works.iterative.claude.core.log.model.MirrorReport
+import works.iterative.claude.core.log.model.PageToken
+import works.iterative.claude.core.log.model.RecordRoot
 import works.iterative.claude.core.log.model.SessionRecord
+import works.iterative.claude.core.log.parsing.ConversationLogParser
 import works.iterative.claude.core.model.SessionId
 
 class ZioConversationArchive private (config: ArchiveConfig)
@@ -31,24 +37,42 @@ class ZioConversationArchive private (config: ArchiveConfig)
   // home passed here are irrelevant.
   private val index = ZioConversationLogIndex.make(None, os.home)
 
+  // Backward reads pull this many bytes per step; tailing a page touches only a
+  // few blocks near the end, never the whole transcript.
+  private val tailBlockSize = 64 * 1024
+
   def forSession(
       sessionId: SessionId
   ): IO[ArchiveError, Option[SessionRecord]] =
-    for
-      main <- ZIO.fromEither(ArchivePaths.mainTranscript(config, sessionId))
-      tree <- ZIO.fromEither(ArchivePaths.treeDir(config, sessionId))
-      record <- ZIO
-        .attemptBlocking:
-          Option.when(os.exists(main) && os.isFile(main)):
-            SessionRecord(sessionId, main, tree)
-        .mapError(toArchiveError)
-    yield record
+    locate(sessionId)
 
   def entries(sessionId: SessionId): EntryStream =
     ZStream.unwrap:
       forSession(sessionId).map:
         case Some(record) => transcriptStream(record.mainTranscript)
         case None         => ZStream.fail(SessionNotFound(sessionId.value))
+
+  def lastEntries(
+      sessionId: SessionId,
+      limit: Int
+  ): IO[ArchiveError, EntryPage] =
+    locate(sessionId).flatMap:
+      case Some(record) =>
+        readPage(sessionId, record.mainTranscript, None, limit)
+      case None => ZIO.fail(SessionNotFound(sessionId.value))
+
+  def entriesBefore(
+      token: PageToken,
+      limit: Int
+  ): IO[ArchiveError, EntryPage] =
+    for
+      current <- resolveMainTranscript(token.sessionId)
+      page <- current match
+        case Some(path) if path == token.source =>
+          readPage(token.sessionId, token.source, Some(token.offset), limit)
+        case Some(_) => ZIO.fail(PageSourceMoved(token.sessionId.value))
+        case None    => ZIO.fail(SessionNotFound(token.sessionId.value))
+    yield page
 
   def subagentEntries(
       sessionId: SessionId,
@@ -61,13 +85,55 @@ class ZioConversationArchive private (config: ArchiveConfig)
           ZStream.fail(SubAgentNotFound(sessionId.value, parentToolUseId))
 
   def mirror(sessionId: SessionId): IO[ArchiveError, MirrorReport] =
+    locate(sessionId).flatMap:
+      case Some(record) if record.root == RecordRoot.Vendor =>
+        ZIO.attemptBlocking(runMirror(record)).mapError(toArchiveError)
+      // Vendor tree absent, session served from the archive: custody is
+      // one-directional, so the mirror is never written back from nothing.
+      case Some(_) => ZIO.succeed(MirrorReport.empty)
+      case None    => ZIO.fail(SessionNotFound(sessionId.value))
+
+  /** Resolves a session's record vendor-first, then from the archive mirror,
+    * keeping the first whose main transcript exists.
+    */
+  private def locate(
+      sessionId: SessionId
+  ): IO[ArchiveError, Option[SessionRecord]] =
     for
-      located <- forSession(sessionId)
-      record <- ZIO
-        .fromOption(located)
-        .orElseFail(SessionNotFound(sessionId.value))
-      report <- ZIO.attemptBlocking(runMirror(record)).mapError(toArchiveError)
-    yield report
+      candidates <- ZIO.fromEither(ArchivePaths.candidates(config, sessionId))
+      found <- ZIO
+        .attemptBlocking(candidates.find(c => isTranscript(c.mainTranscript)))
+        .mapError(toArchiveError)
+    yield found
+
+  /** The path of a session's currently-resolved main transcript, if any. */
+  private def resolveMainTranscript(
+      sessionId: SessionId
+  ): IO[ArchiveError, Option[os.Path]] =
+    locate(sessionId).map(_.map(_.mainTranscript))
+
+  private def isTranscript(path: os.Path): Boolean =
+    os.exists(path) && os.isFile(path)
+
+  private def readPage(
+      sessionId: SessionId,
+      path: os.Path,
+      endOffset: Option[Long],
+      limit: Int
+  ): IO[ArchiveError, EntryPage] =
+    ZIO
+      .attemptBlocking:
+        val regionEnd = endOffset.getOrElse(os.size(path))
+        val tail = BackwardLineReader.lastLines(
+          regionEnd,
+          limit,
+          tailBlockSize,
+          (offset, length) => os.read.bytes(path, offset, length)
+        )
+        val entries = tail.lines.flatMap(ConversationLogParser.parseLogLine)
+        val older = tail.older.map(offset => PageToken(sessionId, path, offset))
+        EntryPage(entries, older)
+      .mapError(toArchiveError)
 
   private def transcriptStream(path: os.Path): EntryStream =
     reader.stream(path).mapError(toArchiveError)
@@ -79,18 +145,32 @@ class ZioConversationArchive private (config: ArchiveConfig)
     for
       _ <- ZIO.fromEither(ArchivePaths.validateId(sessionId.value))
       _ <- ZIO.fromEither(ArchivePaths.validateId(parentToolUseId))
-      located <- index
-        .listSubAgents(ArchivePaths.projectDir(config), sessionId.value)
-        .mapError(toArchiveError)
-        .map(
-          _.find(_.toolUseId.contains(parentToolUseId)).map(_.transcriptPath)
-        )
+      record <- locate(sessionId)
+      located <- record match
+        case None      => ZIO.none
+        case Some(rec) =>
+          index
+            .listSubAgents(projectDirOf(rec.root), sessionId.value)
+            .mapError(toArchiveError)
+            .map(
+              _.find(_.toolUseId.contains(parentToolUseId))
+                .map(_.transcriptPath)
+            )
     yield located
 
+  /** The project directory of a resolved record's root — the vendor tree or the
+    * archive mirror, both projects-dir-shaped.
+    */
+  private def projectDirOf(root: RecordRoot): os.Path =
+    root match
+      case RecordRoot.Vendor  => ArchivePaths.projectDir(config)
+      case RecordRoot.Archive => ArchivePaths.archiveProjectDir(config)
+
   private def runMirror(record: SessionRecord): MirrorReport =
-    val projectDir = ArchivePaths.projectDir(config)
-    val source = listing(sourceFiles(record), projectDir)
-    val mirror = listing(mirrorFiles(record), config.archiveDir)
+    val vendorDir = ArchivePaths.projectDir(config)
+    val mirrorDir = ArchivePaths.archiveProjectDir(config)
+    val source = listing(sourceFiles(record), vendorDir)
+    val mirror = listing(mirrorFiles(record, mirrorDir), mirrorDir)
     val plan = MirrorPlanner.plan(source, mirror)
     val report = plan.actions.foldLeft(MirrorReport.empty): (report, action) =>
       def guarded(rel: os.SubPath)(onSuccess: => MirrorReport): MirrorReport =
@@ -105,18 +185,18 @@ class ZioConversationArchive private (config: ArchiveConfig)
           report.copy(skipped = report.skipped :+ rel)
         case MirrorAction.Copy(rel) =>
           guarded(rel):
-            copyWhole(projectDir / rel, config.archiveDir / rel)
+            copyWhole(vendorDir / rel, mirrorDir / rel)
             report.copy(copied = report.copied :+ rel)
         case MirrorAction.Recopy(rel) =>
           guarded(rel):
-            copyWhole(projectDir / rel, config.archiveDir / rel)
+            copyWhole(vendorDir / rel, mirrorDir / rel)
             report.copy(refreshed = report.refreshed :+ rel)
         case MirrorAction.Extend(rel, _) =>
           guarded(rel):
-            if extendInPlace(projectDir / rel, config.archiveDir / rel) then
+            if extendInPlace(vendorDir / rel, mirrorDir / rel) then
               report.copy(extended = report.extended :+ rel)
             else
-              copyWhole(projectDir / rel, config.archiveDir / rel)
+              copyWhole(vendorDir / rel, mirrorDir / rel)
               report.copy(refreshed = report.refreshed :+ rel)
     restrictArchiveDirs()
     report
@@ -146,9 +226,12 @@ class ZioConversationArchive private (config: ArchiveConfig)
     )
     main.toSeq ++ walkRegularFiles(record.treeDir)
 
-  private def mirrorFiles(record: SessionRecord): Seq[os.Path] =
-    val main = config.archiveDir / s"${record.sessionId.value}.jsonl"
-    val tree = config.archiveDir / record.sessionId.value
+  private def mirrorFiles(
+      record: SessionRecord,
+      mirrorDir: os.Path
+  ): Seq[os.Path] =
+    val main = mirrorDir / s"${record.sessionId.value}.jsonl"
+    val tree = mirrorDir / record.sessionId.value
     val mainFiles = if regularFile(main) then Seq(main) else Seq.empty
     mainFiles ++ walkRegularFiles(tree)
 
