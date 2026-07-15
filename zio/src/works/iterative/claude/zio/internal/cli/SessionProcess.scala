@@ -418,9 +418,13 @@ private final class SessionImpl(
 
   /** Resolves the session id, waiting for the CLI to name the session if it has
     * not yet. The wait races `terminated` so a process that dies before naming
-    * the session fails with the recorded error rather than hanging — and it
-    * completes by promise, so it cannot hang even inside an uninterruptible
-    * region.
+    * the session fails with the recorded error rather than hanging.
+    *
+    * The race is forced `interruptible`: a caller may run within an
+    * uninterruptible region (e.g. a forked request handler that inherits its
+    * parent's interrupt status), and `raceFirst` completes only once it can
+    * interrupt the losing branch — an uninterruptible losing `await` would wedge
+    * it forever. This is the same hazard commit 21594a3 fixed for the init read.
     */
   private def requireSessionId: IO[CLIError, String] =
     sessionIdRef.get.flatMap:
@@ -428,6 +432,7 @@ private final class SessionImpl(
       case None     =>
         idKnown.await
           .raceFirst(terminatedPromise.await.flatMap(failEnd))
+          .interruptible
         *> sessionIdRef.get.flatMap:
           case Some(id) => ZIO.succeed(id)
           case None     => failProcessGone
