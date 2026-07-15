@@ -36,11 +36,6 @@ class ZioConversationArchive private (config: ArchiveConfig)
 
   private val reader = ZioConversationLogReader()
 
-  // Sub-agent discovery reuses the index's tested join. Only `listSubAgents`
-  // is called, and it takes the project path explicitly, so the override and
-  // home passed here are irrelevant.
-  private val index = ZioConversationLogIndex.make(None, os.home)
-
   // Backward reads pull this many bytes per step; tailing a page touches only a
   // few blocks near the end, never the whole transcript.
   private val tailBlockSize = 64 * 1024
@@ -232,7 +227,7 @@ class ZioConversationArchive private (config: ArchiveConfig)
       located <- record match
         case None      => ZIO.none
         case Some(rec) =>
-          index
+          ZioConversationLogIndex
             .listSubAgents(projectDirOf(rec.root), sessionId.value)
             .mapError(toArchiveError)
             .map(

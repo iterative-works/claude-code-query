@@ -39,27 +39,7 @@ class ZioConversationLogIndex private (
       projectPath: os.Path,
       sessionId: String
   ): Task[Seq[SubAgentMetadata]] =
-    ZIO.attemptBlocking:
-      val subagentsDir = projectPath / sessionId / "subagents"
-      if !(os.exists(subagentsDir) && os.isDir(subagentsDir)) then Seq.empty
-      else
-        os.list(subagentsDir)
-          .filter: path =>
-            val name = path.last
-            // Symlinks are refused: a sidechain must be a real file under the
-            // tree, never a link that could point outside it.
-            !os.isLink(path) && os.isFile(path) &&
-            name.startsWith("agent-") && name.endsWith(".jsonl")
-          .flatMap: jsonlPath =>
-            val metaPath =
-              jsonlPath / os.up / s"${jsonlPath.last.stripSuffix(".jsonl")}.meta.json"
-            if !os.exists(metaPath) || os.isLink(metaPath) then None
-            else
-              io.circe.parser
-                .parse(os.read(metaPath))
-                .toOption
-                .flatMap(SubAgentMetadataParser.parse(_, jsonlPath))
-          .toSeq
+    ZioConversationLogIndex.listSubAgents(projectPath, sessionId)
 
   /** Lists all sub-agents for a session in the given working directory. */
   def listSubAgentsFor(
@@ -88,6 +68,36 @@ class ZioConversationLogIndex private (
     )
 
 object ZioConversationLogIndex:
+
+  /** Lists the sub-agents recorded under a project's session directory, reading
+    * each `agent-*.jsonl` sidechain's `.meta.json`. This needs only the project
+    * path, so it is available without constructing an index. Symlinked
+    * sidechains and meta files are refused: a record must be a real file under
+    * the tree, never a link that could point outside it.
+    */
+  def listSubAgents(
+      projectPath: os.Path,
+      sessionId: String
+  ): Task[Seq[SubAgentMetadata]] =
+    ZIO.attemptBlocking:
+      val subagentsDir = projectPath / sessionId / "subagents"
+      if !(os.exists(subagentsDir) && os.isDir(subagentsDir)) then Seq.empty
+      else
+        os.list(subagentsDir)
+          .filter: path =>
+            val name = path.last
+            !os.isLink(path) && os.isFile(path) &&
+            name.startsWith("agent-") && name.endsWith(".jsonl")
+          .flatMap: jsonlPath =>
+            val metaPath =
+              jsonlPath / os.up / s"${jsonlPath.last.stripSuffix(".jsonl")}.meta.json"
+            if !os.exists(metaPath) || os.isLink(metaPath) then None
+            else
+              io.circe.parser
+                .parse(os.read(metaPath))
+                .toOption
+                .flatMap(SubAgentMetadataParser.parse(_, jsonlPath))
+          .toSeq
 
   /** Creates a `ZioConversationLogIndex` from the current environment, deferred
     * in a Task. `CLAUDE_CONFIG_DIR` is read once at construction (empty string
