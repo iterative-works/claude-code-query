@@ -489,7 +489,8 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
           config.archiveDir / encoded / sessionId / "subagents" /
             "agent-abc.jsonl"
         ),
-        // The old flat layout is gone: nothing hangs directly off archiveDir.
+        // Nothing hangs directly off archiveDir: the mirror is always
+        // encoded-cwd-shaped, never flat.
         !os.exists(config.archiveDir / s"$sessionId.jsonl")
       ),
     test("a symlinked main transcript under the archive root is refused, not followed"):
