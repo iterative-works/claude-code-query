@@ -138,7 +138,11 @@ object SessionIntegrationTest extends ClaudeZioSpec:
               .runCollect
           sub1    <- collect.fork
           sub2    <- collect.fork
-          _       <- ZIO.sleep(200.millis) // both subscriptions active before send
+          // Wait until both collectors have subscribed and are blocked pulling
+          // the hub (suspended), so neither can miss the turn's early messages —
+          // deterministic where a fixed sleep would race under load.
+          _       <- sub1.status.repeatUntil(_.isSuspended)
+          _       <- sub2.status.repeatUntil(_.isSuspended)
           _       <- session.send(input)
           one     <- sub1.join
           two     <- sub2.join
