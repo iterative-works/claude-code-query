@@ -7,10 +7,12 @@ import zio.*
 import zio.stream.ZStream
 import works.iterative.claude.core.cli.CLIArgumentBuilder
 import works.iterative.claude.core.{CLIError, ConfigurationError}
+import works.iterative.claude.core.log.ArchiveConfig
 import works.iterative.claude.core.model.*
 import works.iterative.claude.zio.internal.cli.{
   CLIDiscovery,
   ProcessManager,
+  SessionArchiveHook,
   SessionProcess
 }
 
@@ -49,10 +51,25 @@ object ClaudeCode:
   def queryResult(options: QueryOptions): IO[CLIError, String] =
     querySync(options).map(extractTextFromMessages)
 
-  /** Open a scoped multi-turn session backed by a long-lived CLI process. */
-  def session(options: SessionOptions): ZIO[Scope, CLIError, Session] =
+  /** Open a scoped session backed by a long-lived CLI process.
+    *
+    * When `archive` is set, the session mirrors the vendor transcript tree
+    * after each real result and on close — best-effort, so a mirror failure is
+    * logged and never breaks the session. `eventsBufferSize` sizes the lossy
+    * `events` Hub (see [[Session.events]]); the default is conservative.
+    */
+  def session(
+      options: SessionOptions,
+      archive: Option[ArchiveConfig] = None,
+      eventsBufferSize: Int = SessionProcess.DefaultEventsBufferSize
+  ): ZIO[Scope, CLIError, Session] =
     resolveExecutable(options.pathToClaudeCodeExecutable)
-      .flatMap(SessionProcess.start(_, options))
+      .flatMap(
+        SessionProcess.start(_, options, archiveHook(archive), eventsBufferSize)
+      )
+
+  private def archiveHook(archive: Option[ArchiveConfig]): SessionArchiveHook =
+    archive.fold(SessionArchiveHook.none)(SessionArchiveHook.mirroring)
 
   // Mid-level operations - "How" we accomplish the high-level goals
 

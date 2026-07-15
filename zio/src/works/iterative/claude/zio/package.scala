@@ -33,6 +33,28 @@ package object zio:
   val MessageId = works.iterative.claude.core.model.MessageId
   type ResultOrigin = works.iterative.claude.core.model.ResultOrigin
   val ResultOrigin = works.iterative.claude.core.model.ResultOrigin
+
+  // Session surface types
+  type SessionState = works.iterative.claude.core.model.SessionState
+  val SessionState = works.iterative.claude.core.model.SessionState
+  type SessionEnd = works.iterative.claude.core.model.SessionEnd
+  val SessionEnd = works.iterative.claude.core.model.SessionEnd
+  type SessionInfo = works.iterative.claude.core.model.SessionInfo
+  val SessionInfo = works.iterative.claude.core.model.SessionInfo
+  type InterruptOutcome = works.iterative.claude.core.model.InterruptOutcome
+  val InterruptOutcome = works.iterative.claude.core.model.InterruptOutcome
+
+  // Structured user input (Wave 3)
+  type UserInput = works.iterative.claude.core.model.UserInput
+  val UserInput = works.iterative.claude.core.model.UserInput
+  type ContextItem = works.iterative.claude.core.model.ContextItem
+  val ContextItem = works.iterative.claude.core.model.ContextItem
+  type Channel = works.iterative.claude.core.model.Channel
+  val Channel = works.iterative.claude.core.model.Channel
+
+  // Archive custody configuration (Wave 4 wiring)
+  type ArchiveConfig = works.iterative.claude.core.log.ArchiveConfig
+  val ArchiveConfig = works.iterative.claude.core.log.ArchiveConfig
   type PermissionDenial = works.iterative.claude.core.model.PermissionDenial
   val PermissionDenial = works.iterative.claude.core.model.PermissionDenial
   type ResultTimings = works.iterative.claude.core.model.ResultTimings
