@@ -1,7 +1,7 @@
-package works.iterative.claude.core.model
-
 // PURPOSE: Identifier of a live session — the vendor-assigned `session_id`
 // PURPOSE: Keeps a session id distinct from other strings and from a RequestId
+
+package works.iterative.claude.core.model
 
 opaque type SessionId = String
 

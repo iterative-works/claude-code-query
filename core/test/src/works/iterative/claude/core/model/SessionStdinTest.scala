@@ -1,7 +1,7 @@
-package works.iterative.claude.core.model
-
 // PURPOSE: Unit tests for the session stdin serializers — the exact wire bytes written to the CLI process
 // PURPOSE: Pins the block-array user message shape and the control_request shape against the vendor protocol
+
+package works.iterative.claude.core.model
 
 import munit.FunSuite
 import io.circe.parser

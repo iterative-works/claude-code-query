@@ -37,6 +37,10 @@ package object zio:
   val RequestId = works.iterative.claude.core.model.RequestId
   type ResultOrigin = works.iterative.claude.core.model.ResultOrigin
   val ResultOrigin = works.iterative.claude.core.model.ResultOrigin
+  type PermissionDenial = works.iterative.claude.core.model.PermissionDenial
+  val PermissionDenial = works.iterative.claude.core.model.PermissionDenial
+  type ResultTimings = works.iterative.claude.core.model.ResultTimings
+  val ResultTimings = works.iterative.claude.core.model.ResultTimings
 
   // Session surface types
   type SessionState = works.iterative.claude.core.model.SessionState
@@ -59,10 +63,8 @@ package object zio:
   // Archive custody configuration
   type ArchiveConfig = works.iterative.claude.core.log.ArchiveConfig
   val ArchiveConfig = works.iterative.claude.core.log.ArchiveConfig
-  type PermissionDenial = works.iterative.claude.core.model.PermissionDenial
-  val PermissionDenial = works.iterative.claude.core.model.PermissionDenial
-  type ResultTimings = works.iterative.claude.core.model.ResultTimings
-  val ResultTimings = works.iterative.claude.core.model.ResultTimings
+
+  // Message content blocks
   type ContentBlock = works.iterative.claude.core.model.ContentBlock
   type TextBlock = works.iterative.claude.core.model.TextBlock
   val TextBlock = works.iterative.claude.core.model.TextBlock

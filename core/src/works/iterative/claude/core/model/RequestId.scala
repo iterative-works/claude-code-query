@@ -1,7 +1,7 @@
-package works.iterative.claude.core.model
-
 // PURPOSE: Identifier of a control request — correlates a ControlRequest with its ControlResponse
 // PURPOSE: Keeps a request id distinct from other strings and from a SessionId
+
+package works.iterative.claude.core.model
 
 opaque type RequestId = String
 

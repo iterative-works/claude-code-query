@@ -1,7 +1,7 @@
-package works.iterative.claude.core.model
-
 // PURPOSE: Control-channel request written to the CLI's stdin, answered by a ControlResponse
 // PURPOSE: Correlated by the caller-chosen requestId; the request body vocabulary stays open
+
+package works.iterative.claude.core.model
 
 import io.circe.{Encoder, Json}
 

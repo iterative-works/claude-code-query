@@ -1,7 +1,7 @@
-package works.iterative.claude.core.parsing
-
 // PURPOSE: Unit tests for total message parsing — every JSON line survives as a typed Message
 // PURPOSE: Verifies UnknownMessage fallback, wire-field extraction, and control protocol parsing
+
+package works.iterative.claude.core.parsing
 
 import munit.FunSuite
 import io.circe.parser

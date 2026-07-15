@@ -1,7 +1,7 @@
-package works.iterative.claude.core.model
-
 // PURPOSE: Unit tests for the pure SessionState fold — the completion-counter decision as data-in/data-out
 // PURPOSE: Pins that only origin-absent results bump resultsSeen and origin-present ones bump notificationsSeen
+
+package works.iterative.claude.core.model
 
 import munit.FunSuite
 import io.circe.Json

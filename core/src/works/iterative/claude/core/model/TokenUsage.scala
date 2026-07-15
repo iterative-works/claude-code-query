@@ -1,7 +1,7 @@
-package works.iterative.claude.core.model
-
 // PURPOSE: Token usage statistics from Claude API responses
 // PURPOSE: Captures input/output tokens and optional cache-related token counts
+
+package works.iterative.claude.core.model
 
 import io.circe.Json
 

@@ -3,8 +3,8 @@
 
 package works.iterative.claude.zio
 
-import zio.*
 import java.nio.charset.StandardCharsets
+import zio.*
 import zio.test.*
 import io.circe.{Json, parser}
 import works.iterative.claude.core.{CLIError, SessionProcessDied}

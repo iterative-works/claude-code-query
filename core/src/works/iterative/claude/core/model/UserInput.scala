@@ -1,7 +1,7 @@
-package works.iterative.claude.core.model
-
 // PURPOSE: Structured user input encoded as content blocks so verbatim text never entangles with context
 // PURPOSE: Provides a pure codec whose decode inverts encode by construction — decode(encode(i)) == Some(i)
+
+package works.iterative.claude.core.model
 
 import io.circe.{Json, parser}
 

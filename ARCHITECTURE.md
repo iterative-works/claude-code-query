@@ -172,9 +172,10 @@ framing, where it is honest.
 **Internals** (`internal/cli/SessionProcess`): ONE reader fiber owns stdout —
 it parses each line, captures the session id, routes control responses to their
 waiting `request_id`, folds results into the readable `SessionState` (pure
-`SessionState.fold`), and fans every message out over the Hub. This resolves the
-old undocumented exactly-one-consumer constraint of `ZStream.fromQueue` by
-construction. An optional `SessionArchiveHook` mirrors the vendor transcript
+`SessionState.fold`), and fans every message out over the Hub. Because one
+reader fiber owns stdout and fans out over a Hub, any number of
+`events`/`stateChanges` consumers each see the full stream — there is no hidden
+single-consumer constraint. An optional `SessionArchiveHook` mirrors the vendor transcript
 tree after each result and on close — best-effort, so a mirror failure is logged
 and never breaks the session.
 
