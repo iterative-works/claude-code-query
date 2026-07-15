@@ -63,13 +63,23 @@ object ClaudeCode:
       archive: Option[ArchiveConfig] = None,
       eventsBufferSize: Int = SessionProcess.DefaultEventsBufferSize
   ): ZIO[Scope, CLIError, Session] =
-    resolveExecutable(options.pathToClaudeCodeExecutable)
-      .flatMap(
-        SessionProcess.start(_, options, archiveHook(archive), eventsBufferSize)
+    for
+      executablePath <- resolveExecutable(options.pathToClaudeCodeExecutable)
+      hook <- archiveHook(archive)
+      session <- SessionProcess.start(
+        executablePath,
+        options,
+        hook,
+        eventsBufferSize
       )
+    yield session
 
-  private def archiveHook(archive: Option[ArchiveConfig]): SessionArchiveHook =
-    archive.fold(SessionArchiveHook.none)(SessionArchiveHook.mirroring)
+  private def archiveHook(
+      archive: Option[ArchiveConfig]
+  ): UIO[SessionArchiveHook] =
+    archive.fold(ZIO.succeed(SessionArchiveHook.none))(
+      SessionArchiveHook.mirroring
+    )
 
   // Mid-level operations - "How" we accomplish the high-level goals
 

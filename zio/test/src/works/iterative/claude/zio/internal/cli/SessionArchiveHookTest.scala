@@ -31,15 +31,23 @@ object SessionArchiveHookTest extends ClaudeZioSpec:
     test("afterResult mirrors the vendor tree into the archive directory"):
       for
         config <- fixture
-        _      <- SessionArchiveHook.mirroring(config).afterResult(sessionId)
-        copied <- ZIO.attemptBlocking(
-                    os.exists(config.archiveDir / s"$sessionId.jsonl")
-                  ).orDie
-      yield assertTrue(copied),
-    test("afterResult never fails and logs a warning when the tree is missing"):
+        hook   <- SessionArchiveHook.mirroring(config)
+        _      <- hook.afterResult(sessionId)
+        // afterResult schedules the mirror on a background fiber, so poll for
+        // the copy to land rather than assuming it finished on return.
+        copied <- ZIO
+                    .attemptBlocking(
+                      os.exists(config.archiveDir / s"$sessionId.jsonl")
+                    )
+                    .orDie
+                    .repeatUntil(identity)
+                    .timeout(10.seconds)
+      yield assertTrue(copied.contains(true)),
+    test("onClose never fails and logs a warning when the tree is missing"):
       for
         config <- fixture.map(_.copy(cwd = os.Path("/no/such/place")))
-        exit   <- SessionArchiveHook.mirroring(config).afterResult(sessionId).exit
+        hook   <- SessionArchiveHook.mirroring(config)
+        exit   <- hook.onClose(sessionId).exit
         logs   <- ZTestLogger.logOutput
       yield assertTrue(
         exit == Exit.unit,
