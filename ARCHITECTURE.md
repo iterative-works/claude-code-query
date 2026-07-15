@@ -167,10 +167,21 @@ Sealed trait hierarchy representing all message types from Claude Code CLI:
 ```scala
 sealed trait Message
 ├── UserMessage(content: String)
-├── AssistantMessage(content: List[ContentBlock])
+├── AssistantMessage(content: List[ContentBlock], id, parentToolUseId, model)
 ├── SystemMessage(subtype: String, data: Map[String, Any])
-└── ResultMessage(subtype, durationMs, cost, usage, ...)
+├── ResultMessage(subtype, durationMs, ..., usage: Option[TokenUsage],
+│                 id, origin, stopReason, terminalReason,
+│                 permissionDenials, apiErrorStatus, timings)
+├── KeepAliveMessage
+├── StreamEventMessage(data: Map[String, Any])
+├── UnknownMessage(messageType, json)   // fallback — unknown types survive verbatim
+└── ControlResponse(requestId, subtype, payload)   // stdout control channel
 ```
+
+Parsing is total: every JSON line becomes a `Message` (unknown or malformed
+shapes degrade to `UnknownMessage`); only blank or non-JSON lines yield no
+message. `ControlRequest`/`ControlRequestBody` model the stdin side of the
+control protocol.
 
 ### ContentBlock Hierarchy
 **Location**: `works.iterative.claude.model.ContentBlock`
@@ -221,8 +232,11 @@ sealed trait LogEntryPayload
 ├── LastPromptLogEntry(data)
 └── RawLogEntry(entryType, json)   // fallback for unknown types
 
-case class TokenUsage(inputTokens, outputTokens, cacheCreationInputTokens, cacheReadInputTokens, serviceTier)
 case class LogFileMetadata(path, sessionId, summary, lastModified, fileSize, cwd, gitBranch, createdAt)
+
+// TokenUsage lives in works.iterative.claude.core.model — it is shared with
+// the live stream's ResultMessage.usage
+case class TokenUsage(inputTokens, outputTokens, cacheCreationInputTokens, cacheReadInputTokens, serviceTier)
 ```
 
 ### Parsing Layer
