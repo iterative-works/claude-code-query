@@ -223,15 +223,29 @@ object SessionProcess:
       idKnown: Promise[Nothing, Unit]
   ): UIO[Unit] =
     message match
-      case SystemMessage("init", data) =>
+      case SystemMessage(_, data) =>
+        // Any system message that carries a session_id names the session — the
+        // startup-hook messages do so before the CLI has read any input, so the
+        // id is known without waiting for a turn (the CLI emits `init` only
+        // after the first user message).
         data.get("session_id").map(_.toString) match
-          case Some(id) =>
-            ZIO.logInfo(s"Session ID extracted from init message: $id")
-              *> sessionIdRef.set(Some(id)) *> idKnown.succeed(()).unit
-          case None => ZIO.unit
+          case Some(id) => setSessionId(id, sessionIdRef, idKnown)
+          case None     => ZIO.unit
       case result: ResultMessage =>
-        sessionIdRef.set(Some(result.sessionId)) *> idKnown.succeed(()).unit
+        setSessionId(result.sessionId, sessionIdRef, idKnown)
       case _ => ZIO.unit
+
+  private def setSessionId(
+      id: String,
+      sessionIdRef: Ref[Option[String]],
+      idKnown: Promise[Nothing, Unit]
+  ): UIO[Unit] =
+    sessionIdRef.get.flatMap:
+      case Some(current) if current == id => ZIO.unit
+      case _ =>
+        sessionIdRef.set(Some(id))
+          *> idKnown.succeed(()).unit
+          *> ZIO.logInfo(s"Session named: $id")
 
   private def routeControlResponse(
       message: Message,
@@ -364,8 +378,14 @@ private final class SessionImpl(
         stdinQueue.isShutdown.flatMap:
           case true  => failProcessGone
           case false =>
-            requireSessionId.flatMap: id =>
-              val line = SessionStdin.userInputLine(input, id)
+            // Fire-and-forget: never block on the session id. The CLI emits its
+            // `init` (which names the session) only AFTER it reads the first
+            // user message, so a send that waited for the id would deadlock the
+            // first turn. The session_id field on the wire is not load-bearing —
+            // the process IS the session — so an empty value is accepted until
+            // the id is known.
+            sessionIdRef.get.flatMap: idOpt =>
+              val line = SessionStdin.userInputLine(input, idOpt.getOrElse(""))
               ZIO.logDebug(s"Writing user input to stdin: ${line.trim}")
                 *> offer(line)
 

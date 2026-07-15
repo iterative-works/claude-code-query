@@ -88,8 +88,9 @@ object SessionE2ETest extends ClaudeZioSpec:
           // The session survives: a follow-up turn still completes.
           alive   <- session.sendAndAwait(userInput("Reply with 'ALIVE'."))
         yield assertTrue(
-          outcome.stillQueued.isEmpty || outcome.stillQueued.nonEmpty,
+          outcome.stillQueued.forall(_.nonEmpty),
           stopped.isError,
+          stopped.origin.isEmpty,
           !alive.isError
         )
   ) @@ onlyIfClaude
