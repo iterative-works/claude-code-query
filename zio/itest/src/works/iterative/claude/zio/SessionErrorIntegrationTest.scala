@@ -21,6 +21,20 @@ object SessionErrorIntegrationTest extends ClaudeZioSpec:
 
   private val input = UserInput("hello")
 
+  // Death detection is async (a background reader observes the exit), and send
+  // is fire-and-forget — so an early send may still land before aliveRef flips.
+  // Poll until the dead process is observed, mirroring the pre-existing pattern.
+  private def sendUntilDead(session: Session, remaining: Int): Task[CLIError] =
+    if remaining <= 0 then
+      ZIO.fail(new RuntimeException("send never failed despite a dead process"))
+    else
+      session
+        .send(input)
+        .foldZIO(
+          error => ZIO.succeed(error),
+          _ => ZIO.sleep(50.millis) *> sendUntilDead(session, remaining - 1)
+        )
+
   def spec = suite("Session error (integration)")(
     test("awaitResultAfter fails, terminated resolves, and ended is recorded on a mid-turn exit"):
       val script = MockCliScript.crashMidTurnScript(initLine, partialLine, exitCode = 3)
@@ -36,11 +50,11 @@ object SessionErrorIntegrationTest extends ClaudeZioSpec:
           end.exitCode.contains(3),
           state.ended.exists(_.exitCode.contains(3))
         ),
-    test("send to a process that never named the session fails with SessionProcessDied"):
+    test("send to a process that has already exited fails with SessionProcessDied"):
       val script = MockCliScript.queryScript(Nil, exitCode = 1)
       ZIO.scoped:
         for
           session <- ClaudeCode.session(options(script))
-          error   <- session.send(input).flip
+          error   <- sendUntilDead(session, remaining = 100)
         yield assertTrue(error.isInstanceOf[SessionProcessDied])
   ) @@ TestAspect.withLiveClock @@ TestAspect.timeout(Duration.fromSeconds(30))
