@@ -119,6 +119,59 @@ object ZioConversationArchiveTest extends ClaudeZioSpec:
         bySession == Left(ArchiveError.InvalidSessionId("../x")),
         byTool == Left(ArchiveError.InvalidSessionId("../x"))
       ),
+    test("classifyPresence separates confirmed absence from indeterminate existence"):
+      import ZioConversationArchive.TranscriptPresence.*
+      assertTrue(
+        ZioConversationArchive.classifyPresence(
+          isRegularFile = true,
+          notExists = false,
+          exists = true
+        ) == Present,
+        // Confirmed absent: notExists is decisive.
+        ZioConversationArchive.classifyPresence(false, true, false) == Absent,
+        // Exists but is not a regular file (e.g. a directory): not a transcript.
+        ZioConversationArchive.classifyPresence(false, false, true) == Absent,
+        // Nothing confirmed either way: an unreadable parent, not an absence.
+        ZioConversationArchive.classifyPresence(
+          false,
+          false,
+          false
+        ) == Indeterminate
+      ),
+    test("locate fails typed when the vendor tree is unreadable, not falling through"):
+      for
+        fx <- fixture
+        archive = fx.archive
+        config  = fx.config
+        // Archive now holds the session, so an exists-only check would happily
+        // fall through to it and mask the vendor-side access fault.
+        _ <- archive.mirror(SessionId(sessionId))
+        vendorDir = config.vendorProjectsDir / encoded
+        probed <- ZIO.attempt:
+          if !isPosixFs then None
+          else
+            os.perms.set(vendorDir, os.PermSet.fromString("---------"))
+            val enforced = !java.nio.file.Files.isReadable(vendorDir.toNIO)
+            if enforced then Some(vendorDir)
+            else
+              os.perms.set(vendorDir, os.PermSet.fromString("rwx------"))
+              None
+        result <- probed match
+          case Some(_) => archive.forSession(SessionId(sessionId)).either
+          case None    => ZIO.succeed(Right(None))
+        _ <- ZIO.attempt(
+          probed.foreach(d => os.perms.set(d, os.PermSet.fromString("rwx------")))
+        )
+      yield probed match
+        case None =>
+          // Not POSIX, or permissions are not enforced (e.g. running as root):
+          // the indeterminate case cannot be provoked here.
+          assertTrue(true)
+        case Some(_) =>
+          assertTrue(result match
+            case Left(ArchiveError.ArchiveIOError(_, _)) => true
+            case _                                       => false
+          ),
     test("forSession locates an existing session and misses an absent one"):
       for
         fx <- fixture

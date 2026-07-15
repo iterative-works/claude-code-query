@@ -30,6 +30,8 @@ import works.iterative.claude.core.model.SessionId
 class ZioConversationArchive private (config: ArchiveConfig)
     extends ConversationArchive[[A] =>> IO[ArchiveError, A]]:
 
+  import ZioConversationArchive.TranscriptPresence
+
   type EntryStream = ZStream[Any, ArchiveError, ConversationLogEntry]
 
   private val reader = ZioConversationLogReader()
@@ -107,7 +109,10 @@ class ZioConversationArchive private (config: ArchiveConfig)
       case None    => ZIO.fail(SessionNotFound(sessionId.value))
 
   /** Resolves a session's record vendor-first, then from the archive mirror,
-    * keeping the first whose main transcript exists.
+    * keeping the first whose main transcript is confirmed present. A candidate
+    * whose presence cannot be determined — its project directory exists but is
+    * unreadable, so "absent" would be a lie — fails typed rather than silently
+    * falling through to the next root.
     */
   private def locate(
       sessionId: SessionId
@@ -115,9 +120,33 @@ class ZioConversationArchive private (config: ArchiveConfig)
     for
       candidates <- ZIO.fromEither(ArchivePaths.candidates(config, sessionId))
       found <- ZIO
-        .attemptBlocking(candidates.find(c => isTranscript(c.mainTranscript)))
+        .attemptBlocking(resolveFirst(candidates))
         .mapError(toArchiveError)
+        .flatMap(ZIO.fromEither)
     yield found
+
+  /** Keeps the first candidate whose main transcript is confirmed present.
+    * Skips confirmed-absent candidates; fails typed on the first candidate
+    * whose presence is indeterminate, so an unreadable vendor tree is never
+    * mistaken for a pruned one.
+    */
+  private def resolveFirst(
+      candidates: Seq[SessionRecord]
+  ): Either[ArchiveError, Option[SessionRecord]] =
+    candidates match
+      case Seq()        => Right(None)
+      case head +: tail =>
+        transcriptPresence(head.mainTranscript) match
+          case TranscriptPresence.Present       => Right(Some(head))
+          case TranscriptPresence.Absent        => resolveFirst(tail)
+          case TranscriptPresence.Indeterminate =>
+            Left(
+              ArchiveIOError(
+                s"Cannot determine whether ${head.mainTranscript} exists; " +
+                  "its project directory is present but unreadable",
+                new java.io.IOException("indeterminate transcript existence")
+              )
+            )
 
   /** The path of a session's currently-resolved main transcript, if any. */
   private def resolveMainTranscript(
@@ -145,8 +174,20 @@ class ZioConversationArchive private (config: ArchiveConfig)
       case Some(_) => ZIO.fail(PageSourceMoved(token.sessionId.value))
       case None    => ZIO.fail(SessionNotFound(token.sessionId.value))
 
-  private def isTranscript(path: os.Path): Boolean =
-    os.exists(path) && os.isFile(path)
+  /** Classifies whether `path` is a readable transcript, distinguishing a
+    * confirmed-absent file from one whose existence cannot be determined. The
+    * `java.nio.file.Files` predicates all report `false` on an access failure,
+    * so a lone `exists` check cannot tell "absent" from "unreadable"; the pure
+    * [[ZioConversationArchive.classifyPresence]] recovers the indeterminate
+    * outcome by combining them.
+    */
+  private def transcriptPresence(path: os.Path): TranscriptPresence =
+    val nio = path.toNIO
+    ZioConversationArchive.classifyPresence(
+      java.nio.file.Files.isRegularFile(nio),
+      java.nio.file.Files.notExists(nio),
+      java.nio.file.Files.exists(nio)
+    )
 
   private def readPage(
       sessionId: SessionId,
@@ -326,3 +367,26 @@ object ZioConversationArchive:
   /** Creates an archive over the given configuration. */
   def apply(config: ArchiveConfig): ZioConversationArchive =
     new ZioConversationArchive(config)
+
+  /** Whether a candidate transcript is confirmed present, confirmed absent, or
+    * of undeterminable existence (e.g. its directory is present but unreadable,
+    * so every `Files` predicate answered `false`).
+    */
+  private[log] enum TranscriptPresence:
+    case Present, Absent, Indeterminate
+
+  /** The tri-state presence decision from the three `java.nio.file.Files`
+    * predicates for one path. Because each predicate reports `false` when it
+    * cannot access the path, only their combination separates a confirmed
+    * absence (`notExists` or a non-file that `exists`) from the indeterminate
+    * case where none is confirmed — the signature of an unreadable parent.
+    */
+  private[log] def classifyPresence(
+      isRegularFile: Boolean,
+      notExists: Boolean,
+      exists: Boolean
+  ): TranscriptPresence =
+    if isRegularFile then TranscriptPresence.Present
+    else if notExists then TranscriptPresence.Absent
+    else if exists then TranscriptPresence.Absent
+    else TranscriptPresence.Indeterminate
