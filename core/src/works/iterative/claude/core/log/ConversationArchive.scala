@@ -1,22 +1,27 @@
-// PURPOSE: Port for locating, reading, and mirroring a session's vendor record tree (custody)
+// PURPOSE: Port for locating, reading, and mirroring a session's record tree (custody)
 // PURPOSE: Tagless over an effect F with an abstract entry-stream type, per ConversationLogReader
 
 package works.iterative.claude.core.log
 
+import works.iterative.claude.core.log.model.EntryPage
 import works.iterative.claude.core.log.model.MirrorReport
+import works.iterative.claude.core.log.model.PageToken
 import works.iterative.claude.core.log.model.SessionRecord
 import works.iterative.claude.core.model.SessionId
 
-/** Custody of a session's vendor record: locate it, read its conversation
-  * entries (main thread and sub-agent sidechains), and mirror the whole tree
-  * into an archive directory.
+/** Custody of a session's record: locate it, read its conversation entries
+  * (main thread and sub-agent sidechains), and mirror the whole tree into an
+  * archive directory.
   *
-  * Locates by encoding a known cwd into the vendor projects directory — never
-  * by decoding a directory name, which is ambiguous. The record is a tree (the
-  * main `.jsonl` plus the sub-agent `.jsonl` and `.meta.json` sidechains), so
-  * the mirror copies the tree, not a single file. Entry reads tolerate vendor
-  * drift by degrading unrecognized lines to raw entries rather than losing
-  * them.
+  * Every locate and read resolves the session vendor-first, falling back to the
+  * archive mirror once the vendor tree has been pruned; the located record's
+  * `root` names which one won. Locating encodes a known cwd into a project
+  * directory — never decodes a directory name, which is ambiguous — and looks
+  * for that directory under the vendor projects tree first, then under the
+  * mirror. The record is a tree (the main `.jsonl` plus the sub-agent `.jsonl`
+  * and `.meta.json` sidechains), so the mirror copies the tree, not a single
+  * file. Entry reads tolerate vendor drift by degrading unrecognized lines to
+  * raw entries rather than losing them.
   *
   * @tparam F
   *   the effect type; the abstract `EntryStream` lets each backend pick its own
@@ -25,16 +30,41 @@ import works.iterative.claude.core.model.SessionId
 trait ConversationArchive[F[_]]:
   type EntryStream
 
-  /** Locates a session by encoding the configured cwd; `None` when no main
-    * transcript exists for the id.
+  /** Locates a session by encoding the configured cwd, resolving the live
+    * vendor tree first and falling back to the archive mirror; `None` when no
+    * main transcript exists under either root. The returned record's `root`
+    * names which one won.
     */
   def forSession(sessionId: SessionId): F[Option[SessionRecord]]
 
-  /** Streams the main-thread entries of a session. */
+  /** Streams the main-thread entries of a session. Resolves vendor-then-mirror
+    * like [[forSession]].
+    */
   def entries(sessionId: SessionId): EntryStream
 
+  /** Reads the last `limit` main-thread entries of a session without parsing
+    * the transcript from the start. Entries within the returned page are
+    * oldest-first; the page itself is the newest slice of the transcript. The
+    * page's `older` cursor pages backward through earlier, older pages.
+    * Resolves vendor-then-mirror like [[forSession]], so a pruned session still
+    * tails from the mirror.
+    */
+  def lastEntries(sessionId: SessionId, limit: Int): F[EntryPage]
+
+  /** Reads the page of up to `limit` entries immediately older than `token`.
+    *
+    * The token is pinned to the transcript it was minted against; if the
+    * session now resolves to a different file (the vendor tree was pruned
+    * between pages), this fails with [[ArchiveError.PageSourceMoved]] rather
+    * than reading a stale offset against the wrong file. If the session no
+    * longer resolves under either root at all, this fails with
+    * [[ArchiveError.SessionNotFound]].
+    */
+  def entriesBefore(token: PageToken, limit: Int): F[EntryPage]
+
   /** Streams a sub-agent's own sidechain entries, joined to its parent by the
-    * `tool_use` id recorded in the sub-agent's `.meta.json`.
+    * `tool_use` id recorded in the sub-agent's `.meta.json`. Resolves
+    * vendor-then-mirror like [[forSession]].
     */
   def subagentEntries(
       sessionId: SessionId,
@@ -43,5 +73,13 @@ trait ConversationArchive[F[_]]:
 
   /** Idempotently mirrors the whole session tree into the archive directory,
     * reporting what was copied, extended, refreshed, and skipped.
+    *
+    * Custody is one-directional: when the session resolves under
+    * [[works.iterative.claude.core.log.model.RecordRoot.Archive]] (the vendor
+    * tree is already pruned), this is a no-op returning
+    * [[works.iterative.claude.core.log.model.MirrorReport.empty]] — the archive
+    * is never truncated or recopied from nothing. Only a `Vendor`-resolved
+    * record is ever a mirror source. `SessionNotFound` is raised only when
+    * neither root holds the session.
     */
   def mirror(sessionId: SessionId): F[MirrorReport]

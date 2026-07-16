@@ -27,16 +27,42 @@ enum ArchiveError extends Throwable:
     */
   case InvalidSessionId(value: String)
 
+  /** A page cursor was minted against a transcript that no longer is the
+    * session's resolved source (e.g. the vendor tree was pruned between pages,
+    * so the mirror now wins). The offset would index a different file, so
+    * paging stops rather than reading it; restart from the latest page.
+    */
+  case PageSourceMoved(sessionId: String)
+
+  /** A requested page size was outside the accepted range: it must be a
+    * positive count no larger than [[PageSize.Max]], so no read is attempted
+    * for a non-positive or absurd page.
+    */
+  case InvalidPageSize(limit: Int)
+
+  /** A transcript could not be paged: scanning back a whole scan budget from
+    * the page end reached no line boundary, so the transcript is corrupt or
+    * carries an oversized line. Paging stops rather than buffering unbounded
+    * bytes.
+    */
+  case CorruptTranscript(sessionId: String)
+
   def message: String = this match
     case SessionNotFound(sessionId) =>
       s"No archived session found for id '$sessionId'"
     case SubAgentNotFound(sessionId, parentToolUseId) =>
       s"No sub-agent joined by tool_use id '$parentToolUseId' in session '$sessionId'"
-    case ArchiveIOError(detail, _) => detail
-    case InvalidSessionId(value)   =>
+    case ArchiveIOError(detail, _)  => detail
+    case PageSourceMoved(sessionId) =>
+      s"Transcript source for session '$sessionId' changed between pages; restart from the latest page"
+    case InvalidPageSize(limit) =>
+      s"Rejected page size $limit: must be between 1 and ${PageSize.Max}"
+    case CorruptTranscript(sessionId) =>
+      s"Transcript for session '$sessionId' has no line boundary within the scan budget; it is corrupt or has an oversized line"
+    case InvalidSessionId(value) =>
       // The rejected value is attacker-shaped by definition: strip control
       // characters and bound the length before it reaches any log line.
-      val printable = value.filter(c => c >= ' ' && c != '\u007f').take(40)
+      val printable = value.filter(c => !c.isControl).take(40)
       s"Rejected id '$printable': not an accepted session id shape"
 
   override def getMessage: String = message

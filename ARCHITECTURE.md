@@ -334,6 +334,33 @@ The symmetric counterpart to `ProjectPathDecoder`. Encodes an `os.Path` to the C
 
 A pure utility that resolves the Claude projects base directory and per-project subdirectory paths. Encapsulates the `CLAUDE_CONFIG_DIR` override convention: when the environment variable is set to a non-empty value it replaces `~/.claude`; otherwise the home directory is used. Takes `configDirOverride` and `home` as explicit parameters so callers (direct and effectful implementations) supply the env/home values — the utility itself performs no I/O.
 
+### ConversationArchive (custody)
+
+**Location**: `works.iterative.claude.core.log.ConversationArchive` (port), `works.iterative.claude.zio.log.ZioConversationArchive` (adapter).
+
+Custody of a session's vendor record tree — locate it, read it, tail it, and mirror it — per ADR 0001 decision 8: locate by *encoding* a known cwd (never decoding), mirror the *tree* (not a file), no attributed store, no result journal.
+
+```scala
+trait ConversationArchive[F[_]]:
+  type EntryStream
+  def forSession(sessionId: SessionId): F[Option[SessionRecord]]
+  def entries(sessionId: SessionId): EntryStream
+  def lastEntries(sessionId: SessionId, limit: Int): F[EntryPage]
+  def entriesBefore(token: PageToken, limit: Int): F[EntryPage]
+  def subagentEntries(sessionId: SessionId, parentToolUseId: String): EntryStream
+  def mirror(sessionId: SessionId): F[MirrorReport]
+```
+
+**Projects-shaped mirror.** `mirror` writes to `archiveDir/<encoded-cwd>/<rel>` — the same encoded-cwd segment the vendor tree uses — so the archive *is* a projects-dir-shaped tree, not a flat dump. The archive directory tree is restricted to owner-only (`rwx------`) on POSIX. Symlinks are never followed, and an id is validated before any path is derived from it.
+
+**Vendor→mirror read fallback.** `ArchivePaths.candidates` yields a session's record under the vendor tree first, then under the archive mirror; `forSession` keeps the first whose main transcript exists and records the winning `RecordRoot` on the `SessionRecord`. `entries`, `lastEntries`, `entriesBefore`, and `subagentEntries` therefore serve a `cleanupPeriodDays`-pruned session transparently from the mirror.
+
+**One-directional custody.** Mirroring a session whose vendor tree is absent (served only from the archive) is a no-op that returns an empty `MirrorReport`: the archive is never truncated or recopied-from-nothing. `SessionNotFound` results only when neither root has the session.
+
+**Tail reads and pagination (`BackwardLineReader`).** The pure core reads the last *n* complete lines of a transcript from EOF using backward block reads — cost proportional to the page, not the file. Newlines are split on the raw `0x0A` byte, which is UTF-8-safe (no multi-byte sequence contains it); a trailing `\r` is stripped for CRLF tolerance; and a torn final line (bytes after the last newline — a live CLI append in progress) is excluded. Each page carries an opaque `PageToken` for the previous page. A token is a byte `offset` into one resolved file plus that file's `source` path: the offset stays valid as the append-only file grows, and `entriesBefore` re-resolves the session and fails with `PageSourceMoved` when the winning file changed between pages (e.g. the vendor tree was pruned mid-paging), rather than reading a stale offset against the wrong file. Page parsing reuses the tolerant `ConversationLogParser`, so vendor drift survives as `RawLogEntry`.
+
+Only `ZioConversationArchive` implements the port today; `direct`/`effectful` follow once the ZIO contract is proven (ADR 0001 decision 9). An optional `SessionArchiveHook` drives `mirror` after each result and on session close.
+
 ## Internal CLI Management Layer
 
 ### ProcessManager

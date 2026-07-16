@@ -6,6 +6,7 @@ package works.iterative.claude.zio.log
 import zio.*
 import zio.test.*
 import works.iterative.claude.core.log.ArchiveConfig
+import works.iterative.claude.core.log.model.RecordRoot
 import works.iterative.claude.core.model.SessionId
 import works.iterative.claude.zio.internal.testing.ClaudeZioSpec
 
@@ -28,16 +29,25 @@ object ZioConversationArchiveIntegrationTest extends ClaudeZioSpec:
     */
   private def treesMatch(config: ArchiveConfig): Boolean =
     val projectDir = config.vendorProjectsDir / encoded
+    val mirrorDir  = config.archiveDir / encoded
     val sessionFiles = relFiles(projectDir).filter(rel =>
       rel == os.sub / s"$sessionId.jsonl" ||
         rel.segments.headOption.contains(sessionId)
     )
     sessionFiles.nonEmpty && sessionFiles.forall: rel =>
-      os.exists(config.archiveDir / rel) &&
+      os.exists(mirrorDir / rel) &&
         java.util.Arrays.equals(
           os.read.bytes(projectDir / rel),
-          os.read.bytes(config.archiveDir / rel)
+          os.read.bytes(mirrorDir / rel)
         )
+
+  private def snapshot(root: os.Path): Map[os.SubPath, List[Byte]] =
+    if !os.exists(root) then Map.empty
+    else
+      os.walk(root)
+        .filter(os.isFile)
+        .map(p => p.subRelativeTo(root) -> os.read.bytes(p).toList)
+        .toMap
 
   private def buildVendorTree: ZIO[Any, Throwable, ArchiveConfig] =
     ZIO.attempt:
@@ -109,5 +119,44 @@ object ZioConversationArchiveIntegrationTest extends ClaudeZioSpec:
         treesMatch(config),
         shrink.refreshed == Seq(os.sub / s"$sessionId.jsonl"),
         treesMatch(config)
+      ),
+    test("serves a pruned session from the mirror and never writes back"):
+      for
+        config <- buildVendorTree
+        archive = ZioConversationArchive(config)
+
+        // full mirror of the tree
+        _ <- archive.mirror(SessionId(sessionId))
+        mirrorDir = config.archiveDir / encoded
+        before <- ZIO.attempt(snapshot(mirrorDir))
+
+        // the vendor tree is pruned entirely (cleanupPeriodDays)
+        _ <- ZIO.attempt(os.remove.all(config.vendorProjectsDir / encoded))
+
+        // read path still serves full history from the mirror
+        located     <- archive.forSession(SessionId(sessionId))
+        mainEntries <- archive.entries(SessionId(sessionId)).runCollect
+        lastPage    <- archive.lastEntries(SessionId(sessionId), 2)
+        olderPage   <- ZIO.foreach(lastPage.older)(t =>
+          archive.entriesBefore(t, 2)
+        )
+        sub <- archive
+          .subagentEntries(SessionId(sessionId), toolUseId)
+          .runCollect
+
+        // custody is one-directional: mirroring a vendor-absent session is a
+        // no-op that leaves the archive byte-identical
+        report <- archive.mirror(SessionId(sessionId))
+        after  <- ZIO.attempt(snapshot(mirrorDir))
+      yield assertTrue(
+        located.exists(_.root == RecordRoot.Archive),
+        mainEntries.map(_.uuid.getOrElse("")).toList == List("m1", "m2"),
+        lastPage.entries.map(_.uuid.getOrElse("")).toList == List("m1", "m2"),
+        lastPage.older.isEmpty,
+        olderPage.isEmpty,
+        sub.map(_.uuid.getOrElse("")).toList == List("s1"),
+        report.isEmpty,
+        before.nonEmpty,
+        before == after
       )
   )
