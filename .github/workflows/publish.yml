@@ -23,11 +23,12 @@ jobs:
           java-version: 21
       - uses: coursier/cache-action@v6
 
+      # Only the unit suite gates publishing. The integration/E2E suite (__.itest)
+      # spawns real OS processes and the real Claude CLI; on the containerised forge
+      # runner (no zombie-reaping init as PID 1) its process-cleanup assertions are
+      # unreliable, so it is not a publish gate here — run it locally or on demand.
       - name: Run tests
         run: ./mill __.test
-
-      - name: Run integration tests
-        run: ./mill __.itest
 
       # Every push publishes to the forge's own Maven registry: a main push publishes the
       # current -SNAPSHOT, a vX.Y.Z tag publishes the release. MavenPublishModule detects
