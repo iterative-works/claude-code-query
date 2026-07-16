@@ -1,9 +1,11 @@
-# PURPOSE: GitHub Actions workflow for publishing releases to Sonatype Central.
-# PURPOSE: Triggered on version tags (v*); runs tests then publishes all modules.
+# PURPOSE: Publish workflow that runs tests and publishes artifacts to Maven repositories on main branch pushes and version tags.
+# PURPOSE: Publishes to the iterative-works Forgejo Maven registry on every push to main (snapshots) and on tags, and additionally to Maven Central (PGP-signed via Sonatype) on version tag pushes (releases).
+
 name: Publish
 
 on:
   push:
+    branches: [main]
     tags:
       - 'v*'
 
@@ -27,7 +29,24 @@ jobs:
       - name: Run integration tests
         run: ./mill __.itest
 
-      - name: Publish to Sonatype Central
+      # Every push publishes to the forge's own Maven registry: a main push publishes the
+      # current -SNAPSHOT, a vX.Y.Z tag publishes the release. MavenPublishModule detects
+      # SNAPSHOT vs release from the version and routes accordingly — release and snapshot
+      # URIs are the same Forgejo endpoint, which requires no PGP signature. Credentials are
+      # iterative-works org-level Actions secrets; the org is public so reads are anonymous.
+      - name: Publish to Forgejo Maven registry
+        env:
+          MILL_MAVEN_USERNAME: ${{ secrets.MILL_MAVEN_USERNAME }}
+          MILL_MAVEN_PASSWORD: ${{ secrets.MILL_MAVEN_PASSWORD }}
+        run: |
+          ./mill mill.javalib.MavenPublishModule/publishAll \
+            --publishArtifacts __:PublishModule.publishArtifacts \
+            --releaseUri https://code.iterative.works/api/packages/iterative-works/maven \
+            --snapshotUri https://code.iterative.works/api/packages/iterative-works/maven
+
+      # Releases additionally go to Maven Central via Sonatype (PGP-signed). Tags only.
+      - name: Publish to Maven Central
+        if: github.ref_type == 'tag'
         env:
           MILL_PGP_SECRET_BASE64: ${{ secrets.MILL_PGP_SECRET_BASE64 }}
           MILL_SONATYPE_USERNAME: ${{ secrets.MILL_SONATYPE_USERNAME }}
