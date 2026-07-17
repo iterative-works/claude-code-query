@@ -1,5 +1,5 @@
-# PURPOSE: CI workflow that validates compilation, formatting, linting, and tests on pull requests.
-# PURPOSE: Ensures code compiles cleanly, follows formatting standards, FP best practices, and tests pass.
+# PURPOSE: CI workflow that validates compilation, formatting, linting, unit tests, and integration tests on pull requests.
+# PURPOSE: Ensures code compiles cleanly, follows formatting standards, FP best practices, and both unit and integration suites pass.
 
 name: CI
 
@@ -172,3 +172,65 @@ jobs:
 
       - name: Run tests
         run: ./mill __.test
+
+  # ============================================================================
+  # INTEGRATION TESTS: Runs after compile succeeds, alongside the unit test job.
+  # ============================================================================
+  #
+  # The integration/E2E suite (__.itest) spawns real OS processes: mock CLI
+  # scripts, /bin/sh, /bin/sleep. Its process-cleanup tests kill a shell while
+  # its child is still alive, orphaning that child; when the orphan exits it
+  # becomes a zombie until something reaps it. The tests assert the system-wide
+  # zombie count returns to its baseline, which needs a reaper for orphaned
+  # descendants. The forge runner's job container has a non-reaping process as
+  # PID 1, so tini runs as a child-subreaper (`tini -s`) to adopt and reap those
+  # orphans. `--no-daemon` keeps the test JVM under tini instead of a detached
+  # Mill daemon that would escape the subreaper and reparent orphans to PID 1.
+  #
+  # The E2E tests that drive the real Claude CLI gate on its availability and skip
+  # when it is absent, so no API key or CLI install is needed here.
+
+  itest:
+    name: Run Integration Tests
+    needs: compile
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Cache Coursier dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/coursier
+          key: ${{ runner.os }}-coursier-${{ hashFiles('build.mill') }}
+          restore-keys: |
+            ${{ runner.os }}-coursier-
+
+      - name: Cache Mill
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/mill
+          key: ${{ runner.os }}-mill-${{ hashFiles('.mill-version') }}
+          restore-keys: |
+            ${{ runner.os }}-mill-
+
+      - name: Install tini (process subreaper)
+        run: |
+          curl -fsSL -o /tmp/tini \
+            https://github.com/krallin/tini/releases/download/v0.19.0/tini-static-amd64
+          echo "c5b0666b4cb676901f90dfcb37106783c5fe2077b04590973b885950611b30ee  /tmp/tini" \
+            | sha256sum -c -
+          chmod +x /tmp/tini
+
+      - name: Run integration tests
+        run: /tmp/tini -s -- ./mill --no-daemon __.itest
