@@ -35,8 +35,8 @@ download_release() {
     # Create cache directory
     mkdir -p "$CACHE_DIR"
 
-    # Download tarball from GitHub releases
-    local tarball_url="https://github.com/iterative-works/iw-cli/releases/download/v${version}/iw-cli-${version}.tar.gz"
+    # Download tarball from Forgejo releases
+    local tarball_url="https://code.iterative.works/iterative-works/iw-cli/releases/download/v${version}/iw-cli-${version}.tar.gz"
     local temp_file=$(mktemp)
 
     if ! curl -L -f -o "$temp_file" "$tarball_url" 2>&1; then
