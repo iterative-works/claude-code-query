@@ -4,6 +4,7 @@
 package build
 
 import mill._, scalalib._, scalajslib._, publish._
+import mill.scalajslib.api._
 import works.iterative.mill._
 import com.goyeau.mill.scalafix.ScalafixModule
 
@@ -147,5 +148,27 @@ object zio extends SharedModule {
       mvn"dev.zio::zio-test:2.1.26",
       mvn"dev.zio::zio-test-sbt:2.1.26"
     )
+  }
+}
+
+// Spike (throwaway, not published): measures Scala.js bundle sizes for the cc-chat element.
+// Three link targets isolate the cost terms: bare = Scala.js floor, rawdom = + shared
+// model/circe, laminar = + Laminar rendering. See docs/adr/0002.
+object uispike extends Module {
+  trait SpikeJSModule extends ScalaJSModule {
+    def scalaVersion = IWScalaVersions.scala3LTSVersion
+    def scalaJSVersion = "1.20.2"
+    override def moduleKind = Task { ModuleKind.ESModule }
+    def mvnDeps = Seq(mvn"org.scala-js::scalajs-dom::2.8.0")
+  }
+  object bare extends SpikeJSModule
+  object rawdom extends SpikeJSModule {
+    def moduleDeps = Seq(core.js)
+    override def sources = Task.Sources(moduleDir / "src", moduleDir / os.up / "shared" / "src")
+  }
+  object laminar extends SpikeJSModule {
+    def moduleDeps = Seq(core.js)
+    override def mvnDeps = super.mvnDeps() ++ Seq(mvn"com.raquo::laminar::17.2.0")
+    override def sources = Task.Sources(moduleDir / "src", moduleDir / os.up / "shared" / "src")
   }
 }
