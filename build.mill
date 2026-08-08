@@ -171,4 +171,21 @@ object uispike extends Module {
     override def mvnDeps = super.mvnDeps() ++ Seq(mvn"com.raquo::laminar::17.2.0")
     override def sources = Task.Sources(moduleDir / "src", moduleDir / os.up / "shared" / "src")
   }
+
+  // Toy JVM host: serves the linked element bundle as a classpath resource under a
+  // content-hashed path, plus a history page and a canned SSE stream for the element.
+  object host extends ScalaModule {
+    def scalaVersion = IWScalaVersions.scala3LTSVersion
+    override def resources = Task {
+      val bundle = laminar.fullLinkJS().dest.path / "main.js"
+      val digest =
+        java.security.MessageDigest.getInstance("SHA-256").digest(os.read.bytes(bundle))
+      val hash = digest.take(6).map("%02x".format(_)).mkString
+      val assets = Task.dest / "assets"
+      os.makeDir.all(assets)
+      os.copy(bundle, assets / s"cc-chat.$hash.js")
+      os.write(assets / "manifest.txt", s"cc-chat.$hash.js")
+      super.resources() ++ Seq(PathRef(Task.dest))
+    }
+  }
 }
