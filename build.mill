@@ -3,7 +3,7 @@
 // PURPOSE: Defines four modules: core (shared types/parsing), direct (Ox-based sync API), effectful (cats-effect/fs2 async API), zio (ZIO/ZStream async API).
 package build
 
-import mill._, scalalib._, publish._
+import mill._, scalalib._, scalajslib._, publish._
 import works.iterative.mill._
 import com.goyeau.mill.scalafix.ScalafixModule
 
@@ -24,11 +24,25 @@ trait SharedModule extends IWScalaModule with PublishModule with ScalafixModule 
 }
 
 object core extends SharedModule {
+  // Platform-free sources (model, parsing) live in shared/src and are also compiled by core.js
+  override def sources = Task.Sources("src", "shared/src")
   def mvnDeps = Seq(
     mvn"io.circe::circe-core:0.14.15",
     mvn"io.circe::circe-parser:0.14.15",
     mvn"com.lihaoyi::os-lib:0.11.8"
   )
+
+  // Scala.js build of the shared sources: the message/log model and parsers for browser consumers
+  object js extends SharedModule with ScalaJSModule {
+    override def scalaJSVersion = "1.20.2"
+    override def artifactName = "claude-code-query-core"
+    override def sources = Task.Sources(moduleDir / os.up / "shared" / "src")
+    def mvnDeps = Seq(
+      mvn"io.circe::circe-core::0.14.15",
+      mvn"io.circe::circe-parser::0.14.15",
+      mvn"io.github.cquiroz::scala-java-time::2.6.0"
+    )
+  }
 
   object test extends ScalaTests with TestModule.Munit {
     def mvnDeps = Seq(
