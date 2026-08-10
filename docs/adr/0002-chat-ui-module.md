@@ -3,7 +3,7 @@
 
 # ADR 0002: A session-over-HTTP contract, rendered by a self-contained Scala.js chat element
 
-**Status:** Accepted (2026-08-08) — decided with Michal across two design sessions and validated by the `uispike` spike on this branch
+**Status:** Accepted (2026-08-08) — decided with Michal across two design sessions and validated by the `uispike` spike on this branch; amended 2026-08-10 when timestamps moved to `iw-support-time`'s `Moment`
 **Date:** 2026-08-08
 **Author:** Michal Příhoda, with Claude (dev)
 **Relates to:** [ADR 0001](0001-session-is-a-stream-not-turns.md) (the session contract this renders)
@@ -81,6 +81,14 @@ facades, slower dev loop) were accepted with open eyes, ceiling below.
 model/parser) live in `core/shared/src`, compiled by both the JVM `core` module and the new
 `core.js` Scala.js module. JVM-bound code (os-lib, file IO) stays in `core/src`.
 
+Timestamps in the cross-built model are `works.iterative.core.Moment` from the
+dependency-free `iw-support-time` module — an opaque epoch-millisecond `Long` whose parse and
+format delegate to the platform engine (java.time on JVM, the `Date` built-ins on JS) behind
+a shared syntactic guard, pinned by golden vectors on both platforms and differentially
+against `Instant.parse` on the JVM. `java.time` is therefore unreachable from the cross-built
+sources: the ~158 KB `scala-java-time` cost is removed at the root, not avoided, and cannot
+creep back through the model. JVM consumers convert via `MomentInterop.toInstant`.
+
 ### 4. Laminar inside the element
 
 Measured delta: **27 KB gzip** — under the agreed 40 KB rule, so house fluency and velocity
@@ -107,9 +115,14 @@ Three link targets (`uispike`, Scala.js 1.20.2, `fullLinkJS`, gzip), agreed ceil
 | target | gzip | reading |
 |---|---|---|
 | bare element (floor) | 7.9 KB | custom element + registration, no model |
-| + shared model, circe, both parsers | 347 KB | of which **~178 KB is scala-java-time** |
-| + Laminar | 375 KB | **Laminar delta: 27 KB** |
-| realistic (no scala-java-time, see below) | ~197 KB | before a markdown/highlight facade |
+| + shared model, circe, both parsers | 190 KB | circe + cats dominate |
+| + Laminar | 217 KB | **Laminar delta: 27 KB** |
+
+An earlier spike round, with `java.time.Instant` still in the shared model, measured 347 KB
+and 375 KB for the same targets: `Instant.parse` alone retains `scala-java-time`'s formatter
+machinery (~158 KB gzip), and no linker option strips it. That finding drove the `Moment`
+re-basing above, after which the removal was re-measured and the bundle contains no
+`DateTimeFormatter`/`ChronoField` references at all.
 
 Verified in Chrome against a toy host: the element registers (guarded), renders a canned
 history and live SSE frames with correct fold semantics (no result double-render, fallback
@@ -118,19 +131,29 @@ console, tolerant parsing), and survives DOM moves without re-wiring.
 
 ### Spike findings that became decisions
 
-- **The history endpoint serves normalized entries, not raw vendor JSONL.** `Instant` in
-  `ConversationLogEntry` drags `scala-java-time` into the browser: ~178 KB gzip, half the
-  bundle. Serving a wire DTO (timestamps as strings/epoch) removes it — and is better
-  contract design anyway: the browser is shielded from vendor-format drift, which stays a
-  server-side concern where the tolerant parsers live.
-- **The host must serve the bundle compressed.** 375 KB gzip is 2.4 MB raw; the delivery path
-  needs gzip/brotli, not just the hashed name.
+- **Timestamps re-based on `Moment` (the root fix for the scala-java-time cost).** The first
+  reaction — serve normalized history so the browser never parses vendor timestamps — only
+  *avoided* the dependency and would let it creep back through any future shared code. The
+  adopted fix removes `java.time` from the shared model entirely; see the `Moment` paragraph
+  above. Whether the history endpoint should serve normalized entries anyway (shielding the
+  browser from vendor-format drift) is now a contract-design question, not a size question —
+  moved to the open questions.
+- **A CI bundle-size gate guards the classpath.** The gate sits just above the measured size
+  (250 KB, against today's 217 KB) rather than at the 400 KB design ceiling, precisely so a
+  regression of the scala-java-time class (~158 KB) breaks the build instead of consuming
+  headroom silently. Intentional growth raises the gate in the same PR.
+- **The host must serve the bundle compressed.** 217 KB gzip is ~1.5 MB raw; the delivery
+  path needs gzip/brotli, not just the hashed name.
 - **`connectedCallback` re-fires on DOM moves**; the element wires itself once behind a flag.
 
 ## Consequences
 
 - New artifacts: `claude-code-query-core_sjs1_3` now; the `ui` module (element + endpoint
   definitions + server glue) as the real successor of the spike.
+- `core` gains one external dependency: `works.iterative.support::iw-support-time` —
+  deliberately dependency-free, so the SDK's promise that `direct` pulls no ZIO and no cats
+  still holds. Sequencing: iw-support must release the `time` module before this SDK can
+  publish against it (local ivy carries development until then).
 - The repo takes on a Scala.js toolchain. Dev-loop costs are real and accepted: `fastLinkJS`
   dev bundles are huge (complicates remote dev), JS libraries we adopt (markdown, syntax
   highlighting) need hand-maintained facades.
@@ -161,6 +184,9 @@ the second slice.
   measurably hurts (the 122-row real page renders instantly today).
 - **`direct`/`effectful` live bindings** — only `zio` has `Session`; the viewer path is
   effect-free and serves all three.
+- **Normalized history entries vs raw vendor JSONL** — the size argument is gone with the
+  `Moment` re-basing; what remains is contract hygiene (browser shielded from vendor drift)
+  versus one less endpoint shape. Decide in the first slice, where the endpoint is built.
 
 ## References
 
