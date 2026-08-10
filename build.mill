@@ -30,7 +30,8 @@ object core extends SharedModule {
   def mvnDeps = Seq(
     mvn"io.circe::circe-core:0.14.15",
     mvn"io.circe::circe-parser:0.14.15",
-    mvn"com.lihaoyi::os-lib:0.11.8"
+    mvn"com.lihaoyi::os-lib:0.11.8",
+    mvn"works.iterative.support::iw-support-time:0.1.22-SNAPSHOT"
   )
 
   // Scala.js build of the shared sources: the message/log model and parsers for browser consumers
@@ -41,7 +42,7 @@ object core extends SharedModule {
     def mvnDeps = Seq(
       mvn"io.circe::circe-core::0.14.15",
       mvn"io.circe::circe-parser::0.14.15",
-      mvn"io.github.cquiroz::scala-java-time::2.6.0"
+      mvn"works.iterative.support::iw-support-time::0.1.22-SNAPSHOT"
     )
   }
 
