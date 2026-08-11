@@ -41,7 +41,7 @@ object ConversationLogParser:
       timestamp = cursor
         .get[String]("timestamp")
         .toOption
-        .flatMap(Moment.parseIso)
+        .flatMap(Moment.parseIsoOption)
       isSidechain = cursor.get[Boolean]("isSidechain").toOption.getOrElse(false)
       cwd = cursor.get[String]("cwd").toOption
       version = cursor.get[String]("version").toOption

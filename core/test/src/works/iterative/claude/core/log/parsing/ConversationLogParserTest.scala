@@ -71,7 +71,7 @@ class ConversationLogParserTest extends FunSuite:
         assertEquals(entry.parentUuid, Some("parent-uuid-000"))
         assertEquals(
           entry.timestamp,
-          Moment.parseIso("2024-01-15T10:30:00Z")
+          Moment.parseIsoOption("2024-01-15T10:30:00Z")
         )
         assertEquals(entry.sessionId, "session-abc")
         assertEquals(entry.isSidechain, true)
@@ -105,7 +105,7 @@ class ConversationLogParserTest extends FunSuite:
       case Some(entry) =>
         assertEquals(
           entry.timestamp,
-          Moment.parseIso("2025-06-01T12:00:00.000Z")
+          Moment.parseIsoOption("2025-06-01T12:00:00.000Z")
         )
       case None => fail("Expected Some(ConversationLogEntry)")
 
