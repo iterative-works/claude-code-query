@@ -8,7 +8,18 @@ import mill.scalajslib.api._
 import works.iterative.mill._
 import com.goyeau.mill.scalafix.ScalafixModule
 
-trait SharedModule extends IWScalaModule with PublishModule with ScalafixModule {
+// First-party iw-support artifacts live in the iterative-works Forgejo Maven
+// registry (Sonatype Central hosts none of them); the org is public, so reads
+// are anonymous. Mill resolves each module's dependency graph with that
+// module's repositories, so every module that reaches iw-support-time —
+// directly or through core.js — mixes this in.
+trait IWRegistryModule extends CoursierModule {
+  override def repositories = Task {
+    super.repositories() ++ Seq("https://code.iterative.works/api/packages/iterative-works/maven")
+  }
+}
+
+trait SharedModule extends IWScalaModule with PublishModule with ScalafixModule with IWRegistryModule {
   override def scalaVersion = IWScalaVersions.scala3LTSVersion
   // ScalafixModule handles -Xsemanticdb, so disable IWScalaModule's duplicate
   override def semanticDbOptions = Task { Seq.empty }
@@ -31,7 +42,7 @@ object core extends SharedModule {
     mvn"io.circe::circe-core:0.14.15",
     mvn"io.circe::circe-parser:0.14.15",
     mvn"com.lihaoyi::os-lib:0.11.8",
-    mvn"works.iterative.support::iw-support-time:0.1.22-SNAPSHOT"
+    mvn"works.iterative.support::iw-support-time:0.2.0"
   )
 
   // Scala.js build of the shared sources: the message/log model and parsers for browser consumers
@@ -42,7 +53,7 @@ object core extends SharedModule {
     def mvnDeps = Seq(
       mvn"io.circe::circe-core::0.14.15",
       mvn"io.circe::circe-parser::0.14.15",
-      mvn"works.iterative.support::iw-support-time::0.1.22-SNAPSHOT"
+      mvn"works.iterative.support::iw-support-time::0.2.0"
     )
   }
 
@@ -156,7 +167,7 @@ object zio extends SharedModule {
 // Three link targets isolate the cost terms: bare = Scala.js floor, rawdom = + shared
 // model/circe, laminar = + Laminar rendering. See docs/adr/0002.
 object uispike extends Module {
-  trait SpikeJSModule extends ScalaJSModule {
+  trait SpikeJSModule extends ScalaJSModule with IWRegistryModule {
     def scalaVersion = IWScalaVersions.scala3LTSVersion
     def scalaJSVersion = "1.20.2"
     override def moduleKind = Task { ModuleKind.ESModule }
