@@ -5,7 +5,7 @@ package works.iterative.claude.core.log.parsing
 
 import munit.FunSuite
 import io.circe.parser
-import java.time.Instant
+import works.iterative.core.Moment
 import works.iterative.claude.core.log.model.*
 import works.iterative.claude.core.model.*
 
@@ -71,7 +71,7 @@ class ConversationLogParserTest extends FunSuite:
         assertEquals(entry.parentUuid, Some("parent-uuid-000"))
         assertEquals(
           entry.timestamp,
-          Some(Instant.parse("2024-01-15T10:30:00Z"))
+          Moment.parseIsoOption("2024-01-15T10:30:00Z")
         )
         assertEquals(entry.sessionId, "session-abc")
         assertEquals(entry.isSidechain, true)
@@ -91,7 +91,7 @@ class ConversationLogParserTest extends FunSuite:
         assertEquals(entry.version, None)
       case None => fail("Expected Some(ConversationLogEntry)")
 
-  test("parses ISO-8601 timestamp string to Instant"):
+  test("parses ISO-8601 timestamp string to Moment"):
     val line =
       """{
         "type":"user",
@@ -105,7 +105,7 @@ class ConversationLogParserTest extends FunSuite:
       case Some(entry) =>
         assertEquals(
           entry.timestamp,
-          Some(Instant.parse("2025-06-01T12:00:00.000Z"))
+          Moment.parseIsoOption("2025-06-01T12:00:00.000Z")
         )
       case None => fail("Expected Some(ConversationLogEntry)")
 

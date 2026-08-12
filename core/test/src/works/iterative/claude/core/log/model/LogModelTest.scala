@@ -5,6 +5,7 @@ package works.iterative.claude.core.log.model
 
 import munit.FunSuite
 import java.time.Instant
+import works.iterative.core.Moment
 import works.iterative.claude.core.model.{ContentBlock, TextBlock, TokenUsage}
 import io.circe.Json
 
@@ -115,7 +116,7 @@ class LogModelTest extends FunSuite:
 
   test("ConversationLogEntry should hold envelope metadata and payload"):
     val payload = UserLogEntry(List(TextBlock("hello")))
-    val now = Instant.now()
+    val now = Moment.ofEpochMilli(System.currentTimeMillis())
     val entry = ConversationLogEntry(
       uuid = Some("uuid-001"),
       parentUuid = Some("parent-uuid-000"),

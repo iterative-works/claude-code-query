@@ -4,7 +4,7 @@ package works.iterative.claude.core.log.parsing
 // PURPOSE: Dispatches to per-type payload parsers and reuses ContentBlockParser for content blocks
 
 import io.circe.{HCursor, Json, parser}
-import java.time.Instant
+import works.iterative.core.Moment
 import works.iterative.claude.core.log.model.*
 import works.iterative.claude.core.model.*
 import works.iterative.claude.core.parsing.ContentBlockParser
@@ -38,7 +38,10 @@ object ConversationLogParser:
       uuid = cursor.get[String]("uuid").toOption
       entryType <- cursor.get[String]("type").toOption
       parentUuid = cursor.get[String]("parentUuid").toOption
-      timestamp = cursor.get[String]("timestamp").toOption.flatMap(parseInstant)
+      timestamp = cursor
+        .get[String]("timestamp")
+        .toOption
+        .flatMap(Moment.parseIsoOption)
       isSidechain = cursor.get[Boolean]("isSidechain").toOption.getOrElse(false)
       cwd = cursor.get[String]("cwd").toOption
       version = cursor.get[String]("version").toOption
@@ -55,10 +58,6 @@ object ConversationLogParser:
       payload,
       agentId
     )
-
-  private def parseInstant(s: String): Option[Instant] =
-    try Some(Instant.parse(s))
-    catch case _: java.time.format.DateTimeParseException => None
 
   private def parsePayload(
       entryType: String,

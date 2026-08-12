@@ -234,3 +234,60 @@ jobs:
 
       - name: Run integration tests
         run: /tmp/tini -s -- ./mill --no-daemon __.itest
+
+  # ============================================================================
+  # BUNDLE SIZE GATE: Runs after compile succeeds.
+  # ============================================================================
+  #
+  # The browser bundle must stay small enough to embed anywhere; ADR 0002 sets a
+  # 400 KB gzip design ceiling. The gate is deliberately tighter — just above the
+  # measured size — so that a heavy dependency creeping into the cross-built
+  # sources (the scala-java-time class of regression, ~158 KB) breaks the build
+  # instead of silently consuming the headroom. Raising the gate is fine when the
+  # growth is intentional; raise it in the same PR that adds the weight.
+
+  bundle-size:
+    name: Check Bundle Size
+    needs: compile
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Cache Coursier dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/coursier
+          key: ${{ runner.os }}-coursier-${{ hashFiles('build.mill') }}
+          restore-keys: |
+            ${{ runner.os }}-coursier-
+
+      - name: Cache Mill
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/mill
+          key: ${{ runner.os }}-mill-${{ hashFiles('.mill-version') }}
+          restore-keys: |
+            ${{ runner.os }}-mill-
+
+      - name: Link browser bundle and check gzip size
+        run: |
+          ./mill uispike.laminar.fullLinkJS
+          limit=256000
+          size=$(gzip -c out/uispike/laminar/fullLinkJS.dest/main.js | wc -c)
+          echo "bundle gzip size: $size bytes (gate: $limit)"
+          if [ "$size" -gt "$limit" ]; then
+            echo "Bundle exceeds the size gate. If the growth is intentional," \
+              "raise the gate in this PR; see ADR 0002."
+            exit 1
+          fi

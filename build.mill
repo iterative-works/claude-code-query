@@ -3,11 +3,23 @@
 // PURPOSE: Defines four modules: core (shared types/parsing), direct (Ox-based sync API), effectful (cats-effect/fs2 async API), zio (ZIO/ZStream async API).
 package build
 
-import mill._, scalalib._, publish._
+import mill._, scalalib._, scalajslib._, publish._
+import mill.scalajslib.api._
 import works.iterative.mill._
 import com.goyeau.mill.scalafix.ScalafixModule
 
-trait SharedModule extends IWScalaModule with PublishModule with ScalafixModule {
+// First-party iw-support artifacts live in the iterative-works Forgejo Maven
+// registry (Sonatype Central hosts none of them); the org is public, so reads
+// are anonymous. Mill resolves each module's dependency graph with that
+// module's repositories, so every module that reaches iw-support-time —
+// directly or through core.js — mixes this in.
+trait IWRegistryModule extends CoursierModule {
+  override def repositories = Task {
+    super.repositories() ++ Seq("https://code.iterative.works/api/packages/iterative-works/maven")
+  }
+}
+
+trait SharedModule extends IWScalaModule with PublishModule with ScalafixModule with IWRegistryModule {
   override def scalaVersion = IWScalaVersions.scala3LTSVersion
   // ScalafixModule handles -Xsemanticdb, so disable IWScalaModule's duplicate
   override def semanticDbOptions = Task { Seq.empty }
@@ -24,11 +36,26 @@ trait SharedModule extends IWScalaModule with PublishModule with ScalafixModule 
 }
 
 object core extends SharedModule {
+  // Platform-free sources (model, parsing) live in shared/src and are also compiled by core.js
+  override def sources = Task.Sources("src", "shared/src")
   def mvnDeps = Seq(
     mvn"io.circe::circe-core:0.14.15",
     mvn"io.circe::circe-parser:0.14.15",
-    mvn"com.lihaoyi::os-lib:0.11.8"
+    mvn"com.lihaoyi::os-lib:0.11.8",
+    mvn"works.iterative.support::iw-support-time:0.2.0"
   )
+
+  // Scala.js build of the shared sources: the message/log model and parsers for browser consumers
+  object js extends SharedModule with ScalaJSModule {
+    override def scalaJSVersion = "1.20.2"
+    override def artifactName = "claude-code-query-core"
+    override def sources = Task.Sources(moduleDir / os.up / "shared" / "src")
+    def mvnDeps = Seq(
+      mvn"io.circe::circe-core::0.14.15",
+      mvn"io.circe::circe-parser::0.14.15",
+      mvn"works.iterative.support::iw-support-time::0.2.0"
+    )
+  }
 
   object test extends ScalaTests with TestModule.Munit {
     def mvnDeps = Seq(
@@ -133,5 +160,44 @@ object zio extends SharedModule {
       mvn"dev.zio::zio-test:2.1.26",
       mvn"dev.zio::zio-test-sbt:2.1.26"
     )
+  }
+}
+
+// Spike (throwaway, not published): measures Scala.js bundle sizes for the cc-chat element.
+// Three link targets isolate the cost terms: bare = Scala.js floor, rawdom = + shared
+// model/circe, laminar = + Laminar rendering. See docs/adr/0002.
+object uispike extends Module {
+  trait SpikeJSModule extends ScalaJSModule with IWRegistryModule {
+    def scalaVersion = IWScalaVersions.scala3LTSVersion
+    def scalaJSVersion = "1.20.2"
+    override def moduleKind = Task { ModuleKind.ESModule }
+    def mvnDeps = Seq(mvn"org.scala-js::scalajs-dom::2.8.0")
+  }
+  object bare extends SpikeJSModule
+  object rawdom extends SpikeJSModule {
+    def moduleDeps = Seq(core.js)
+    override def sources = Task.Sources(moduleDir / "src", moduleDir / os.up / "shared" / "src")
+  }
+  object laminar extends SpikeJSModule {
+    def moduleDeps = Seq(core.js)
+    override def mvnDeps = super.mvnDeps() ++ Seq(mvn"com.raquo::laminar::17.2.0")
+    override def sources = Task.Sources(moduleDir / "src", moduleDir / os.up / "shared" / "src")
+  }
+
+  // Toy JVM host: serves the linked element bundle as a classpath resource under a
+  // content-hashed path, plus a history page and a canned SSE stream for the element.
+  object host extends ScalaModule {
+    def scalaVersion = IWScalaVersions.scala3LTSVersion
+    override def resources = Task {
+      val bundle = laminar.fullLinkJS().dest.path / "main.js"
+      val digest =
+        java.security.MessageDigest.getInstance("SHA-256").digest(os.read.bytes(bundle))
+      val hash = digest.take(6).map("%02x".format(_)).mkString
+      val assets = Task.dest / "assets"
+      os.makeDir.all(assets)
+      os.copy(bundle, assets / s"cc-chat.$hash.js")
+      os.write(assets / "manifest.txt", s"cc-chat.$hash.js")
+      super.resources() ++ Seq(PathRef(Task.dest))
+    }
   }
 }
