@@ -12,12 +12,11 @@ companion: intent.md, decisions.md, map.md (same directory)
 
 ## Where we are right now
 
-Effort framed; no slice active yet. PR #60 (`spike/cc-chat-scalajs` → main) is
-open and green: it carries the core split for cross-building, ADR 0002, the
-throwaway `uispike` spike with measured bundles (217.9 KB gzip laminar,
-gate 250 KB), the Moment re-basing onto released `iw-support-time:0.2.0`, and
-this effort directory. Next unblocked step: merge #60, then `sl-define
-"transcript-viewer"`.
+Effort framed; no slice active yet. PR #60 is merged into main (`e1d69b3`): it
+carried the core split for cross-building, ADR 0002, the throwaway `uispike`
+spike with measured bundles (217.9 KB gzip laminar, gate 250 KB), and the
+Moment re-basing onto released `iw-support-time:0.2.0`. This effort directory
+lives on main. Next unblocked step: `sl-define "transcript-viewer"`.
 
 ## Log
 
